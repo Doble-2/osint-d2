@@ -1,0 +1,44 @@
+.venv/
+__pycache__/
+*.py[cod]
+*.so
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pytype/
+.coverage
+coverage.xml
+htmlcov/
+.hypothesis/
+.cache/
+.dist/
+dist/
+build/
+*.egg-info/
+
+# OSINT outputs
+output/
+reports/
+*.pdf
+*.html
+*.json
+
+# Downloaded datasets (no se commitean)
+data/
+
+# Local DB / scratch
+*.sqlite3
+*.db
+
+# Env secrets
+.env
+.env.*
+!.env.example
+
+# Editors
+.vscode/
+.idea/
+.DS_Store
+
+# OS
+Thumbs.db
