@@ -241,8 +241,8 @@ def _strict_keep_profile(*, profile: SocialProfile, username: str) -> bool:
 
 async def _hunt_async(
     *,
-    username: str | None,
-    email: str | None,
+    usernames: list[str] | None,
+    emails: list[str] | None,
     deep_analyze: bool,
     export_pdf: bool,
     export_json: bool,
@@ -258,8 +258,8 @@ async def _hunt_async(
     use_sherlock: bool,
     strict: bool,
 ) -> None:
-    if not username and not email:
-        raise typer.BadParameter("Debes indicar --username y/o --email.")
+    if not usernames and not emails:
+        raise typer.BadParameter("Debes indicar al menos un username o email para buscar.")
 
     output_format = _auto_output_format(output_format)
     human = output_format == OutputFormat.table
@@ -275,7 +275,7 @@ async def _hunt_async(
     profiles: list[SocialProfile] = []
 
     if human:
-        status_ctx = console.status("Ejecutando búsqueda (username/email)...", spinner="dots")
+        status_ctx = console.status("Ejecutando búsqueda (usernames/emails)...", spinner="dots")
         status_ctx.__enter__()
     else:
         status_ctx = None
@@ -307,7 +307,7 @@ async def _hunt_async(
                     else {"error": str(exc), "scanner": name},
                 )
 
-        if username:
+        if usernames:
             username_scanners: list[object] = [
                 GitHubScanner(),
                 GitHubGistScanner(),
@@ -328,19 +328,19 @@ async def _hunt_async(
                 BehanceScanner(),
                 XScanner(),
             ]
-            profiles.extend(await asyncio.gather(*(safe_scan(s, username) for s in username_scanners)))
+            profiles.extend(await asyncio.gather(*(safe_scan(s, username) for username in usernames for s in username_scanners)))
 
-        if email:
+        if emails:
             email_scanners: list[object] = [
                 GravatarScanner(),
                 GravatarProfileScanner(),
                 OpenPGPKeysScanner(),
                 UbuntuKeyserverScanner(),
             ]
-            profiles.extend(await asyncio.gather(*(safe_scan(s, email) for s in email_scanners)))
+            profiles.extend(await asyncio.gather(*(safe_scan(s, email) for email in emails for s in email_scanners)))
 
             if scan_localpart:
-                localpart = email.split("@", 1)[0]
+                localparts = [email.split("@", 1)[0] for email in emails]
                 username_scanners2: list[object] = [
                     GitHubScanner(),
                     GitHubGistScanner(),
@@ -362,11 +362,11 @@ async def _hunt_async(
                     XScanner(),
                 ]
                 profiles.extend(
-                    await asyncio.gather(*(safe_scan(s, localpart, derived_from="email_localpart") for s in username_scanners2))
+                    await asyncio.gather(*(safe_scan(s, localpart, derived_from="email_localpart") for localpart in localparts for s in username_scanners2))
                 )
 
         if use_site_lists:
-            if username:
+            if usernames:
                 p = username_sites_path or settings.username_sites_path
                 if p and not p.exists():
                     # Si el usuario pasó solo un nombre, intentamos ubicarlo.
@@ -377,7 +377,7 @@ async def _hunt_async(
                     sites_file = load_username_sites(p)
                     profiles.extend(
                         await run_username_sites(
-                            username=username,
+                            usernames=usernames,
                             sites=sites_file.sites,
                             settings=settings,
                             max_concurrency=max_concurrency,
@@ -389,7 +389,7 @@ async def _hunt_async(
                     if not use_sherlock:
                         console.print("[yellow]Site-lists username no configuradas (falta ruta).[/yellow]")
 
-            if email:
+            if emails:
                 p = email_sites_path or settings.email_sites_path
                 if p and not p.exists():
                     fallback = get_default_list_path(p.name)
@@ -399,7 +399,7 @@ async def _hunt_async(
                     sites_file = load_email_sites(p)
                     profiles.extend(
                         await run_email_sites(
-                            email=email,
+                            emails=emails,
                             sites=sites_file.sites,
                             settings=settings,
                             max_concurrency=max_concurrency,
@@ -413,11 +413,11 @@ async def _hunt_async(
 
         # Importante: `console.status()` usa Live internamente. Si vamos a mostrar
         # una barra de progreso (también Live), debemos cerrar el status primero.
-        if human and status_ctx and use_sherlock and username:
+        if human and status_ctx and use_sherlock and usernames and len(usernames) == 1:
             status_ctx.__exit__(None, None, None)
             status_ctx = None
 
-        if use_sherlock and username:
+        if use_sherlock and usernames:
             # Sherlock: descarga a data/sherlock.json si falta.
             manifest = load_sherlock_data(refresh=False)
             if human:
@@ -450,7 +450,7 @@ async def _hunt_async(
 
                     profiles.extend(
                         await run_sherlock_username(
-                            username=username,
+                            usernames=usernames,
                             manifest=manifest,
                             settings=settings,
                             max_concurrency=max_concurrency,
@@ -461,7 +461,7 @@ async def _hunt_async(
             else:
                 profiles.extend(
                     await run_sherlock_username(
-                        username=username,
+                        usernames=usernames,
                         manifest=manifest,
                         settings=settings,
                         max_concurrency=max_concurrency,
@@ -475,14 +475,14 @@ async def _hunt_async(
 
     profiles = _dedupe_profiles(profiles)
 
-    if strict and username:
-        profiles = [p for p in profiles if _strict_keep_profile(profile=p, username=username)]
+    if strict and usernames:
+        profiles = [p for p in profiles if any(_strict_keep_profile(profile=p, username=username) for username in usernames)]
 
     # Enriquecimiento HTML (fallback): añade metadata (title/description/og:image) útil para análisis.
     # Se ejecuta antes del análisis IA para aportar contexto adicional.
     await enrich_profiles_from_html(profiles=profiles, settings=settings, max_concurrency=min(20, max_concurrency))
 
-    target_label = "/".join([v for v in [username, email] if v])
+    target_label = "/".join([v for v in ["/".join(usernames) if usernames else None, "/".join(emails) if emails else None] if v])
     person = PersonEntity(target=target_label, profiles=profiles)
 
     if human:
@@ -974,17 +974,17 @@ def scan_email(
 
 @app.command()
 def hunt(
-    username: str | None = typer.Option(
+    usernames: list[str] | None = typer.Option(
         None,
-        "--username",
+        "--usernames",
         "-u",
-        help="Username/alias objetivo.",
+        help="Usernames objetivo (lista separada por comas).",
     ),
-    email: str | None = typer.Option(
+    emails: list[str] | None = typer.Option(
         None,
-        "--email",
+        "--emails",
         "-e",
-        help="Email objetivo.",
+        help="Emails objetivo (lista separada por comas).",
     ),
     deep_analyze: bool = typer.Option(
         True,
@@ -1061,7 +1061,7 @@ def hunt(
 ) -> None:
     """Ejecuta búsqueda combinada: username y/o email, en una sola corrida."""
 
-    normalized_email = _normalize_email(email) if email else None
+    normalized_emails = [_normalize_email(e) for e in emails] if emails else None
     categories = {c.strip().lower() for c in (category or []) if c.strip()} or None
     no_nsfw: bool | None
     if nsfw == NsfwPolicy.inherit:
@@ -1074,8 +1074,8 @@ def hunt(
     output_format = _auto_output_format(output_format)
     asyncio.run(
         _hunt_async(
-            username=(username.strip() if username else None),
-            email=normalized_email,
+            usernames=usernames if usernames else None,
+            emails=normalized_emails if normalized_emails else None,
             deep_analyze=deep_analyze,
             export_pdf=export_pdf,
             export_json=export_json,
@@ -1107,22 +1107,22 @@ def wizard() -> None:
         default="ambos",
     )
 
-    username: str | None
-    email: str | None
+    usernames: list[str] | None
+    emails: list[str] | None
 
     if mode in ("username", "ambos"):
-        u = Prompt.ask("Username", default="").strip()
-        username = u or None
+        u = Prompt.ask("Usernames separados por coma", default="").strip()
+        usernames = [x.strip() for x in u.split(",")] if u else None
     else:
-        username = None
+        usernames = None
 
     if mode in ("email", "ambos"):
-        e = Prompt.ask("Email", default="").strip()
-        email = _normalize_email(e) if e else None
+        e = Prompt.ask("Emails separados por coma", default="").strip()
+        emails = [_normalize_email(x.strip()) for x in e.split(",")] if e else None
     else:
-        email = None
+        emails = None
 
-    if not username and not email:
+    if not usernames and not emails:
         console.print("[red]Necesito al menos username o email.[/red]")
         raise typer.Exit(code=2)
 
@@ -1137,7 +1137,7 @@ def wizard() -> None:
 
     if use_site_lists:
         settings = AppSettings()
-        if username:
+        if usernames:
             default_u = ""
             if settings.username_sites_path:
                 default_u = str(settings.username_sites_path)
@@ -1147,7 +1147,7 @@ def wizard() -> None:
                     default_u = str(auto)
             p = Prompt.ask("Ruta JSON username-sites (wmn-data.json)", default=default_u).strip()
             username_sites_path = Path(p) if p else (Path(default_u) if default_u else None)
-        if email:
+        if emails:
             default_e = ""
             if settings.email_sites_path:
                 default_e = str(settings.email_sites_path)
@@ -1168,7 +1168,7 @@ def wizard() -> None:
             category = {c.strip().lower() for c in cats.split(",") if c.strip()} or None
 
     scan_localpart = False
-    if email:
+    if emails:
         scan_localpart = Confirm.ask("¿Probar también el localpart como username?", default=True)
 
     deep_analyze = Confirm.ask("¿Analizar con IA?", default=True)
@@ -1177,8 +1177,8 @@ def wizard() -> None:
 
     asyncio.run(
         _hunt_async(
-            username=username,
-            email=email,
+            usernames=usernames,
+            emails=emails,
             deep_analyze=deep_analyze,
             export_pdf=export_pdf,
             export_json=export_json,

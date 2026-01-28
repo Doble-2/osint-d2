@@ -61,7 +61,7 @@ def _contains_any(text: str, needle: Any) -> bool:
 
 async def run_sherlock_username(
     *,
-    username: str,
+    usernames: list[str],
     manifest: dict[str, Any],
     settings: AppSettings,
     max_concurrency: int,
@@ -88,7 +88,7 @@ async def run_sherlock_username(
 
     async with build_async_client(settings) as client:
 
-        async def check(site_name: str, info: dict[str, Any]) -> SocialProfile | None:
+        async def check(site_name: str, info: dict[str, Any], username: str) -> SocialProfile | None:
             url_t = info.get("url")
             if not isinstance(url_t, str) or not url_t:
                 return None
@@ -178,7 +178,8 @@ async def run_sherlock_username(
 
         tasks: list[asyncio.Task[SocialProfile | None]] = []
         for name, info in items:
-            t = asyncio.create_task(check(name, info), name=name)
+            for username in usernames:
+                t = asyncio.create_task(check(name, info, username), name=f"sherlock:{name}:{username}")
             tasks.append(t)
 
         completed = 0
