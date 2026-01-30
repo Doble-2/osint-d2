@@ -95,7 +95,7 @@ class AboutMeScanner(OSINTScanner):
                 if ns:
                     # Extrae todos los elementos entre comillas
                     social_links = re.findall(r'"(.*?)"', ns.group(1))
-                    print(social_links)
+                    
                 metadata["social_links"] = social_links
                 
 

@@ -397,7 +397,7 @@ async def _hunt_async(
             if scan_localpart:
                 localparts = [email.split("@", 1)[0] for email in new_emails]
                 username_scanners2: list[object] = [
-                    GitHubScanner(),
+                    GitHubScanner(), 
                     GitHubGistScanner(),
                     GitLabScanner(),
                     KeybaseScanner(),
@@ -765,7 +765,7 @@ async def _scan_email_async(
                 GitLabScanner(),
                 KeybaseScanner(),
                 DevToScanner(),
-                #MediumScanner(),
+                MediumScanner(),
                 NpmScanner(),
                 ProductHuntScanner(),
                 RedditScanner(),
