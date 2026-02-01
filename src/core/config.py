@@ -14,6 +14,8 @@ from pathlib import Path
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from core.domain.language import Language
+
 
 class AppSettings(BaseSettings):
     """Configuración central de la aplicación.
@@ -87,4 +89,9 @@ class AppSettings(BaseSettings):
     email_sites_path: Path | None = Field(
         default=None,
         description="Ruta local a un JSON de sitios para email (p.ej. email-data.json).",
+    )
+
+    default_language: Language = Field(
+        default=Language.ENGLISH,
+        description="Idioma por defecto para prompts y reportes (en/es).",
     )

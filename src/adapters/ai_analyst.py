@@ -23,6 +23,7 @@ except Exception:  # pragma: no cover
     APIConnectionError = APITimeoutError = APIStatusError = RateLimitError = Exception  # type: ignore
 
 from core.config import AppSettings
+from core.domain.language import Language
 from core.domain.models import AnalysisReport, PersonEntity
 
 
@@ -32,21 +33,111 @@ def build_deepseek_client(*, api_key: str, base_url: str) -> AsyncOpenAI:
 
 _JSON_FENCE_RE = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.DOTALL | re.IGNORECASE)
 
+
 def _extract_json_object(text: str) -> str:
-    t = text.strip()
-    if not t:
-        raise ValueError("Respuesta IA vacía")
-    m = _JSON_FENCE_RE.search(t)
-    #m= BeautifulSoup(t, "html.parser").find("code")
-    if m:
-        return m.group(1).strip()
-    if t.startswith("{") and t.endswith("}"):
-        return t
-    start = t.find("{")
-    end = t.rfind("}")
-    if start != -1 and end != -1 and end > start:
-        return t[start : end + 1].strip()
-    raise ValueError("No se encontró un objeto JSON en la respuesta IA")
+    """Obtiene el primer objeto JSON presente en la respuesta del proveedor."""
+    match = _JSON_FENCE_RE.search(text)
+    if match:
+        return match.group(1).strip()
+
+    stripped = text.strip()
+    if stripped.startswith("{") and stripped.endswith("}"):
+        return stripped
+
+    start = stripped.find("{")
+    end = stripped.rfind("}")
+    if 0 <= start < end:
+        candidate = stripped[start : end + 1]
+        try:
+            json.loads(candidate)
+            return candidate
+        except json.JSONDecodeError:
+            pass
+
+    raise ValueError("Could not locate a valid JSON object in the AI provider response.")
+
+
+def _build_system_prompt(language: Language) -> str:
+    if language == Language.SPANISH:
+        return (
+            "ACTÚA COMO: Un Perfilador Criminalista y Experto en Inteligencia de Amenazas (CTI).\n"
+            "TU OBJETIVO: Construir un reporte psicológico y conductual del objetivo basado en su huella digital.\n"
+            "TU MÉTODO: Deducción lógica agresiva (Chain of Thought). No solo describas, INFIERE.\n\n"
+            "ANALIZA LAS SIGUIENTES 6 DIMENSIONES Y GENERA UN REPORTE EN FORMATO MARKDOWN:\n\n"
+            "1. 🆔 IDENTIDAD Y DEMOGRAFÍA (Inferencia):\n"
+            "   - ¿Nombre real probable?\n"
+            "   - Rango de edad estimado (jerga, antigüedad de cuentas, referencias culturales).\n"
+            "   - Género probable (patrones lingüísticos y pronombres).\n"
+            "   - Nivel educativo estimado (gramática, complejidad técnica).\n\n"
+            "2. 🌍 ANÁLISIS GEO-TEMPORAL (Crítico):\n"
+            "   - Cruza timestamps de commits/posts/comentarios para triangular ZONA HORARIA REAL.\n"
+            "   - Infiere rutina de sueño (búho nocturno vs alondra madrugadora).\n"
+            "   - ¿Patrones que sugieran ubicación geográfica (actividad laboral vs fines de semana)?\n\n"
+            "3. 🧠 PERFIL PSICOLÓGICO (Modelo OCEAN):\n"
+            "   - Apertura: curiosidad y experimentación.\n"
+            "   - Extraversión: nivel de interacción social.\n"
+            "   - Responsabilidad: consistencia y orden en el trabajo/código.\n"
+            "   - Neuroticismo: frustración, quejas, tono defensivo.\n"
+            "   - Intereses obsesivos: temas o comunidades recurrentes.\n\n"
+            "4. 💻 PERFIL TÉCNICO Y PROFESIONAL:\n"
+            "   - Stack real (basado en actividad, no en lo que declara).\n"
+            "   - Nivel de seniority (Junior, Mid, Senior, Script Kiddie).\n"
+            "   - Arquetipo profesional (corporativo, freelance, investigador, hacker, creador, etc.).\n\n"
+            "5. ⚖️ IDEOLOGÍA Y VALORES:\n"
+            "   - Infiere inclinación política o ética a partir de comunidades, repositorios, publicaciones o likes.\n\n"
+            "6. ⚠️ VECTORES DE ATAQUE (OpSec):\n"
+            "   - Susceptibilidad a ingeniería social.\n"
+            "   - Exposición de emails personales, empleadores o identidades reales.\n"
+            "   - Higiene de seguridad (2FA, reutilización de alias, credenciales expuestas).\n"
+            "   - Indicios de actividad maliciosa o hacking.\n\n"
+            "IDIOMA DE RESPUESTA: Español neutro.\n"
+            "FORMATO DE SALIDA (JSON ESTRICTO):\n"
+            "{\n"
+            "  \"summary\": \"Texto en Markdown con las seis secciones.\",\n"
+            "  \"highlights\": [\"Lista de 3-5 deducciones rápidas.\"],\n"
+            "  \"confidence\": 0.0 a 1.0\n"
+            "}"
+        )
+
+    return (
+        "ROLE: Criminal Profiler and Threat Intelligence Analyst.\n"
+        "OBJECTIVE: Build a psychological and behavioural report using public evidence.\n"
+        "METHOD: Aggressive logical deduction (Chain of Thought). Do not merely describe — infer.\n\n"
+        "ANALYSE THE FOLLOWING SIX DIMENSIONS AND PRODUCE A MARKDOWN REPORT:\n\n"
+        "1. 🆔 IDENTITY & DEMOGRAPHICS (Inference):\n"
+        "   - Probable real name.\n"
+        "   - Estimated age range (slang, account age, cultural references).\n"
+        "   - Probable gender (linguistic cues, pronouns).\n"
+        "   - Education level inferred from grammar, technical depth, writing quality.\n\n"
+        "2. 🌍 GEO-TEMPORAL ANALYSIS (Critical):\n"
+        "   - Cross activity timestamps to triangulate REAL TIMEZONE.\n"
+        "   - Infer sleep routine (night owl vs early bird).\n"
+        "   - Highlight patterns suggesting geography (workdays vs weekends).\n\n"
+        "3. 🧠 PSYCHOLOGICAL PROFILE (OCEAN Model):\n"
+        "   - Openness: curiosity and experimentation.\n"
+        "   - Extraversion: level of social interaction.\n"
+        "   - Conscientiousness: consistency and hygiene in output.\n"
+        "   - Neuroticism: frustration, complaints, defensive tone.\n"
+        "   - Obsessive interests: recurring themes or communities.\n\n"
+        "4. 💻 TECHNICAL / PROFESSIONAL PROFILE:\n"
+        "   - Real stack (evidence-based).\n"
+        "   - Seniority estimate (Junior, Mid, Senior, Script Kiddie).\n"
+        "   - Role archetype (corporate dev, freelancer, researcher, hacker, creator, etc.).\n\n"
+        "5. ⚖️ IDEOLOGY & VALUES:\n"
+        "   - Infer political or ethical leaning from communities, starred repos, publications or likes.\n\n"
+        "6. ⚠️ ATTACK SURFACE (OpSec):\n"
+        "   - Susceptibility to social engineering.\n"
+        "   - Exposure of personal emails, employers, real identities.\n"
+        "   - Security hygiene (2FA, alias reuse, credential leaks).\n"
+        "   - Any hints of malicious or hacking activity.\n\n"
+        "OUTPUT LANGUAGE: English only.\n"
+        "OUTPUT FORMAT (STRICT JSON):\n"
+        "{\n"
+        "  \"summary\": \"Markdown text with the six sections above.\",\n"
+        "  \"highlights\": [\"3-5 high-impact deductions.\"],\n"
+        "  \"confidence\": 0.0 to 1.0\n"
+        "}"
+    )
 
 
 class _AIReportPayload(BaseModel):
@@ -55,7 +146,12 @@ class _AIReportPayload(BaseModel):
     confidence: float = Field(default=0.5, ge=0.0, le=1.0)
 
 
-async def analyze_person(*, person: PersonEntity, settings: AppSettings | None = None) -> AnalysisReport:
+async def analyze_person(
+    *,
+    person: PersonEntity,
+    language: Language,
+    settings: AppSettings | None = None,
+) -> AnalysisReport:
     """Genera un reporte de análisis IA a partir de evidencias públicas."""
 
     settings = settings or AppSettings()
@@ -81,52 +177,7 @@ async def analyze_person(*, person: PersonEntity, settings: AppSettings | None =
         max_retries=0,
     )
 
-    system_prompt = (
-        "ACTÚA COMO: Un Perfilador Criminalista y Experto en Inteligencia de Amenazas (CTI).\n"
-        "TU OBJETIVO: Construir un reporte psicológico y conductual del objetivo basado en su huella digital.\n"
-        "TU MÉTODO: Deducción lógica agresiva (Chain of Thought). No solo describas, INFIERE.\n\n"
-
-        "ANALIZA LAS SIGUIENTES 6 DIMENSIONES Y GENERA UN REPORTE EN FORMATO MARKDOWN:\n\n"
-
-        "1. 🆔 IDENTIDAD Y DEMOGRAFÍA (Inferencia):\n"
-        "   - ¿Nombre real probable?\n"
-        "   - Rango de edad estimado (Basado en jerga, fecha creación de cuentas, referencias culturales).\n"
-        "   - Género probable (Basado en patrones de lenguaje y pronombres).\n"
-        "   - Nivel educativo estimado (Basado en gramática y complejidad técnica).\n\n"
-
-        "2. 🌍 ANÁLISIS GEO-TEMPORAL (Crítico):\n"
-        "   - Cruza timestamps de commits/posts/comentarios para triangular su ZONA HORARIA REAL.\n"
-        "   - Infiere su RUTINA DE SUEÑO (¿Es un 'búho' que interactua de madrugada o una 'alondra'?)\n"
-        "   - ¿Hay patrones de actividad que sugieran ubicación geográfica? (Ej. actividad laboral vs fines de semana)\n\n"
-
-        "3. 🧠 PERFIL PSICOLÓGICO (Modelo OCEAN):\n"
-        "   - Apertura: ¿Curioso, prueba cosas nuevas (o todo lo contrario)?\n"
-        "   - Extraversión: ¿Interactúa mucho con otros o es más reservado?\n"
-        "   - Responsabilidad: en caso de ser programdor, ¿Código limpio/comentarios o repositorios basura/abandonados?, en caso de que no  sea programador, ¿Es ordenado en sus posts y comentarios?\n"
-        "   - Neuroticismo: ¿Se queja en los comentarios? ¿Tono agresivo o defensivo?\n"
-        "   - Intereses Obsesivos: ¿De qué temas habla repetitivamente?\n\n"
-
-        "4. 💻 PERFIL TÉCNICO Y PROFESIONAL: (en caso de tener indicios de ser desarrollador, ingeniero, o participar en la industria tech de alguan forma)\n"
-        "   - Stack tecnológico real (no el que dice, sino el que usa).\n"
-        "   - Nivel de Seniority real (Junior, Mid, Senior, Script Kiddie).\n"
-        "   - ¿Desarrollador Corporativo, Freelance, Investigador o Hacker?\n\n"
-
-        "5. ⚖️ IDEOLOGÍA Y VALORES:\n"
-        "   - Infiere inclinación política o ética (izquierda - derecha, conservador - liberal, progresista, etc.) basándote en qué subreddits sigue o qué repositorios 'starrea', que posts sube a medium etc.\n\n"
-
-        "6. ⚠️ VECTORES DE ATAQUE (OpSec):\n"
-        "   - ¿Qué tan fácil sería hacerle Ingeniería Social? (¿Comparte demasiado?)\n"
-        "   - ¿Ha expuesto correos personales o nombres de empresas?\n"
-        "  - ¿Usa buenas prácticas de seguridad? (2FA, no reutiliza usernames, etc.)\n"
-        "   - ¿Hay indicios de actividades maliciosas o hacking?\n\n"
-
-        "FORMATO DE SALIDA (JSON ESTRICTO):\n"
-        "{\n"
-        "  'summary': 'Texto largo en Markdown con las 6 secciones detalladas arriba.',\n"
-        "  'highlights': ['Lista de 3-5 deducciones rápidas y de alto impacto (Bullet points)'],\n"
-        "  'confidence': 0.0 a 1.0 (Qué tan seguro estás de que los perfiles son la misma persona)\n"
-        "}"
-    )
+    system_prompt = _build_system_prompt(language)
 
     # Preparación de evidencia normalizada (best-effort).
     profiles_data = []
@@ -161,6 +212,7 @@ async def analyze_person(*, person: PersonEntity, settings: AppSettings | None =
         "target_query": clean_person.target,
         "evidence_count": len(profiles_data),
         "raw_evidence": profiles_data,
+        "output_language": language.value,
     }
 
     request_messages = [
