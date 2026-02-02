@@ -15,11 +15,6 @@
 
 **Advanced identity correlation and cognitive profiling CLI**
 
-![Command walkthrough showing the initial hunt invocation](assets/command_image.png)
-![CLI AI analysis panel screenshot](assets/ai_analysis.png)
-![PDF dossier cover rendered with the classified layout](assets/pdf.png)
-![Social footprint list for torvalds without Sherlock](assets/socials_list.png)
-
 OSINT-D2 ingests usernames and/or emails, aggregates public evidence from multiple OSINT sources, and enriches the dataset with targeted scrapers. A DeepSeek/OpenAI-compatible analyst can turn the evidence into hypothesis-driven intelligence. The CLI defaults to English while still supporting a full Spanish experience (`--spanish`).
 
 ## Highlights
@@ -29,6 +24,8 @@ OSINT-D2 ingests usernames and/or emails, aggregates public evidence from multip
 - Cognitive AI analysis (`--deep-analyze`) generating structured summaries, highlights, and confidence levels.
 - Professional dossier exports (JSON + PDF/HTML) suitable for incident response or executive briefings.
 - Typer + Rich CLI with contextual help, interactive wizard, and JSON-first automation outputs.
+
+![Social footprint list for torvalds without Sherlock](assets/socials_list.png)
 
 ## Installation
 
@@ -73,6 +70,8 @@ Direct help:
 poetry run osint-d2 --help
 poetry run osint-d2 hunt --help
 ```
+
+![Command walkthrough showing the initial hunt invocation](assets/command_image.png)
 
 ## Command Reference
 
@@ -121,11 +120,15 @@ poetry run osint-d2 analyze reports/example.json --spanish
 - `--json-raw` embeds the provider payload under `analysis.raw` for auditing.
 - Treat AI output as hypothesis generation; always confirm with primary evidence.
 
+![CLI AI analysis panel screenshot](assets/ai_analysis.png)
+
 ## Reports
 
 - JSON exports mirror the internal Pydantic models, making them easy to post-process.
 - PDF/HTML dossiers are rendered via Jinja2 templates and WeasyPrint, including summary tables and AI narratives when available.
 - Exports are written under `reports/` with filenames sanitised via the pipeline helpers.
+
+![PDF dossier cover rendered with the classified layout](assets/pdf.png)
 
 ## Architecture
 
