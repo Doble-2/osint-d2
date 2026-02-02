@@ -61,7 +61,7 @@ def _contains_any(text: str, needle: Any) -> bool:
 
 async def run_sherlock_username(
     *,
-    username: str,
+    usernames: list[str],
     manifest: dict[str, Any],
     settings: AppSettings,
     max_concurrency: int,
@@ -72,6 +72,7 @@ async def run_sherlock_username(
 
     # Manifest es dict: site_name -> info
     items: list[tuple[str, dict[str, Any]]] = []
+
     for site_name, info in manifest.items():
         if site_name == "$schema":
             continue
@@ -80,15 +81,14 @@ async def run_sherlock_username(
         if no_nsfw and _is_nsfw(info):
             continue
         items.append((site_name, info))
-
-    total = len(items)
+    total = len(items) * max(1, len(usernames))
     if progress_callback:
         # Primer tick: permite inicializar la UI.
         progress_callback(0, total, "")
 
     async with build_async_client(settings) as client:
 
-        async def check(site_name: str, info: dict[str, Any]) -> SocialProfile | None:
+        async def check(site_name: str, info: dict[str, Any], username: str) -> SocialProfile | None:
             url_t = info.get("url")
             if not isinstance(url_t, str) or not url_t:
                 return None
@@ -154,6 +154,7 @@ async def run_sherlock_username(
                         return None
 
                     html_meta = extract_html_metadata(html=text, base_url=final_url)
+                    print(f"[debug] Sherlock: encontrado en {site_name} para {username}")
                     metadata: dict[str, Any] = {
                         "source": "sherlock",
                         "site_name": site_name,
@@ -176,10 +177,14 @@ async def run_sherlock_username(
                 except Exception:
                     return None
 
-        tasks: list[asyncio.Task[SocialProfile | None]] = []
+        tasks: list[asyncio.Future[SocialProfile | None]] = []
+        task_labels: dict[asyncio.Future[SocialProfile | None], str] = {}
         for name, info in items:
-            t = asyncio.create_task(check(name, info), name=name)
-            tasks.append(t)
+            for username in usernames:
+                label = f"sherlock:{name}:{username}"
+                t = asyncio.create_task(check(name, info, username), name=label)
+                tasks.append(t)
+                task_labels[t] = label
 
         completed = 0
         found: list[SocialProfile] = []
@@ -188,7 +193,7 @@ async def run_sherlock_username(
             completed += 1
             if progress_callback:
                 try:
-                    progress_callback(completed, total, t.get_name())
+                    progress_callback(completed, total, task_labels.get(t, ""))
                 except Exception:
                     # Nunca dejar que la UI rompa el scanning.
                     pass

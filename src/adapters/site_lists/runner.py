@@ -55,7 +55,7 @@ def _match_found(*, text: str, status_code: int, e_code: int, e_string: str, m_c
 
 async def run_username_sites(
     *,
-    username: str,
+    usernames: list[str],
     sites: list[UsernameSite],
     settings: AppSettings,
     max_concurrency: int,
@@ -74,12 +74,13 @@ async def run_username_sites(
 
     async with build_async_client(settings) as client:
 
-        async def check(site: UsernameSite) -> SocialProfile | None:
+        async def check(site: UsernameSite, username: str) -> SocialProfile | None:
             url = site.uri_check.replace("{account}", username)
             async with semaphore:
                 try:
                     resp = await client.get(url)
                     text = resp.text or ""
+                   
                     found = _match_found(
                         text=text,
                         status_code=resp.status_code,
@@ -101,7 +102,8 @@ async def run_username_sites(
                         "site_name": site.name,
                         **html_meta,
                     }
-
+                    print(f"[debug] Sherlock: metadata: {metadata}")
+                    
                     return SocialProfile(
                         url=str(resp.url),
                         username=username,
@@ -115,14 +117,14 @@ async def run_username_sites(
                     # Errores: para masivo preferimos no contaminar con cientos de errores.
                     return None
 
-        results = await asyncio.gather(*(check(s) for s in filtered), return_exceptions=False)
+        results = await asyncio.gather(*(check(s, username) for s in filtered for username in usernames), return_exceptions=False)
 
     return [r for r in results if r is not None]
 
 
 async def run_email_sites(
     *,
-    email: str,
+    emails: list[str],
     sites: list[EmailSite],
     settings: AppSettings,
     max_concurrency: int,
@@ -141,7 +143,7 @@ async def run_email_sites(
 
     async with build_async_client(settings) as client:
 
-        async def check(site: EmailSite) -> SocialProfile | None:
+        async def check(site: EmailSite, email: str) -> SocialProfile | None:
             processed = apply_input_operation(email, site.input_operation)
             url = site.uri_check.replace("{account}", processed)
             data = site.data.replace("{account}", processed) if site.data else None
@@ -191,6 +193,6 @@ async def run_email_sites(
                 except Exception:
                     return None
 
-        results = await asyncio.gather(*(check(s) for s in filtered), return_exceptions=False)
+        results = await asyncio.gather(*(check(s, email) for s in filtered for email in emails), return_exceptions=False)
 
     return [r for r in results if r is not None]

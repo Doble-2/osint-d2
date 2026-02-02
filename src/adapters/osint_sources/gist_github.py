@@ -34,7 +34,7 @@ class GitHubGistScanner(OSINTScanner):
             "status_code": response.status_code,
             "final_url": str(response.url),
         }
-
+        
         return SocialProfile(
             url=str(response.url),
             username=username,

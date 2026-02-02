@@ -1,10 +1,4 @@
-"""Comando `doctor`.
-
-Por qué existe:
-- En herramientas OSINT modernas, la principal fuente de fallos es el entorno:
-  dependencias nativas (PDF), API keys, conectividad, paths.
-- `doctor` reduce fricción y acelera soporte/depuración sin tocar la lógica OSINT.
-"""
+"""Doctor command for environment diagnostics."""
 
 from __future__ import annotations
 
@@ -18,9 +12,10 @@ from rich.table import Table
 from adapters.http_client import build_async_client
 from adapters.report_exporter import export_person_pdf
 from core.config import AppSettings
+from core.domain.language import Language
 from core.domain.models import PersonEntity
 
-app = typer.Typer(no_args_is_help=True, help="Diagnóstico del entorno y configuración.")
+app = typer.Typer(no_args_is_help=True, help="Environment diagnostics and configuration checks.")
 
 _console = Console()
 
@@ -35,16 +30,12 @@ async def _check_http(url: str) -> tuple[bool, str]:
 
 
 def _check_pdf() -> tuple[bool, str]:
-    """Intenta generar un PDF mínimo.
-
-    Nota:
-    - WeasyPrint puede fallar por dependencias del sistema. Queremos detectarlo.
-    """
+    """Attempt to generate a minimal PDF to detect WeasyPrint issues."""
 
     try:
         tmp = Path("reports") / "_doctor_test.pdf"
         person = PersonEntity(target="doctor", profiles=[])
-        export_person_pdf(person=person, output_path=tmp)
+        export_person_pdf(person=person, output_path=tmp, language=Language.ENGLISH)
         try:
             tmp.unlink(missing_ok=True)
         except Exception:
@@ -56,12 +47,12 @@ def _check_pdf() -> tuple[bool, str]:
 
 @app.command()
 def run() -> None:
-    """Ejecuta chequeos básicos y muestra recomendaciones."""
+    """Run baseline diagnostics and show recommended fixes."""
 
     settings = AppSettings()
 
     table = Table(title="OSINT-D2 Doctor")
-    table.add_column("Check", style="cyan", no_wrap=True)
+    table.add_column("Check", style="bright_green", no_wrap=True)
     table.add_column("Status", style="white")
     table.add_column("Details", style="dim")
 
@@ -69,7 +60,7 @@ def run() -> None:
     table.add_row(
         "AI key (.env)",
         "OK" if bool(settings.ai_api_key) else "MISSING",
-        "Define OSINT_D2_AI_API_KEY en .env",
+        "Set OSINT_D2_AI_API_KEY in .env",
     )
     table.add_row("AI base_url", "OK", settings.ai_base_url)
     table.add_row("AI model", "OK", settings.ai_model)
@@ -86,5 +77,5 @@ def run() -> None:
 
     if not ok_pdf:
         _console.print(
-            "\n[yellow]Nota:[/yellow] Si PDF falla, `--export-pdf` cae a HTML automáticamente."
+            "\n[yellow]Note:[/yellow] When PDF export fails, `--export-pdf` automatically falls back to HTML."
         )

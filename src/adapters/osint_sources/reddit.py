@@ -40,6 +40,7 @@ class RedditScanner(OSINTScanner):
             if isinstance(api.get("icon_img"), str) and api.get("icon_img"):
                 image_url = api.get("icon_img")
 
+
         return SocialProfile(
             url=public_url,
             username=username,
