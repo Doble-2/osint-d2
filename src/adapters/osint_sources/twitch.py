@@ -12,7 +12,7 @@ from adapters.http_client import build_async_client
 from core.config import AppSettings
 from core.domain.models import SocialProfile
 from core.interfaces.scanner import OSINTScanner
-
+from bs4 import BeautifulSoup
 
 class TwitchScanner(OSINTScanner):
     _base_url = "https://www.twitch.tv"
@@ -21,7 +21,7 @@ class TwitchScanner(OSINTScanner):
         self._settings = settings or AppSettings()
 
     async def scan(self, username: str) -> SocialProfile:
-        import re
+        #import re
         url = f"{self._base_url}/{username}"
 
         async with build_async_client(self._settings) as client:
@@ -37,27 +37,33 @@ class TwitchScanner(OSINTScanner):
             html = response.text if hasattr(response, "text") else await response.aread()
             if not isinstance(html, str):
                 html = html.decode(errors="ignore")
-            patternExist = r'<meta property="og:title" content="(.*?)"'
-            ne = re.search(patternExist, html, re.IGNORECASE | re.DOTALL)
+            soup = BeautifulSoup(html, "html.parser")
+            title_soup = soup.find("meta", {"property": "og:title"})
             
-            if ne is not None:
+            name = None
+            if title_soup:
+                name = title_soup.get("content", "").replace("Twitch", "").strip(" ·-")
+                metadata["name"] = name
+            if title_soup is not None:
                 exists = True
                 
-                pattern_desc = r'<meta name="description" content="(.*?)"'
-                nd = re.search(pattern_desc, html, re.IGNORECASE | re.DOTALL)
-                if nd is not None:
-                    description = nd.group(1)
+                #pattern_desc = r'<meta name="description" content="(.*?)"'
+                desc_soup = soup.find("meta", {"name": "description"})
+                
+                if desc_soup is not None:
+                    description = desc_soup.get("content")
                     metadata["description"] = description
                 
-                pattern_avatar = r'<meta property="og:image" content="(.*?)"'
-                na = re.search(pattern_avatar, html, re.IGNORECASE | re.DOTALL)
-                if na is not None:
-                    avatar_url = na.group(1)
+                #pattern_avatar = r'<meta property="og:image" content="(.*?)"'
+                avatar_soup = soup.find("meta", {"property": "og:image"})
+                if avatar_soup is not None:
+                    avatar_url = avatar_soup.get("content")
                     metadata["avatar_url"] = avatar_url
+                #na = re.search(pattern_avatar, html, re.IGNORECASE | re.DOTALL)
         
             else:
                 exists = False  
-                
+                                
         return SocialProfile(
             url=str(response.url),
             username=username,

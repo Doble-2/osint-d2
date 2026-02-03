@@ -52,7 +52,7 @@ from core.services.identity_pipeline import (
     scan_email as run_email_pipeline,
     scan_username as run_username_pipeline,
 )
-
+# TODO: arreglar las advertencias de pylance
 app = typer.Typer(
     name="osint-d2",
     no_args_is_help=False,
@@ -65,6 +65,7 @@ app = typer.Typer(
         "  analyze      -> Reprocess an exported JSON with the AI engine.\n"
         "  wizard       -> Guided workflow for interactive runs.\n"
         "  doctor       -> Environment diagnostics and utilities.\n"
+        "  breach      -> Check if credentials have been leaked (BreachDirectory).\n\n"
         "Use `osint-d2 <command> --help` for detailed flags."
     ),
 )

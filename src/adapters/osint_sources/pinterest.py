@@ -15,7 +15,7 @@ from adapters.http_client import build_async_client
 from core.config import AppSettings
 from core.domain.models import SocialProfile
 from core.interfaces.scanner import OSINTScanner
-
+from bs4 import BeautifulSoup
 
 class PinterestScanner(OSINTScanner):
     _base_url = "https://www.pinterest.com"
@@ -35,6 +35,7 @@ class PinterestScanner(OSINTScanner):
             "status_code": response.status_code,
             "final_url": str(response.url),
         }
+        soup = BeautifulSoup(response.text, "html.parser")
         
         if response.status_code == 200:
             # Extraer <title> del HTML
@@ -44,8 +45,10 @@ class PinterestScanner(OSINTScanner):
                 
             #validamos existencia real del perfil con el div que contiene el nombre
             pattern_exist_div = r'<div class="H2DtUH KwViV7 FE_3R1 KDGhSV Tjcf3c sSBu24" data-test-id="profile-name"><div class="ADXRXN">(.*?)</div>'
-            ne = re.search(pattern_exist_div, html, re.IGNORECASE | re.DOTALL)
-            name= ne.group(1) if ne is not None else None
+            exist_soup = soup.find("div", {"data-test-id": "profile-name"})
+            exist= exist_soup.find("div").text if exist_soup and exist_soup.find("div") else None
+            #ne = re.search(pattern_exist_div, html, re.IGNORECASE | re.DOTALL)
+            name= exist if exist is not None else None
             
             
             if name is not None:
@@ -53,6 +56,7 @@ class PinterestScanner(OSINTScanner):
                 metadata["name"] = name
                 
                 pattern_desc = r'<span class="WuRgKB aMgNKE YfEt3H v_eFe4 qnEc35 hxKTA7 mm0O_j" data-test-id="main-user-description-text">(.*?)</span>'
+                
                 nd = re.search(pattern_desc, html, re.IGNORECASE | re.DOTALL)
                 if nd is not None:
                     description = nd.group(1)
@@ -63,14 +67,17 @@ class PinterestScanner(OSINTScanner):
                 if na is not None:
                     avatar_url = na.group(1)
                     metadata["avatar_url"] = avatar_url
-                                
-                #pattern_website = r'<div class="H2DtUH opw_4g H__hJz Tjcf3c sSBu24" data-test-id="website-icon-and-url"><div class="oRZ5_s"><svg aria-label="(.?)" class="aTSQd5 hL9n03 _ByyDT"'
-                #pattern_website = r'class="etmDmh i7jpet zlD4hU Q3hcOU DodKMr O0u6sV KQwCbH itw4K9 g0I6wi be_g_n ap8aAM" href="(.*?)" rel="noopener noreferrer" tabindex="0" target="_blank">'
-                pattern_website = r'<span class="WuRgKB eMU5i5 YfEt3H v_eFe4 qnEc35 hxKTA7 rszMzv">(.*?)</span>'
-                nw = re.search(pattern_website, html, re.IGNORECASE | re.DOTALL)
+                
+                #pattern_website = r'<span class="WuRgKB eMU5i5 YfEt3H v_eFe4 qnEc35 hxKTA7 rszMzv">(.*?)</span>'
+                website_section_soup= soup.find("div", {"data-test-id": "website-icon-and-url"})
+                website= website_section_soup.find("span") if website_section_soup and website_section_soup.find("span") else None
+                
+                website_url= website.text if website and website.text else None
+                
+                #nw = re.search(pattern_website, html, re.IGNORECASE | re.DOTALL)
+                
 
-                if nw is not None:
-                    website_url = nw.group(1)
+                if website_url is not None:
                     metadata["other_websites"] = website_url
         
             else:
