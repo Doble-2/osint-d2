@@ -1,0 +1,113 @@
+name: Release (PyInstaller)
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install Linux deps (WeasyPrint)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libcairo2 libpango-1.0-0 libpangoft2-1.0-0 \
+            libgdk-pixbuf2.0-0 libffi-dev shared-mime-info
+
+      - name: Install macOS deps (WeasyPrint)
+        if: runner.os == 'macOS'
+        run: |
+          brew update
+          brew install cairo pango gdk-pixbuf libffi shared-mime-info
+
+      # Windows note: WeasyPrint PDF may fail at runtime due to GTK/Cairo.
+      # OSINT-D2 falls back to HTML if PDF export fails.
+
+      - name: Install Python deps
+        run: |
+          python -m pip install -U pip
+          python -m pip install -e .
+          python -m pip install "pyinstaller>=6.6"
+
+      - name: Build with PyInstaller
+        run: |
+          pyinstaller -y packaging/pyinstaller/osint-d2.spec
+
+      - name: Smoke test (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          ./dist/osint-d2/osint-d2 --help
+          ./dist/osint-d2/osint-d2 doctor run
+
+      - name: Smoke test (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          .\dist\osint-d2\osint-d2.exe --help
+          .\dist\osint-d2\osint-d2.exe doctor run
+
+      - name: Archive artifact (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          cd dist
+          tar -czf "osint-d2-${{ runner.os }}.tar.gz" osint-d2
+
+      - name: Archive artifact (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Compress-Archive -Path dist\osint-d2\* -DestinationPath "dist\osint-d2-Windows.zip" -Force
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: osint-d2-${{ runner.os }}
+          path: |
+            dist/osint-d2-${{ runner.os }}.tar.gz
+            dist/osint-d2-Windows.zip
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Display artifacts
+        run: |
+          ls -R artifacts
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/**/osint-d2-*.tar.gz
+            artifacts/**/osint-d2-*.zip
+          generate_release_notes: true

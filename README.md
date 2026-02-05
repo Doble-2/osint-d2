@@ -270,6 +270,30 @@ pip install -e .
 bash scripts/build_pyinstaller_linux.sh
 ```
 
+### macOS build
+
+```bash
+python -m venv .venv-build
+source .venv-build/bin/activate
+
+pip install -U pip
+pip install -e .
+
+bash scripts/build_pyinstaller_macos.sh
+```
+
+### Windows build (PowerShell)
+
+```powershell
+python -m venv .venv-build
+.\.venv-build\Scripts\Activate.ps1
+
+pip install -U pip
+pip install -e .
+
+.\scripts\build_pyinstaller_windows.ps1
+```
+
 The artifact will be available at:
 
 - `dist/osint-d2/` (ship this folder as a `.zip` or `.tar.gz`)
@@ -282,6 +306,23 @@ Inside the shipped folder:
 ./osint-d2 doctor setup-ai
 ./osint-d2 hunt -e user@example.com --ai --ai-provider groq --breach-check
 ```
+
+### GitHub Releases (recommended for multiplatform)
+
+This repo includes a GitHub Actions workflow that builds PyInstaller bundles for:
+
+- Linux (`.tar.gz`)
+- macOS (`.tar.gz`)
+- Windows (`.zip`)
+
+To publish a new release, push a tag like:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+The workflow will upload artifacts to the GitHub Release automatically.
 
 ![PDF dossier cover rendered with the classified layout](assets/pdf.png)
 
