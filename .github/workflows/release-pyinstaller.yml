@@ -65,8 +65,10 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         env:
+          PYTHONUTF8: 1
           PYTHONIOENCODING: utf-8
         run: |
+          chcp 65001
           .\dist\osint-d2\osint-d2.exe --help
           .\dist\osint-d2\osint-d2.exe doctor run
 
