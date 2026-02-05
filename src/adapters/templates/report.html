@@ -1,0 +1,594 @@
+<!doctype html>
+<html lang="{{ strings.lang_code }}">
+  <head>
+    <meta charset="utf-8" />
+    <title>{{ strings.title_prefix }} • {{ person.target }}</title>
+    <meta name="generator" content="OSINT-D2" />
+    <meta name="created" content="{{ generated_at }}" />
+    <style>
+      :root {
+        color-scheme: light;
+        --brand-dark: #041914;
+        --brand-ink: #133026;
+        --brand-muted: #4a6b59;
+        --brand-accent: #0f766e;
+        --brand-accent-soft: #34d399;
+        --surface: #ffffff;
+        --surface-alt: #f4fbf9;
+      }
+
+      @page {
+        size: A4;
+        margin: 18mm;
+        @top-left {
+          content: "{{ strings.layout.top_left }}";
+          font-size: 9pt;
+          color: var(--brand-muted);
+        }
+        @top-right {
+          content: "{{ strings.layout.top_right }}: {{ generated_at_local }}";
+          font-size: 9pt;
+          color: var(--brand-muted);
+        }
+        @bottom-right {
+          content: "{{ strings.layout.page_label }} " counter(page) " / " counter(pages);
+          font-size: 9pt;
+          color: var(--brand-muted);
+        }
+      }
+
+      @page:first {
+        margin: 0;
+      }
+
+      body {
+        font-family: "IBM Plex Sans", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        background: var(--surface-alt);
+        color: var(--brand-ink);
+        margin: 0;
+      }
+
+      .watermark {
+        position: fixed;
+        top: 45%;
+        left: 50%;
+        transform: translate(-50%, -50%) rotate(-24deg);
+        font-size: 110px;
+        font-weight: 700;
+        letter-spacing: 16px;
+        color: rgba(15, 118, 110, 0.08);
+        text-transform: uppercase;
+        pointer-events: none;
+        z-index: 0;
+      }
+
+      .cover {
+        min-height: 297mm;
+        width: 100%;
+        background: linear-gradient(140deg, rgba(4, 18, 16, 0.96) 0%, rgba(10, 37, 32, 0.92) 55%, rgba(13, 52, 42, 0.88) 100%);
+        color: #f9fafb;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        page-break-after: always;
+        position: relative;
+        z-index: 1;
+        padding: 48px;
+        box-sizing: border-box;
+      }
+
+      .cover-inner {
+        background: rgba(6, 24, 20, 0.6);
+        border: 1px solid rgba(148, 241, 209, 0.18);
+        border-radius: 12px;
+        padding: 56px 64px;
+        max-width: 600px;
+        text-align: left;
+        box-shadow: 0 28px 60px rgba(7, 10, 19, 0.6);
+      }
+
+      .cover-band {
+        display: inline-block;
+        border: 1px solid rgba(52, 211, 153, 0.7);
+        color: var(--brand-accent-soft);
+        padding: 6px 18px;
+        letter-spacing: 3px;
+        font-size: 13px;
+        font-weight: 700;
+        text-transform: uppercase;
+        margin-bottom: 26px;
+        background: rgba(15, 118, 110, 0.18);
+      }
+
+      .cover-title {
+        font-size: 58px;
+        letter-spacing: 4px;
+        margin: 0;
+        line-height: 1.05;
+      }
+
+      .cover-subtitle {
+        margin: 14px 0 0;
+        font-size: 16px;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        color: rgba(196, 248, 223, 0.9);
+      }
+
+      .cover-meta {
+        margin-top: 40px;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 18px 20px;
+      }
+
+      .cover-meta-item {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        padding: 12px 14px;
+        border: 1px solid rgba(248, 250, 252, 0.12);
+        border-radius: 8px;
+        background: rgba(7, 30, 24, 0.6);
+      }
+
+      .cover-meta-item .label {
+        color: rgba(148, 241, 209, 0.85);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+      }
+
+      .cover-meta-item .value {
+        font-size: 14px;
+        font-weight: 600;
+        letter-spacing: 0.8px;
+        text-transform: uppercase;
+      }
+
+      .page {
+        page-break-after: always;
+        padding: 0 6mm;
+        position: relative;
+        z-index: 1;
+      }
+
+      .page:last-of-type {
+        page-break-after: auto;
+      }
+
+      .section-title {
+        margin: 24px 0 14px;
+        padding-left: 14px;
+        border-left: 6px solid var(--brand-accent);
+        text-transform: uppercase;
+        letter-spacing: 0.6px;
+        font-size: 18px;
+      }
+
+      .sub-section-title {
+        margin: 18px 0 10px;
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+        color: var(--brand-accent);
+      }
+
+      .card {
+        background: var(--surface);
+        border: 1px solid rgba(31, 41, 51, 0.12);
+        border-radius: 6px;
+        padding: 16px;
+        box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+        margin-bottom: 16px;
+      }
+
+      .stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 10px 16px;
+      }
+
+      .kv {
+        margin: 0;
+        font-size: 12px;
+        letter-spacing: 0.3px;
+      }
+
+      .kv strong {
+        color: var(--brand-accent);
+      }
+
+      .muted {
+        color: var(--brand-muted);
+        font-size: 11px;
+      }
+
+      .highlights {
+        margin: 0;
+        padding-left: 18px;
+        font-size: 11px;
+      }
+
+      .highlights li {
+        margin-bottom: 6px;
+      }
+
+      .toc ul {
+        list-style: none;
+        padding-left: 0;
+        margin: 0;
+      }
+
+      .toc li {
+        padding: 6px 0;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.25);
+      }
+
+      .toc a {
+        color: var(--brand-ink);
+        text-decoration: none;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        letter-spacing: 0.3px;
+        font-size: 12px;
+      }
+
+      .toc a.toc-link::after {
+        content: leader('.') target-counter(attr(href), page);
+        color: var(--brand-muted);
+        padding-left: 10px;
+      }
+
+      .breach-meta {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+        font-size: 11px;
+        color: var(--brand-muted);
+      }
+
+      .breach-meta strong {
+        color: var(--brand-accent);
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 12px;
+        font-size: 11px;
+      }
+
+      th {
+        background: var(--brand-dark);
+        color: #f9fafb;
+        padding: 9px 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        font-size: 11px;
+      }
+
+      td {
+        padding: 8px 10px;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.35);
+        vertical-align: top;
+      }
+
+      .badge-confirmed {
+        color: #0f766e;
+        font-weight: 700;
+        letter-spacing: 0.4px;
+      }
+
+      a {
+        color: #0f766e;
+        text-decoration: none;
+      }
+
+      .evidence {
+        margin-top: 10px;
+        padding: 12px;
+        border-left: 4px solid rgba(15, 118, 110, 0.85);
+        background: rgba(222, 247, 236, 0.75);
+        font-size: 11px;
+        white-space: pre-wrap;
+        border-radius: 4px;
+      }
+
+      .footer-note {
+        margin-top: 12px;
+        font-size: 10px;
+        color: var(--brand-muted);
+      }
+
+      .source-title {
+        margin: 14px 0 8px;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+        color: var(--brand-dark);
+      }
+
+      .checklist {
+        list-style: none;
+        padding-left: 0;
+        margin: 0;
+      }
+
+      .checklist li {
+        position: relative;
+        padding-left: 18px;
+        margin-bottom: 6px;
+      }
+
+      .checklist li::before {
+        content: "▸";
+        position: absolute;
+        left: 0;
+        color: var(--brand-accent);
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="watermark">{{ strings.watermark }}</div>
+    <div class="cover">
+      <div class="cover-inner">
+        <div class="cover-band">{{ strings.cover.badge }}</div>
+        <h1 class="cover-title">OSINT-D2</h1>
+        <p class="cover-subtitle">{{ strings.cover.subtitle }}</p>
+        <div class="cover-meta">
+          <div class="cover-meta-item">
+            <span class="label">{{ strings.cover.target_label }}</span>
+            <span class="value">{{ person.target }}</span>
+          </div>
+          <div class="cover-meta-item">
+            <span class="label">{{ strings.cover.date_label }}</span>
+            <span class="value">{{ generated_at }}</span>
+          </div>
+          <div class="cover-meta-item">
+            <span class="label">{{ strings.cover.report_label }}</span>
+            <span class="value">{{ report_id }}</span>
+          </div>
+          <div class="cover-meta-item">
+            <span class="label">{{ strings.cover.confidentiality_label }}</span>
+            <span class="value">{{ strings.cover.confidentiality_value }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="page" id="sec-00">
+      <h2 class="section-title">{{ strings.toc_title }}</h2>
+      <div class="card">
+        <div class="toc">
+          <ul>
+            {% for entry in strings.toc_entries %}
+              <li><a class="toc-link" href="{{ entry.anchor }}">{{ entry.label }}</a></li>
+            {% endfor %}
+          </ul>
+        </div>
+        <div class="footer-note">{{ strings.toc_hint }}</div>
+      </div>
+    </div>
+
+    <div class="page" id="sec-01">
+      <h2 class="section-title">{{ strings.analysis_title }}</h2>
+
+      <div class="card stats">
+        <p class="kv"><strong>{{ strings.analysis_card_labels.total }}:</strong> {{ profiles_total }}</p>
+        <p class="kv"><strong>{{ strings.analysis_card_labels.confirmed }}:</strong> {{ profiles_confirmed_count }}</p>
+        <p class="kv"><strong>{{ strings.analysis_card_labels.unconfirmed }}:</strong> {{ profiles_unconfirmed_count }}</p>
+        <p class="kv"><strong>{{ strings.analysis_card_labels.generated }}:</strong> {{ generated_at }}</p>
+      </div>
+
+      {% if person.analysis %}
+        <div class="card">
+          <p class="kv"><strong>{{ strings.analysis_model_label }}:</strong> {{ person.analysis.model or "" }}</p>
+          <p class="kv"><strong>{{ strings.analysis_confidence_label }}:</strong> {{ '{:.0%}'.format(person.analysis.confidence) }}</p>
+          <p class="kv"><strong>{{ strings.analysis_generated_label }}:</strong> {{ person.analysis.generated_at }}</p>
+          <hr />
+          <div class="evidence">{{ person.analysis.summary }}</div>
+          {% if person.analysis.highlights %}
+            <h3 class="sub-section-title">{{ strings.analysis_highlights_title }}</h3>
+            <ul class="highlights">
+              {% for h in person.analysis.highlights %}
+                <li>{{ h }}</li>
+              {% endfor %}
+            </ul>
+          {% endif %}
+        </div>
+      {% else %}
+        <div class="card">
+          <p class="muted">{{ strings.analysis_absent }}</p>
+        </div>
+      {% endif %}
+
+      <div class="footer-note">{{ strings.analysis_footer_note }}</div>
+    </div>
+
+    <div class="page" id="sec-02">
+      <h2 class="section-title">{{ strings.confirmed_title }}</h2>
+      <div class="card">
+        <p class="muted">{{ strings.confirmed_hint }}</p>
+        <table>
+          <thead>
+            <tr>
+              <th>{{ strings.confirmed_headers.network }}</th>
+              <th>{{ strings.confirmed_headers.username }}</th>
+              <th>{{ strings.confirmed_headers.source }}</th>
+              <th>{{ strings.confirmed_headers.status }}</th>
+              <th>{{ strings.confirmed_headers.url }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in profiles_confirmed %}
+              <tr>
+                <td>{{ p.network_name }}</td>
+                <td>{{ p.username }}</td>
+                <td>{{ p._source }}</td>
+                <td class="badge-confirmed">{{ strings.status_confirmed }}</td>
+                <td><a href="{{ p.url }}">{{ p.url }}</a></td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="page" id="sec-03">
+      <h2 class="section-title">{{ strings.unconfirmed_title }}</h2>
+      <div class="card">
+        <p class="muted">{{ strings.unconfirmed_hint }}</p>
+
+        {% if profiles_unconfirmed_count == 0 %}
+          <p class="muted">{{ strings.unconfirmed_none }}</p>
+        {% else %}
+          {% for source, items in unconfirmed_by_source %}
+            <h3 class="source-title">{{ strings.unconfirmed_source_label }}: {{ source }} ({{ items|length }})</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>{{ strings.unconfirmed_headers.network }}</th>
+                  <th>{{ strings.unconfirmed_headers.username }}</th>
+                  <th>{{ strings.unconfirmed_headers.url }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for p in items %}
+                  <tr>
+                    <td>{{ p.network_name }}</td>
+                    <td>{{ p.username }}</td>
+                    <td><a href="{{ p.url }}">{{ p.url }}</a></td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          {% endfor %}
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="page" id="sec-04">
+      <h2 class="section-title">{{ strings.textual_title }}</h2>
+      <div class="card">
+        <p class="muted">{{ strings.textual_hint }}</p>
+
+        {% set ns = namespace(printed=0) %}
+        {% for p in person.profiles %}
+          {% if p.metadata and (p.metadata.recent_commits or p.metadata.recent_comments) %}
+            {% if ns.printed < 4 %}
+              <h3 class="sub-section-title">{{ p.network_name }} // {{ p.username }}</h3>
+
+              {% if p.metadata.recent_commits %}
+                <div class="evidence">
+                  <strong>{{ strings.textual_commits }}:</strong>
+                  {% for c in p.metadata.recent_commits[:10] %}
+                    - {{ c.message }}{% if c.timestamp %} ({{ c.timestamp }}){% endif %}
+                  {% endfor %}
+                </div>
+              {% endif %}
+
+              {% if p.metadata.recent_comments %}
+                <div class="evidence">
+                  <strong>{{ strings.textual_comments }}:</strong>
+                  {% for c in p.metadata.recent_comments[:10] %}
+                    - {{ c.body }}{% if c.subreddit %} [r/{{ c.subreddit }}]{% endif %}
+                  {% endfor %}
+                </div>
+              {% endif %}
+
+              {% set ns.printed = ns.printed + 1 %}
+            {% endif %}
+          {% endif %}
+        {% endfor %}
+
+        {% if ns.printed == 0 %}
+          <p class="muted">{{ strings.textual_none }}</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="page" id="sec-05">
+      <h2 class="section-title">{{ strings.methodology_title }}</h2>
+      <div class="card">
+        <p class="muted">{{ strings.methodology_hint }}</p>
+        <div class="evidence">
+          <ul class="highlights checklist">
+            {% for item in strings.methodology_points %}
+              <li>{{ item }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="page" id="sec-06">
+      <h2 class="section-title">{{ strings.limitations_title }}</h2>
+      <div class="card">
+        <div class="evidence">
+          <ul class="highlights checklist">
+            {% for item in strings.limitations_points %}
+              <li>{{ item }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="page" id="sec-07">
+      <h2 class="section-title">{{ strings.breaches_title }}</h2>
+      <div class="card">
+        <p class="muted">{{ strings.breaches_hint }}</p>
+
+        {% if not breach_entries %}
+          <p class="muted">{{ strings.breaches_none }}</p>
+        {% else %}
+          {% for entry in breach_entries %}
+            <h3 class="sub-section-title">HIBP // {{ entry.email }}</h3>
+            <div class="breach-meta">
+              <span><strong>{{ strings.breaches_email_label }}:</strong> {{ entry.email }}</span>
+              <span><strong>{{ strings.breaches_status_label }}:</strong> {{ entry.status_code or "" }}</span>
+            </div>
+
+            {% set dump = entry.breaches %}
+            {% set breaches = dump.breaches if dump and dump.breaches is defined else [] %}
+
+            {% if entry.status_code != 200 %}
+              <p class="muted">{{ strings.breaches_request_failed }}</p>
+            {% elif not breaches %}
+              <p class="muted">{{ strings.breaches_no_breaches }}</p>
+            {% else %}
+              <table>
+                <thead>
+                  <tr>
+                    <th>{{ strings.breaches_headers.title }}</th>
+                    <th>{{ strings.breaches_headers.domain }}</th>
+                    <th>{{ strings.breaches_headers.date }}</th>
+                    <th>{{ strings.breaches_headers.records }}</th>
+                    <th>{{ strings.breaches_headers.classes }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for b in breaches %}
+                    <tr>
+                      <td>{{ b.title }}</td>
+                      <td>{{ b.domain }}</td>
+                      <td>{{ b.breach_date }}</td>
+                      <td>{{ b.pwn_count }}</td>
+                      <td>{{ b.data_classes | join(", ") }}</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            {% endif %}
+          {% endfor %}
+        {% endif %}
+      </div>
+    </div>
+  </body>
+</html>

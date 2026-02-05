@@ -25,6 +25,10 @@ reports/
 *.json
 *.log
 
+# Allow HTML templates (they must be committed for packaging)
+!src/templates/*.html
+!src/adapters/templates/*.html
+
 # Downloaded datasets (no se commitean)
 data/
 
