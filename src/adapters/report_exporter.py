@@ -48,8 +48,13 @@ def _resolve_templates_dir() -> Path:
         )
 
     for p in candidates:
-        if p.is_dir():
+        if p.is_dir() and (p / "report.html").is_file():
             return p
+
+    # Fallback final: intentar buscar relativa al CWD si estamos en modo dev
+    cwd_templates = Path.cwd() / "src" / "templates"
+    if cwd_templates.is_dir() and (cwd_templates / "report.html").is_file():
+        return cwd_templates
 
     return _TEMPLATES_DIR
 
