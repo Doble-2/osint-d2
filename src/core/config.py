@@ -9,12 +9,74 @@ Nota: se implementará en la siguiente iteración.
 
 from __future__ import annotations
 
+import os
+import sys
 from pathlib import Path
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from core.domain.language import Language
+
+
+def get_user_config_dir() -> Path:
+    """Directorio de configuración por usuario (cross-platform, sin dependencias).
+
+    Objetivo: permitir un instalador/PyInstaller sin necesidad de editar `.env` en el proyecto.
+    """
+
+    if sys.platform.startswith("win"):
+        base = Path(os.environ.get("APPDATA", str(Path.home())))
+        return base / "osint-d2"
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / "osint-d2"
+
+    xdg = os.environ.get("XDG_CONFIG_HOME")
+    if xdg:
+        return Path(xdg) / "osint-d2"
+    return Path.home() / ".config" / "osint-d2"
+
+
+def get_user_env_file() -> Path:
+    return get_user_config_dir() / ".env"
+
+
+def _parse_env_lines(text: str) -> dict[str, str]:
+    data: dict[str, str] = {}
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        if key:
+            data[key] = value
+    return data
+
+
+def write_user_env_vars(values: dict[str, str]) -> Path:
+    """Escribe/actualiza variables en el .env global del usuario."""
+
+    env_path = get_user_env_file()
+    env_path.parent.mkdir(parents=True, exist_ok=True)
+
+    existing: dict[str, str] = {}
+    if env_path.exists():
+        try:
+            existing = _parse_env_lines(env_path.read_text(encoding="utf-8"))
+        except Exception:
+            existing = {}
+
+    existing.update({k: v for k, v in values.items() if v is not None})
+
+    lines = ["# OSINT-D2 user config (.env)"]
+    for key in sorted(existing.keys()):
+        lines.append(f"{key}={existing[key]}")
+    env_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return env_path
 
 
 class AppSettings(BaseSettings):
@@ -29,7 +91,8 @@ class AppSettings(BaseSettings):
         env_prefix="OSINT_D2_",
         extra="ignore",
         case_sensitive=False,
-        env_file=(".env",),
+        # Orden: proyecto primero (dev), luego config global de usuario (PyInstaller).
+        env_file=(".env", str(get_user_env_file())),
         env_file_encoding="utf-8",
     )
 

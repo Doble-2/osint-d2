@@ -29,6 +29,7 @@ from rich.progress import (
     BarColumn,
     Progress,
     SpinnerColumn,
+    TaskID,
     TextColumn,
     TimeElapsedColumn,
     TimeRemainingColumn,
@@ -38,8 +39,8 @@ from adapters.ai_analyst import analyze_person
 from adapters.json_exporter import export_person_json
 from adapters.report_exporter import export_person_html, export_person_pdf
 from cli.doctor import app as doctor_app
-from cli.ui_components import build_analysis_panel, build_profiles_table, print_banner
-from core.config import AppSettings
+from cli.ui_components import build_analysis_panel, build_breaches_table, build_profiles_table, print_banner
+from core.config import AppSettings, write_user_env_vars
 from core.domain.language import Language
 from core.domain.models import PersonEntity
 from core.resources_loader import get_default_list_path
@@ -52,7 +53,6 @@ from core.services.identity_pipeline import (
     scan_email as run_email_pipeline,
     scan_username as run_username_pipeline,
 )
-
 app = typer.Typer(
     name="osint-d2",
     no_args_is_help=False,
@@ -65,12 +65,81 @@ app = typer.Typer(
         "  analyze      -> Reprocess an exported JSON with the AI engine.\n"
         "  wizard       -> Guided workflow for interactive runs.\n"
         "  doctor       -> Environment diagnostics and utilities.\n"
+        "  breach      -> Check if credentials have been leaked (BreachDirectory).\n\n"
         "Use `osint-d2 <command> --help` for detailed flags."
     ),
 )
 app.add_typer(doctor_app, name="doctor")
 
 _console = Console()
+
+
+AI_PROVIDER_PRESETS: dict[str, dict[str, str]] = {
+    # Nota: los modelos disponibles cambian según el proveedor/plan.
+    "deepseek": {"base_url": "https://api.deepseek.com", "model": "deepseek-chat"},
+    # Calidad (si no está disponible, el runtime hace fallback automático a un modelo más común):
+    "groq": {"base_url": "https://api.groq.com/openai/v1", "model": "llama-3.1-70b-versatile"},
+    "groq-70b": {"base_url": "https://api.groq.com/openai/v1", "model": "llama-3.1-70b-versatile"},
+    # Velocidad (más barato/rápido):
+    "groq-fast": {"base_url": "https://api.groq.com/openai/v1", "model": "llama-3.1-8b-instant"},
+    "openrouter": {"base_url": "https://openrouter.ai/api/v1", "model": "openai/gpt-4o-mini"},
+    "huggingface": {"base_url": "https://api-inference.huggingface.co/v1", "model": "meta-llama/Llama-3.1-8B-Instruct"},
+}
+
+
+def _configure_ai_for_run(
+    *,
+    settings: AppSettings,
+    ai_provider: str | None,
+    ai_key: str | None,
+    ai_save: bool,
+    interactive: bool,
+    console: Console,
+) -> AppSettings:
+    """Aplica un preset de IA para esta ejecución y (opcionalmente) lo persiste.
+
+    UX objetivo:
+    - Usuarios PyInstaller: elegir proveedor + pegar key 1 vez.
+    - Runs posteriores: no pedir nada (lee config global del usuario).
+    """
+
+    provider = (ai_provider or "").strip().lower() or None
+    if not provider:
+        return settings
+
+    preset = AI_PROVIDER_PRESETS.get(provider)
+    if not preset:
+        raise typer.BadParameter(
+            f"Unknown --ai-provider '{provider}'. Choices: {', '.join(sorted(AI_PROVIDER_PRESETS.keys()))}"
+        )
+
+    base_url = preset["base_url"]
+    model = preset["model"]
+
+    key = (ai_key or "").strip() or (settings.ai_api_key or "").strip()
+    if not key and interactive:
+        console.print(
+            "[yellow]AI provider selected but no API key found.[/yellow] "
+            "Paste it now (it will be saved for next runs)."
+        )
+        key = Prompt.ask("AI API key", password=True).strip()
+
+    os.environ["OSINT_D2_AI_BASE_URL"] = base_url
+    os.environ["OSINT_D2_AI_MODEL"] = model
+    if key:
+        os.environ["OSINT_D2_AI_API_KEY"] = key
+
+    if ai_save and key:
+        env_path = write_user_env_vars(
+            {
+                "OSINT_D2_AI_BASE_URL": base_url,
+                "OSINT_D2_AI_MODEL": model,
+                "OSINT_D2_AI_API_KEY": key,
+            }
+        )
+        console.print(f"[green]AI config saved to:[/green] {env_path}")
+
+    return AppSettings()
 
 try:
     signal.signal(signal.SIGPIPE, signal.SIG_DFL)
@@ -165,6 +234,85 @@ def _print_profiles_table(*, person: PersonEntity, primary_usernames: list[str])
     _console.print(table)
 
 
+def _print_breaches_table(*, person: PersonEntity) -> None:
+    hibp_profiles = [p for p in person.profiles if (p.network_name or "").lower() == "hibp"]
+    if not hibp_profiles:
+        return
+
+    table = build_breaches_table()
+    printed_rows = 0
+
+    for profile in sorted(hibp_profiles, key=lambda p: (p.username or "").lower()):
+        md = profile.metadata if isinstance(profile.metadata, dict) else {}
+        status_code = md.get("status_code")
+        error = md.get("error")
+        status_text = "" if status_code is None else str(status_code)
+        error_text = str(error) if isinstance(error, str) else ""
+        email_value = profile.username
+
+        breaches_dump = md.get("breaches")
+        breaches_list = []
+        if isinstance(breaches_dump, dict):
+            maybe = breaches_dump.get("breaches")
+            if isinstance(maybe, list):
+                breaches_list = [b for b in maybe if isinstance(b, dict)]
+
+        if status_code != 200:
+            table.add_row(
+                email_value,
+                "-",
+                "-",
+                "-",
+                "-",
+                "-",
+                status_text,
+                error_text or f"hibp_http_{status_text}" if status_text else "hibp_no_response",
+            )
+            printed_rows += 1
+            continue
+
+        if not breaches_list:
+            table.add_row(
+                email_value,
+                "(none)",
+                "",
+                "",
+                "0",
+                "",
+                status_text,
+                "",
+            )
+            printed_rows += 1
+            continue
+
+        for breach in breaches_list:
+            title = str(breach.get("title") or "")
+            domain = str(breach.get("domain") or "")
+            date = str(breach.get("breach_date") or "")
+            records = breach.get("pwn_count")
+            records_text = str(records) if records is not None else ""
+            data_classes = breach.get("data_classes")
+            if isinstance(data_classes, list):
+                classes_text = ", ".join(str(x) for x in data_classes if x is not None)
+            else:
+                classes_text = ""
+
+            table.add_row(
+                email_value,
+                title,
+                domain,
+                date,
+                records_text,
+                classes_text,
+                status_text,
+                "",
+            )
+            printed_rows += 1
+
+    if printed_rows:
+        _console.print(table)
+
+
 def _handle_exports(
     *,
     person: PersonEntity,
@@ -203,6 +351,7 @@ def _handle_exports(
 
 async def _hunt_async(
     *,
+    settings: AppSettings,
     usernames: list[str] | None,
     emails: list[str] | None,
     deep_analyze: bool,
@@ -220,9 +369,13 @@ async def _hunt_async(
     use_sherlock: bool,
     strict: bool,
     language: Language,
+    breach_check: bool = False,
 ) -> None:
     if not usernames and not emails:
         raise typer.BadParameter("Provide at least one username or email to hunt.")
+
+    if breach_check and not emails:
+        raise typer.BadParameter("--breach-check requires --emails/-e (you passed only usernames).")
 
     output_format = _auto_output_format(output_format)
     human = output_format == OutputFormat.table
@@ -231,10 +384,10 @@ async def _hunt_async(
     if human:
         print_banner(console)
 
-    settings = AppSettings()
+    # settings se inyecta desde el comando.
     status_ctx = console.status("Building aggregated intelligence...", spinner="dots") if human else None
     progress: Progress | None = None
-    progress_task_id: int | None = None
+    progress_task_id: TaskID | None = None
 
     def close_status() -> None:
         nonlocal status_ctx
@@ -288,6 +441,7 @@ async def _hunt_async(
             ),
             use_sherlock=use_sherlock,
             strict=strict,
+            use_breach_check=breach_check,
         )
         result = await run_hunt_pipeline(
             settings=settings,
@@ -304,9 +458,11 @@ async def _hunt_async(
 
     if human:
         _print_profiles_table(person=person, primary_usernames=primary_usernames)
+        _print_breaches_table(person=person)
 
     if deep_analyze:
         await _analyze_async(
+            settings=settings,
             person=person,
             output_format=output_format,
             emit_json=False,
@@ -330,6 +486,7 @@ async def _hunt_async(
 
 async def _scan_async(
     *,
+    settings: AppSettings,
     target: str,
     deep_analyze: bool,
     export_pdf: bool,
@@ -349,7 +506,7 @@ async def _scan_async(
     if status_ctx:
         status_ctx.__enter__()
     try:
-        result = await run_username_pipeline(settings=AppSettings(), username=target)
+        result = await run_username_pipeline(settings=settings, username=target)
     finally:
         if status_ctx:
             status_ctx.__exit__(None, None, None)
@@ -361,6 +518,7 @@ async def _scan_async(
 
     if deep_analyze:
         await _analyze_async(
+            settings=settings,
             person=person,
             output_format=output_format,
             emit_json=False,
@@ -384,6 +542,7 @@ async def _scan_async(
 
 async def _scan_email_async(
     *,
+    settings: AppSettings,
     email: str,
     deep_analyze: bool,
     export_pdf: bool,
@@ -405,7 +564,7 @@ async def _scan_email_async(
         status_ctx.__enter__()
     try:
         result = await run_email_pipeline(
-            settings=AppSettings(),
+            settings=settings,
             email=email,
             scan_localpart=scan_localpart,
         )
@@ -420,6 +579,7 @@ async def _scan_email_async(
 
     if deep_analyze:
         await _analyze_async(
+            settings=settings,
             person=person,
             output_format=output_format,
             emit_json=False,
@@ -443,6 +603,7 @@ async def _scan_email_async(
 
 async def _analyze_async(
     *,
+    settings: AppSettings,
     person: PersonEntity,
     output_format: OutputFormat,
     emit_json: bool,
@@ -452,7 +613,6 @@ async def _analyze_async(
     human = output_format == OutputFormat.table
     console = _console if human else Console(stderr=True)
 
-    settings = AppSettings()
     if human:
         print_banner(console)
 
@@ -471,6 +631,20 @@ async def _analyze_async(
                 status.__exit__(None, None, None)
 
         if human:
+            # UX: si el proveedor rate-limitea y caemos a heurístico, explicarlo claramente.
+            if getattr(report, "model", None) == "heuristic":
+                reason = ""
+                try:
+                    reason = str((report.raw or {}).get("reason") or "")
+                except Exception:
+                    reason = ""
+                if "provider_failed:RateLimitError" in reason or "429" in reason:
+                    console.print(
+                        "[yellow]AI remoto rate-limited (TPM/429).[/yellow] "
+                        "Mostrando análisis heurístico local. "
+                        "Sugerencias: espera 30–90s y reintenta; reduce concurrencia/uso; "
+                        "o usa un preset distinto (p.ej. `--ai-provider groq` para mejor calidad)."
+                    )
             console.print(build_analysis_panel(report))
         elif emit_json:
             sys.stdout.write(_dump_person_json(person=person, include_raw=include_raw_in_json))
@@ -492,6 +666,23 @@ def scan(
         False,
         "--deep-analyze/--no-deep-analyze",
         help="Run the cognitive AI analysis (DeepSeek) on top of collected evidence.",
+    ),
+    ai_provider: str | None = typer.Option(
+        None,
+        "--ai-provider",
+        help="AI provider preset: deepseek|groq|groq-70b|groq-fast|openrouter|huggingface (prompts for key if missing).",
+        show_default=False,
+    ),
+    ai_key: str | None = typer.Option(
+        None,
+        "--ai-key",
+        help="AI API key (optional). Prefer `osint-d2 doctor setup-ai` to avoid shell history leaks.",
+        show_default=False,
+    ),
+    ai_save: bool = typer.Option(
+        True,
+        "--ai-save/--no-ai-save",
+        help="Persist provider configuration in the user config (.env) for next runs.",
     ),
     spanish: bool | None = typer.Option(
         None,
@@ -523,8 +714,19 @@ def scan(
 ) -> None:
     output_format = _auto_output_format(output_format)
     language = _resolve_language(spanish)
+    settings = AppSettings()
+    if deep_analyze and ai_provider:
+        settings = _configure_ai_for_run(
+            settings=settings,
+            ai_provider=ai_provider,
+            ai_key=ai_key,
+            ai_save=ai_save,
+            interactive=sys.stdin.isatty() and sys.stdout.isatty(),
+            console=_console,
+        )
     asyncio.run(
         _scan_async(
+            settings=settings,
             target=target,
             deep_analyze=deep_analyze,
             export_pdf=export_pdf,
@@ -543,6 +745,23 @@ def scan_email(
         True,
         "--deep-analyze/--no-deep-analyze",
         help="Run the cognitive AI analysis (DeepSeek) on top of collected evidence.",
+    ),
+    ai_provider: str | None = typer.Option(
+        None,
+        "--ai-provider",
+        help="AI provider preset: deepseek|groq|groq-70b|groq-fast|openrouter|huggingface (prompts for key if missing).",
+        show_default=False,
+    ),
+    ai_key: str | None = typer.Option(
+        None,
+        "--ai-key",
+        help="AI API key (optional). Prefer `osint-d2 doctor setup-ai` to avoid shell history leaks.",
+        show_default=False,
+    ),
+    ai_save: bool = typer.Option(
+        True,
+        "--ai-save/--no-ai-save",
+        help="Persist provider configuration in the user config (.env) for next runs.",
     ),
     scan_localpart: bool = typer.Option(
         False,
@@ -580,8 +799,19 @@ def scan_email(
     normalized = _normalize_email(email)
     output_format = _auto_output_format(output_format)
     language = _resolve_language(spanish)
+    settings = AppSettings()
+    if deep_analyze and ai_provider:
+        settings = _configure_ai_for_run(
+            settings=settings,
+            ai_provider=ai_provider,
+            ai_key=ai_key,
+            ai_save=ai_save,
+            interactive=sys.stdin.isatty() and sys.stdout.isatty(),
+            console=_console,
+        )
     asyncio.run(
         _scan_email_async(
+            settings=settings,
             email=normalized,
             deep_analyze=deep_analyze,
             export_pdf=export_pdf,
@@ -612,6 +842,23 @@ def hunt(
         True,
         "--ai/--noai",
         help="Run the cognitive AI analysis (DeepSeek) on top of collected evidence.",
+    ),
+    ai_provider: str | None = typer.Option(
+        None,
+        "--ai-provider",
+        help="AI provider preset: deepseek|groq|groq-70b|groq-fast|openrouter|huggingface (prompts for key if missing).",
+        show_default=False,
+    ),
+    ai_key: str | None = typer.Option(
+        None,
+        "--ai-key",
+        help="AI API key (optional). Prefer `osint-d2 doctor setup-ai` to avoid shell history leaks.",
+        show_default=False,
+    ),
+    ai_save: bool = typer.Option(
+        True,
+        "--ai-save/--no-ai-save",
+        help="Persist provider configuration in the user config (.env) for next runs.",
     ),
     scan_localpart: bool = typer.Option(
         True,
@@ -687,6 +934,11 @@ def hunt(
         "--strict/--no-strict",
         help="Apply conservative heuristics to trim common false positives (handy with Sherlock).",
     ),
+    breach_check: bool = typer.Option(
+        False,
+        "--breach-check/--no-breach-check",
+        help="Query HaveIBeenPwned unifiedsearch for emails (best-effort; may be rate-limited).",
+    ),
 ) -> None:
     normalized_emails = [_normalize_email(e) for e in emails] if emails else None
     categories = {c.strip().lower() for c in (category or []) if c.strip()} or None
@@ -699,8 +951,19 @@ def hunt(
 
     output_format = _auto_output_format(output_format)
     language = _resolve_language(spanish)
+    settings = AppSettings()
+    if ai and ai_provider:
+        settings = _configure_ai_for_run(
+            settings=settings,
+            ai_provider=ai_provider,
+            ai_key=ai_key,
+            ai_save=ai_save,
+            interactive=sys.stdin.isatty() and sys.stdout.isatty(),
+            console=_console,
+        )
     asyncio.run(
         _hunt_async(
+            settings=settings,
             usernames=usernames if usernames else None,
             emails=normalized_emails if normalized_emails else None,
             deep_analyze=ai,
@@ -718,6 +981,7 @@ def hunt(
             use_sherlock=sherlock,
             strict=strict,
             language=language,
+            breach_check=breach_check,
         )
     )
 
@@ -764,6 +1028,9 @@ def wizard() -> None:
     use_site_lists = Confirm.ask("Enable large site-lists engine?", default=False)
     use_sherlock = Confirm.ask("Enable Sherlock (400+ sites)?", default=False)
     strict = Confirm.ask("Strict mode (trim false positives)?", default=False)
+    breach_check = False
+    if emails:
+        breach_check = Confirm.ask("Check emails against breach sources (HaveIBeenPwned)?", default=False)
 
     username_sites_path: Path | None = None
     email_sites_path: Path | None = None
@@ -807,11 +1074,46 @@ def wizard() -> None:
         scan_localpart = Confirm.ask("Also try local part as username?", default=True)
 
     deep_analyze = Confirm.ask("Run AI analysis?", default=True)
+    if deep_analyze:
+        settings_now = AppSettings()
+        if not (settings_now.ai_api_key or "").strip() and settings_now.ai_base_url.startswith("https://api.deepseek"):
+            if Confirm.ask("No AI key configured. Configure a free-tier provider now (recommended)?", default=True):
+                provider = Prompt.ask(
+                    "Provider",
+                    choices=["groq", "groq-70b", "groq-fast", "deepseek", "openrouter", "huggingface"],
+                    default="groq",
+                ).strip().lower()
+
+                presets: dict[str, dict[str, str]] = {
+                    "deepseek": {"OSINT_D2_AI_BASE_URL": "https://api.deepseek.com", "OSINT_D2_AI_MODEL": "deepseek-chat"},
+                    "groq": {"OSINT_D2_AI_BASE_URL": "https://api.groq.com/openai/v1", "OSINT_D2_AI_MODEL": "llama-3.1-70b-versatile"},
+                    "groq-70b": {"OSINT_D2_AI_BASE_URL": "https://api.groq.com/openai/v1", "OSINT_D2_AI_MODEL": "llama-3.1-70b-versatile"},
+                    "groq-fast": {"OSINT_D2_AI_BASE_URL": "https://api.groq.com/openai/v1", "OSINT_D2_AI_MODEL": "llama-3.1-8b-instant"},
+                    "openrouter": {"OSINT_D2_AI_BASE_URL": "https://openrouter.ai/api/v1", "OSINT_D2_AI_MODEL": "openai/gpt-4o-mini"},
+                    "huggingface": {"OSINT_D2_AI_BASE_URL": "https://api-inference.huggingface.co/v1", "OSINT_D2_AI_MODEL": "meta-llama/Llama-3.1-8B-Instruct"},
+                }
+                preset = presets.get(provider, {})
+                base_url = Prompt.ask("AI base URL", default=preset.get("OSINT_D2_AI_BASE_URL", "")).strip()
+                model = Prompt.ask("AI model", default=preset.get("OSINT_D2_AI_MODEL", "")).strip()
+                api_key = Prompt.ask("AI API key", password=True).strip()
+
+                if base_url and model and api_key:
+                    env_path = write_user_env_vars(
+                        {
+                            "OSINT_D2_AI_BASE_URL": base_url,
+                            "OSINT_D2_AI_MODEL": model,
+                            "OSINT_D2_AI_API_KEY": api_key,
+                        }
+                    )
+                    _console.print(f"[green]AI config saved to:[/green] {env_path}")
+                else:
+                    _console.print("[yellow]Skipping remote AI setup; using heuristic fallback.[/yellow]")
     export_json = Confirm.ask("Export JSON to reports/?", default=False)
     export_pdf = Confirm.ask("Export PDF/HTML to reports/?", default=False)
 
     asyncio.run(
         _hunt_async(
+            settings=AppSettings(),
             usernames=usernames,
             emails=emails,
             deep_analyze=deep_analyze,
@@ -829,6 +1131,7 @@ def wizard() -> None:
             use_sherlock=use_sherlock,
             strict=strict,
             language=language,
+            breach_check=breach_check,
         )
     )
 
@@ -855,13 +1158,41 @@ def analyze(
         "--json-raw/--no-json-raw",
         help="(--format json) Include analysis.raw with the raw AI provider payload.",
     ),
+    ai_provider: str | None = typer.Option(
+        None,
+        "--ai-provider",
+        help="AI provider preset: deepseek|groq|groq-70b|groq-fast|openrouter|huggingface (prompts for key if missing).",
+        show_default=False,
+    ),
+    ai_key: str | None = typer.Option(
+        None,
+        "--ai-key",
+        help="AI API key (optional). Prefer `osint-d2 doctor setup-ai` to avoid shell history leaks.",
+        show_default=False,
+    ),
+    ai_save: bool = typer.Option(
+        True,
+        "--ai-save/--no-ai-save",
+        help="Persist provider configuration in the user config (.env) for next runs.",
+    ),
 ) -> None:
     raw = input_path.read_text(encoding="utf-8")
     person = PersonEntity.model_validate_json(raw)
     output_format = _auto_output_format(output_format)
     language = _resolve_language(spanish)
+    settings = AppSettings()
+    if ai_provider:
+        settings = _configure_ai_for_run(
+            settings=settings,
+            ai_provider=ai_provider,
+            ai_key=ai_key,
+            ai_save=ai_save,
+            interactive=sys.stdin.isatty() and sys.stdout.isatty(),
+            console=_console,
+        )
     asyncio.run(
         _analyze_async(
+            settings=settings,
             person=person,
             output_format=output_format,
             emit_json=True,

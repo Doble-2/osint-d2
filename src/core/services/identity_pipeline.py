@@ -12,7 +12,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Iterable, Sequence
+from typing import Callable, Iterable, Sequence, cast
 
 from adapters.email_sources import (
     GravatarProfileScanner,
@@ -76,6 +76,7 @@ class HuntRequest:
     use_sherlock: bool = False
     strict: bool = False
     sherlock_manifest: dict[str, object] | None = None
+    use_breach_check: bool = False
 
 
 @dataclass
@@ -214,7 +215,6 @@ async def hunt(
 ) -> PipelineResult:
     hooks = hooks or PipelineHooks()
     warnings: list[str] = []
-
     usernames = list({u.strip() for u in request.usernames or [] if u.strip()})
     emails = list({e.strip().lower() for e in request.emails or [] if e.strip()})
 
@@ -372,6 +372,7 @@ async def hunt(
                         no_nsfw=no_nsfw_effective,
                     )
                 )
+                
         if emails:
             email_path = request.site_lists.email_path
             if email_path and not email_path.exists():
@@ -425,6 +426,13 @@ async def hunt(
 
     profiles = dedupe_profiles(profiles)
 
+    if request.use_breach_check:
+        from adapters.breach_check import enrich_profiles_with_breach_data
+
+        breach_profiles = enrich_profiles_with_breach_data(emails=emails)
+        profiles.extend(breach_profiles)
+        profiles = dedupe_profiles(profiles)
+    
     if request.strict and usernames:
         profiles = [
             profile

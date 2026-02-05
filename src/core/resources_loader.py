@@ -10,9 +10,13 @@ No incluye datasets en el repo; los descarga a `data/` (ignorarlo en git).
 from __future__ import annotations
 
 import json
+import os
+import sys
 from pathlib import Path
 
 import httpx
+
+from core.config import get_user_config_dir
 
 
 SHERLOCK_MANIFEST_URL = (
@@ -26,6 +30,25 @@ def _project_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
 
+def _data_dir() -> Path:
+    """Directorio de datos en runtime.
+
+    Reglas:
+    - Si OSINT_D2_DATA_DIR está definido, se usa tal cual.
+    - Si estamos en modo "frozen" (PyInstaller), usar un path escribible del usuario.
+    - En desarrollo, usar <project_root>/data.
+    """
+
+    override = (os.environ.get("OSINT_D2_DATA_DIR") or "").strip()
+    if override:
+        return Path(override)
+
+    if getattr(sys, "frozen", False):
+        return get_user_config_dir() / "data"
+
+    return _project_root() / "data"
+
+
 def get_default_list_path(filename: str) -> Path | None:
     """Busca un dataset por defecto en ubicaciones comunes.
 
@@ -36,8 +59,10 @@ def get_default_list_path(filename: str) -> Path | None:
     """
 
     root = _project_root()
+    user_data = get_user_config_dir() / "data"
     candidates = [
         root / "data" / filename,
+        user_data / filename,
         root.parent / "blackbird" / "data" / filename,
         Path.cwd() / filename,
     ]
@@ -58,8 +83,7 @@ def load_sherlock_data(*, refresh: bool = False, url: str = SHERLOCK_MANIFEST_UR
     - dict con la estructura del manifest (con `$schema` si viene en el JSON).
     """
 
-    root = _project_root()
-    data_dir = root / "data"
+    data_dir = _data_dir()
     data_dir.mkdir(parents=True, exist_ok=True)
 
     out_path = data_dir / "sherlock.json"

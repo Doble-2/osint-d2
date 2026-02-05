@@ -32,6 +32,21 @@ def build_profiles_table() -> Table:
     return table
 
 
+def build_breaches_table() -> Table:
+    """Create the Rich table used to display HIBP breach results."""
+
+    table = Table(title="Breaches (HIBP)", title_style="bright_green")
+    table.add_column("Email", style="bright_green", no_wrap=True)
+    table.add_column("Breach", style="white")
+    table.add_column("Domain", style="white", no_wrap=True)
+    table.add_column("Date", style="white", no_wrap=True)
+    table.add_column("Records", style="white", justify="right", no_wrap=True)
+    table.add_column("Data classes", style="green")
+    table.add_column("Status", style="yellow", justify="right", no_wrap=True)
+    table.add_column("Error", style="red")
+    return table
+
+
 def build_analysis_panel(report: AnalysisReport) -> Panel:
     """Render the AI analysis report in a Rich panel."""
 

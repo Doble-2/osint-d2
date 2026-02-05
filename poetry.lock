@@ -1280,6 +1280,18 @@ doc = ["furo", "sphinx"]
 test = ["pytest", "ruff"]
 
 [[package]]
+name = "tls-client"
+version = "1.0.1"
+description = "Advanced Python HTTP Client."
+optional = false
+python-versions = "*"
+groups = ["main"]
+files = [
+    {file = "tls_client-1.0.1-py3-none-any.whl", hash = "sha256:2f8915c0642c2226c9e33120072a2af082812f6310d32f4ea4da322db7d3bb1c"},
+    {file = "tls_client-1.0.1.tar.gz", hash = "sha256:dad797f3412bb713606e0765d489f547ffb580c5ffdb74aed47a183ce8505ff5"},
+]
+
+[[package]]
 name = "tqdm"
 version = "4.67.1"
 description = "Fast, Extensible Progress Meter"
@@ -1412,4 +1424,4 @@ test = ["pytest"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.11"
-content-hash = "556179eeab14f6079a46de65c1ae00d8d8a6cbecb274ad526260f788dadbd6ab"
+content-hash = "d29445157e549fe17c98411eed1b45a8b42479d16664b018b9256987796f9eab"

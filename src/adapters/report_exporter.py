@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
+import sys
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from weasyprint import HTML
@@ -19,6 +20,33 @@ from core.domain.models import PersonEntity
 
 _TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 _TEMPLATES_DIR_FALLBACK = Path(__file__).resolve().parents[1] / "templates"
+
+
+def _resolve_templates_dir() -> Path:
+    candidates: list[Path] = []
+
+    if _TEMPLATES_DIR.is_dir():
+        candidates.append(_TEMPLATES_DIR)
+    if _TEMPLATES_DIR_FALLBACK.is_dir():
+        candidates.append(_TEMPLATES_DIR_FALLBACK)
+
+    # PyInstaller: los archivos se extraen bajo sys._MEIPASS.
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        base = Path(str(meipass))
+        # Mapeos previstos en el spec: adapters/templates y templates
+        candidates.extend(
+            [
+                base / "adapters" / "templates",
+                base / "templates",
+            ]
+        )
+
+    for p in candidates:
+        if p.is_dir():
+            return p
+
+    return _TEMPLATES_DIR
 
 _STRINGS: dict[Language, dict[str, object]] = {
     Language.ENGLISH: {
@@ -48,6 +76,7 @@ _STRINGS: dict[Language, dict[str, object]] = {
             {"anchor": "#sec-04", "label": "04 // Textual Evidence Samples"},
             {"anchor": "#sec-05", "label": "05 // Methodology"},
             {"anchor": "#sec-06", "label": "06 // Limitations"},
+            {"anchor": "#sec-07", "label": "07 // Breach Exposure (HIBP)"},
         ],
         "analysis_title": "01 // Intelligence Summary",
         "analysis_card_labels": {
@@ -100,6 +129,20 @@ _STRINGS: dict[Language, dict[str, object]] = {
             "Rate limiting or authentication requirements can reduce coverage.",
             "Treat AI analysis as decision support; always validate with primary evidence.",
         ],
+        "breaches_title": "07 // Breach Exposure (HIBP)",
+        "breaches_hint": "HaveIBeenPwned unifiedsearch results for discovered emails.",
+        "breaches_none": "No breach checks were executed for this dossier.",
+        "breaches_email_label": "Email",
+        "breaches_status_label": "Status",
+        "breaches_no_breaches": "No breaches reported for this email.",
+        "breaches_request_failed": "Breach request failed or was blocked.",
+        "breaches_headers": {
+            "title": "Breach",
+            "domain": "Domain",
+            "date": "Date",
+            "records": "Records",
+            "classes": "Data classes",
+        },
     },
     Language.SPANISH: {
         "lang_code": "es",
@@ -128,6 +171,7 @@ _STRINGS: dict[Language, dict[str, object]] = {
             {"anchor": "#sec-04", "label": "04 // Evidencia Textual"},
             {"anchor": "#sec-05", "label": "05 // Metodología"},
             {"anchor": "#sec-06", "label": "06 // Limitaciones"},
+            {"anchor": "#sec-07", "label": "07 // Brechas (HIBP)"},
         ],
         "analysis_title": "01 // Resumen de Inteligencia",
         "analysis_card_labels": {
@@ -180,12 +224,26 @@ _STRINGS: dict[Language, dict[str, object]] = {
             "El rate limiting o la autenticación pueden reducir la cobertura.",
             "Trata el análisis IA como apoyo; valida siempre con evidencia primaria.",
         ],
+        "breaches_title": "07 // Brechas (HIBP)",
+        "breaches_hint": "Resultados de HaveIBeenPwned unifiedsearch para los correos detectados.",
+        "breaches_none": "No se ejecutó breach-check en este expediente.",
+        "breaches_email_label": "Email",
+        "breaches_status_label": "Estado",
+        "breaches_no_breaches": "No se reportan brechas para este correo.",
+        "breaches_request_failed": "La consulta de brechas falló o fue bloqueada.",
+        "breaches_headers": {
+            "title": "Brecha",
+            "domain": "Dominio",
+            "date": "Fecha",
+            "records": "Registros",
+            "classes": "Datos expuestos",
+        },
     },
 }
 
 
 def _get_env() -> Environment:
-    templates_dir = _TEMPLATES_DIR if _TEMPLATES_DIR.is_dir() else _TEMPLATES_DIR_FALLBACK
+    templates_dir = _resolve_templates_dir()
     return Environment(
         loader=FileSystemLoader(str(templates_dir)),
         autoescape=select_autoescape(["html", "xml"]),
@@ -227,6 +285,28 @@ def render_person_html(*, person: PersonEntity, language: Language) -> str:
         key=lambda kv: (kv[0] != "sherlock", kv[0]),
     )
 
+    breach_entries: list[dict[str, object]] = []
+    for profile in person.profiles:
+        if getattr(profile, "network_name", None) != "hibp":
+            continue
+        md = getattr(profile, "metadata", None)
+        if not isinstance(md, dict):
+            continue
+
+        breach_entries.append(
+            {
+                "email": str(getattr(profile, "username", "")) or str(md.get("email") or ""),
+                "url": str(getattr(profile, "url", "")),
+                "status_code": md.get("status_code"),
+                "error": md.get("error"),
+                "breach_count": md.get("breach_count"),
+                "breaches": (md.get("breaches") or {}),
+                "ok": bool(getattr(profile, "existe", False)),
+            }
+        )
+
+    breach_entries.sort(key=lambda item: str(item.get("email") or ""))
+
     report_id = f"{person.target}:{generated_at}"
     template = _get_env().get_template("report.html")
     strings = _STRINGS.get(language, _STRINGS[Language.ENGLISH])
@@ -240,6 +320,7 @@ def render_person_html(*, person: PersonEntity, language: Language) -> str:
         profiles_confirmed_count=len(profiles_confirmed),
         profiles_unconfirmed_count=len(profiles_unconfirmed),
         unconfirmed_by_source=unconfirmed_by_source,
+        breach_entries=breach_entries,
         strings=strings,
     )
 
@@ -268,6 +349,6 @@ def export_person_pdf(*, person: PersonEntity, output_path: Path, language: Lang
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     html = render_person_html(person=person, language=language)
-    base_url = str(_TEMPLATES_DIR if _TEMPLATES_DIR.is_dir() else _TEMPLATES_DIR_FALLBACK)
+    base_url = str(_resolve_templates_dir())
     HTML(string=html, base_url=base_url).write_pdf(str(output_path))
     return output_path
