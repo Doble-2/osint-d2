@@ -246,6 +246,43 @@ Example:
 poetry run osint-d2 hunt -e user@example.com --breach-check --no-sherlock --no-site-lists
 ```
 
+## Packaging (PyInstaller)
+
+You can ship OSINT-D2 to “simple users” as a standalone executable bundle.
+
+Key design points:
+
+- AI keys are stored in the user config `.env` (no need to edit the project `.env`).
+- Runtime datasets (like `sherlock.json`) are stored in a writable user data dir when frozen.
+- Report templates are bundled into the executable.
+
+### Linux build (folder distribution)
+
+Build in a clean environment that matches your target distro/glibc:
+
+```bash
+python -m venv .venv-build
+source .venv-build/bin/activate
+
+pip install -U pip
+pip install -e .
+
+bash scripts/build_pyinstaller_linux.sh
+```
+
+The artifact will be available at:
+
+- `dist/osint-d2/` (ship this folder as a `.zip` or `.tar.gz`)
+
+### First-run setup for end users
+
+Inside the shipped folder:
+
+```bash
+./osint-d2 doctor setup-ai
+./osint-d2 hunt -e user@example.com --ai --ai-provider groq --breach-check
+```
+
 ![PDF dossier cover rendered with the classified layout](assets/pdf.png)
 
 ## Architecture

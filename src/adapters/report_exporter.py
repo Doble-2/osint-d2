@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
+import sys
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from weasyprint import HTML
@@ -19,6 +20,33 @@ from core.domain.models import PersonEntity
 
 _TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 _TEMPLATES_DIR_FALLBACK = Path(__file__).resolve().parents[1] / "templates"
+
+
+def _resolve_templates_dir() -> Path:
+    candidates: list[Path] = []
+
+    if _TEMPLATES_DIR.is_dir():
+        candidates.append(_TEMPLATES_DIR)
+    if _TEMPLATES_DIR_FALLBACK.is_dir():
+        candidates.append(_TEMPLATES_DIR_FALLBACK)
+
+    # PyInstaller: los archivos se extraen bajo sys._MEIPASS.
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        base = Path(str(meipass))
+        # Mapeos previstos en el spec: adapters/templates y templates
+        candidates.extend(
+            [
+                base / "adapters" / "templates",
+                base / "templates",
+            ]
+        )
+
+    for p in candidates:
+        if p.is_dir():
+            return p
+
+    return _TEMPLATES_DIR
 
 _STRINGS: dict[Language, dict[str, object]] = {
     Language.ENGLISH: {
@@ -215,7 +243,7 @@ _STRINGS: dict[Language, dict[str, object]] = {
 
 
 def _get_env() -> Environment:
-    templates_dir = _TEMPLATES_DIR if _TEMPLATES_DIR.is_dir() else _TEMPLATES_DIR_FALLBACK
+    templates_dir = _resolve_templates_dir()
     return Environment(
         loader=FileSystemLoader(str(templates_dir)),
         autoescape=select_autoescape(["html", "xml"]),
@@ -321,6 +349,6 @@ def export_person_pdf(*, person: PersonEntity, output_path: Path, language: Lang
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     html = render_person_html(person=person, language=language)
-    base_url = str(_TEMPLATES_DIR if _TEMPLATES_DIR.is_dir() else _TEMPLATES_DIR_FALLBACK)
+    base_url = str(_resolve_templates_dir())
     HTML(string=html, base_url=base_url).write_pdf(str(output_path))
     return output_path
