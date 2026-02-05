@@ -102,6 +102,7 @@ def setup_ai() -> None:
         "groq-fast": {"OSINT_D2_AI_BASE_URL": "https://api.groq.com/openai/v1", "OSINT_D2_AI_MODEL": "llama-3.1-8b-instant"},
         "openrouter": {"OSINT_D2_AI_BASE_URL": "https://openrouter.ai/api/v1", "OSINT_D2_AI_MODEL": "openai/gpt-4o-mini"},
         "huggingface": {"OSINT_D2_AI_BASE_URL": "https://api-inference.huggingface.co/v1", "OSINT_D2_AI_MODEL": "meta-llama/Llama-3.1-8B-Instruct"},
+        "ollama": {"OSINT_D2_AI_BASE_URL": "http://localhost:11434/v1", "OSINT_D2_AI_MODEL": "llama3"},
     }
 
     values = presets.get(provider, {}).copy()

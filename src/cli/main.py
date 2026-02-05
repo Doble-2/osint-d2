@@ -84,6 +84,8 @@ AI_PROVIDER_PRESETS: dict[str, dict[str, str]] = {
     "groq-fast": {"base_url": "https://api.groq.com/openai/v1", "model": "llama-3.1-8b-instant"},
     "openrouter": {"base_url": "https://openrouter.ai/api/v1", "model": "openai/gpt-4o-mini"},
     "huggingface": {"base_url": "https://api-inference.huggingface.co/v1", "model": "meta-llama/Llama-3.1-8B-Instruct"},
+    # Local (gratis, privado, requiere instalar Ollama):
+    "ollama": {"base_url": "http://localhost:11434/v1", "model": "llama3"},
 }
 
 
@@ -117,6 +119,11 @@ def _configure_ai_for_run(
     model = preset["model"]
 
     key = (ai_key or "").strip() or (settings.ai_api_key or "").strip()
+    
+    # Para proveedores locales (Ollama), la key es opcional/dummy.
+    if provider == "ollama" and not key:
+        key = "ollama"
+
     if not key and interactive:
         console.print(
             "[yellow]AI provider selected but no API key found.[/yellow] "
