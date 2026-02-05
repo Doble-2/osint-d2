@@ -12,7 +12,12 @@ from pathlib import Path
 import sys
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
-from weasyprint import HTML
+
+try:
+    from weasyprint import HTML
+except (ImportError, OSError):
+    # On Windows, missing GTK libraries can cause OSError during import.
+    HTML = None
 
 from core.domain.language import Language
 from core.domain.models import PersonEntity
@@ -350,5 +355,12 @@ def export_person_pdf(*, person: PersonEntity, output_path: Path, language: Lang
     output_path.parent.mkdir(parents=True, exist_ok=True)
     html = render_person_html(person=person, language=language)
     base_url = str(_resolve_templates_dir())
+
+    if HTML is None:
+        raise ImportError(
+            "WeasyPrint is not available (likely missing GTK libraries on Windows). "
+            "PDF export is disabled."
+        )
+
     HTML(string=html, base_url=base_url).write_pdf(str(output_path))
     return output_path
