@@ -8,7 +8,13 @@ from pathlib import Path
 
 block_cipher = None
 
-ROOT = Path(__file__).resolve().parents[2]
+_spec_dir = Path(globals().get("SPECPATH", Path.cwd())).resolve()
+
+# When invoked by PyInstaller, SPECPATH points to the directory containing this spec
+# (e.g. <repo>/packaging/pyinstaller). When SPECPATH is not provided, fall back to cwd.
+ROOT = (_spec_dir / ".." / "..").resolve()
+if not (ROOT / "pyproject.toml").exists():
+    ROOT = _spec_dir
 
 # Entry point: root main.py injects src/ into sys.path (important for src-layout)
 ENTRY = str(ROOT / "main.py")
