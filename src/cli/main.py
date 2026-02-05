@@ -29,6 +29,7 @@ from rich.progress import (
     BarColumn,
     Progress,
     SpinnerColumn,
+    TaskID,
     TextColumn,
     TimeElapsedColumn,
     TimeRemainingColumn,
@@ -38,7 +39,7 @@ from adapters.ai_analyst import analyze_person
 from adapters.json_exporter import export_person_json
 from adapters.report_exporter import export_person_html, export_person_pdf
 from cli.doctor import app as doctor_app
-from cli.ui_components import build_analysis_panel, build_profiles_table, print_banner
+from cli.ui_components import build_analysis_panel, build_breaches_table, build_profiles_table, print_banner
 from core.config import AppSettings
 from core.domain.language import Language
 from core.domain.models import PersonEntity
@@ -52,7 +53,6 @@ from core.services.identity_pipeline import (
     scan_email as run_email_pipeline,
     scan_username as run_username_pipeline,
 )
-# TODO: arreglar las advertencias de pylance
 app = typer.Typer(
     name="osint-d2",
     no_args_is_help=False,
@@ -166,6 +166,85 @@ def _print_profiles_table(*, person: PersonEntity, primary_usernames: list[str])
     _console.print(table)
 
 
+def _print_breaches_table(*, person: PersonEntity) -> None:
+    hibp_profiles = [p for p in person.profiles if (p.network_name or "").lower() == "hibp"]
+    if not hibp_profiles:
+        return
+
+    table = build_breaches_table()
+    printed_rows = 0
+
+    for profile in sorted(hibp_profiles, key=lambda p: (p.username or "").lower()):
+        md = profile.metadata if isinstance(profile.metadata, dict) else {}
+        status_code = md.get("status_code")
+        error = md.get("error")
+        status_text = "" if status_code is None else str(status_code)
+        error_text = str(error) if isinstance(error, str) else ""
+        email_value = profile.username
+
+        breaches_dump = md.get("breaches")
+        breaches_list = []
+        if isinstance(breaches_dump, dict):
+            maybe = breaches_dump.get("breaches")
+            if isinstance(maybe, list):
+                breaches_list = [b for b in maybe if isinstance(b, dict)]
+
+        if status_code != 200:
+            table.add_row(
+                email_value,
+                "-",
+                "-",
+                "-",
+                "-",
+                "-",
+                status_text,
+                error_text or f"hibp_http_{status_text}" if status_text else "hibp_no_response",
+            )
+            printed_rows += 1
+            continue
+
+        if not breaches_list:
+            table.add_row(
+                email_value,
+                "(none)",
+                "",
+                "",
+                "0",
+                "",
+                status_text,
+                "",
+            )
+            printed_rows += 1
+            continue
+
+        for breach in breaches_list:
+            title = str(breach.get("title") or "")
+            domain = str(breach.get("domain") or "")
+            date = str(breach.get("breach_date") or "")
+            records = breach.get("pwn_count")
+            records_text = str(records) if records is not None else ""
+            data_classes = breach.get("data_classes")
+            if isinstance(data_classes, list):
+                classes_text = ", ".join(str(x) for x in data_classes if x is not None)
+            else:
+                classes_text = ""
+
+            table.add_row(
+                email_value,
+                title,
+                domain,
+                date,
+                records_text,
+                classes_text,
+                status_text,
+                "",
+            )
+            printed_rows += 1
+
+    if printed_rows:
+        _console.print(table)
+
+
 def _handle_exports(
     *,
     person: PersonEntity,
@@ -221,9 +300,13 @@ async def _hunt_async(
     use_sherlock: bool,
     strict: bool,
     language: Language,
+    breach_check: bool = False,
 ) -> None:
     if not usernames and not emails:
         raise typer.BadParameter("Provide at least one username or email to hunt.")
+
+    if breach_check and not emails:
+        raise typer.BadParameter("--breach-check requires --emails/-e (you passed only usernames).")
 
     output_format = _auto_output_format(output_format)
     human = output_format == OutputFormat.table
@@ -235,7 +318,7 @@ async def _hunt_async(
     settings = AppSettings()
     status_ctx = console.status("Building aggregated intelligence...", spinner="dots") if human else None
     progress: Progress | None = None
-    progress_task_id: int | None = None
+    progress_task_id: TaskID | None = None
 
     def close_status() -> None:
         nonlocal status_ctx
@@ -289,6 +372,7 @@ async def _hunt_async(
             ),
             use_sherlock=use_sherlock,
             strict=strict,
+            use_breach_check=breach_check,
         )
         result = await run_hunt_pipeline(
             settings=settings,
@@ -305,6 +389,7 @@ async def _hunt_async(
 
     if human:
         _print_profiles_table(person=person, primary_usernames=primary_usernames)
+        _print_breaches_table(person=person)
 
     if deep_analyze:
         await _analyze_async(
@@ -688,6 +773,11 @@ def hunt(
         "--strict/--no-strict",
         help="Apply conservative heuristics to trim common false positives (handy with Sherlock).",
     ),
+    breach_check: bool = typer.Option(
+        False,
+        "--breach-check/--no-breach-check",
+        help="Query HaveIBeenPwned unifiedsearch for emails (best-effort; may be rate-limited).",
+    ),
 ) -> None:
     normalized_emails = [_normalize_email(e) for e in emails] if emails else None
     categories = {c.strip().lower() for c in (category or []) if c.strip()} or None
@@ -719,6 +809,7 @@ def hunt(
             use_sherlock=sherlock,
             strict=strict,
             language=language,
+            breach_check=breach_check,
         )
     )
 
@@ -765,6 +856,9 @@ def wizard() -> None:
     use_site_lists = Confirm.ask("Enable large site-lists engine?", default=False)
     use_sherlock = Confirm.ask("Enable Sherlock (400+ sites)?", default=False)
     strict = Confirm.ask("Strict mode (trim false positives)?", default=False)
+    breach_check = False
+    if emails:
+        breach_check = Confirm.ask("Check emails against breach sources (HaveIBeenPwned)?", default=False)
 
     username_sites_path: Path | None = None
     email_sites_path: Path | None = None
@@ -830,6 +924,7 @@ def wizard() -> None:
             use_sherlock=use_sherlock,
             strict=strict,
             language=language,
+            breach_check=breach_check,
         )
     )
 

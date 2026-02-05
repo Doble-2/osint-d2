@@ -157,7 +157,7 @@ async def analyze_person(
     settings = settings or AppSettings()
     
     clean_person = person.model_copy()
-    
+        
     while True:
         to_remove = [p for p in clean_person.profiles if not p.existe]
         if not to_remove:

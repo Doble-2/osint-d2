@@ -48,6 +48,7 @@ _STRINGS: dict[Language, dict[str, object]] = {
             {"anchor": "#sec-04", "label": "04 // Textual Evidence Samples"},
             {"anchor": "#sec-05", "label": "05 // Methodology"},
             {"anchor": "#sec-06", "label": "06 // Limitations"},
+            {"anchor": "#sec-07", "label": "07 // Breach Exposure (HIBP)"},
         ],
         "analysis_title": "01 // Intelligence Summary",
         "analysis_card_labels": {
@@ -100,6 +101,20 @@ _STRINGS: dict[Language, dict[str, object]] = {
             "Rate limiting or authentication requirements can reduce coverage.",
             "Treat AI analysis as decision support; always validate with primary evidence.",
         ],
+        "breaches_title": "07 // Breach Exposure (HIBP)",
+        "breaches_hint": "HaveIBeenPwned unifiedsearch results for discovered emails.",
+        "breaches_none": "No breach checks were executed for this dossier.",
+        "breaches_email_label": "Email",
+        "breaches_status_label": "Status",
+        "breaches_no_breaches": "No breaches reported for this email.",
+        "breaches_request_failed": "Breach request failed or was blocked.",
+        "breaches_headers": {
+            "title": "Breach",
+            "domain": "Domain",
+            "date": "Date",
+            "records": "Records",
+            "classes": "Data classes",
+        },
     },
     Language.SPANISH: {
         "lang_code": "es",
@@ -128,6 +143,7 @@ _STRINGS: dict[Language, dict[str, object]] = {
             {"anchor": "#sec-04", "label": "04 // Evidencia Textual"},
             {"anchor": "#sec-05", "label": "05 // Metodología"},
             {"anchor": "#sec-06", "label": "06 // Limitaciones"},
+            {"anchor": "#sec-07", "label": "07 // Brechas (HIBP)"},
         ],
         "analysis_title": "01 // Resumen de Inteligencia",
         "analysis_card_labels": {
@@ -180,6 +196,20 @@ _STRINGS: dict[Language, dict[str, object]] = {
             "El rate limiting o la autenticación pueden reducir la cobertura.",
             "Trata el análisis IA como apoyo; valida siempre con evidencia primaria.",
         ],
+        "breaches_title": "07 // Brechas (HIBP)",
+        "breaches_hint": "Resultados de HaveIBeenPwned unifiedsearch para los correos detectados.",
+        "breaches_none": "No se ejecutó breach-check en este expediente.",
+        "breaches_email_label": "Email",
+        "breaches_status_label": "Estado",
+        "breaches_no_breaches": "No se reportan brechas para este correo.",
+        "breaches_request_failed": "La consulta de brechas falló o fue bloqueada.",
+        "breaches_headers": {
+            "title": "Brecha",
+            "domain": "Dominio",
+            "date": "Fecha",
+            "records": "Registros",
+            "classes": "Datos expuestos",
+        },
     },
 }
 
@@ -227,6 +257,28 @@ def render_person_html(*, person: PersonEntity, language: Language) -> str:
         key=lambda kv: (kv[0] != "sherlock", kv[0]),
     )
 
+    breach_entries: list[dict[str, object]] = []
+    for profile in person.profiles:
+        if getattr(profile, "network_name", None) != "hibp":
+            continue
+        md = getattr(profile, "metadata", None)
+        if not isinstance(md, dict):
+            continue
+
+        breach_entries.append(
+            {
+                "email": str(getattr(profile, "username", "")) or str(md.get("email") or ""),
+                "url": str(getattr(profile, "url", "")),
+                "status_code": md.get("status_code"),
+                "error": md.get("error"),
+                "breach_count": md.get("breach_count"),
+                "breaches": (md.get("breaches") or {}),
+                "ok": bool(getattr(profile, "existe", False)),
+            }
+        )
+
+    breach_entries.sort(key=lambda item: str(item.get("email") or ""))
+
     report_id = f"{person.target}:{generated_at}"
     template = _get_env().get_template("report.html")
     strings = _STRINGS.get(language, _STRINGS[Language.ENGLISH])
@@ -240,6 +292,7 @@ def render_person_html(*, person: PersonEntity, language: Language) -> str:
         profiles_confirmed_count=len(profiles_confirmed),
         profiles_unconfirmed_count=len(profiles_unconfirmed),
         unconfirmed_by_source=unconfirmed_by_source,
+        breach_entries=breach_entries,
         strings=strings,
     )
 
