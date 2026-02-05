@@ -154,7 +154,7 @@ async def run_sherlock_username(
                         return None
 
                     html_meta = extract_html_metadata(html=text, base_url=final_url)
-                    print(f"[debug] Sherlock: encontrado en {site_name} para {username}")
+                    #print(f"[debug] Sherlock: encontrado en {site_name} para {username}")
                     metadata: dict[str, Any] = {
                         "source": "sherlock",
                         "site_name": site_name,
