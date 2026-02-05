@@ -64,6 +64,8 @@ jobs:
       - name: Smoke test (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
+        env:
+          PYTHONIOENCODING: utf-8
         run: |
           .\dist\osint-d2\osint-d2.exe --help
           .\dist\osint-d2\osint-d2.exe doctor run
