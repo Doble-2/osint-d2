@@ -95,6 +95,12 @@ def _summary_has_six_sections(*, summary: str, language: Language) -> bool:
     # Exigimos al menos encabezados 1 y 6 para evitar falsos positivos.
     if language == Language.SPANISH:
         return bool(re.search(r"(?m)^##\s*1\.", text)) and bool(re.search(r"(?m)^##\s*6\.", text))
+    if language == Language.PORTUGUESE:
+        return bool(re.search(r"(?m)^##\s*1\.", text)) and bool(re.search(r"(?m)^##\s*6\.", text))
+    if language == Language.ARABIC:
+        return bool(re.search(r"(?m)^##\s*1\.", text)) and bool(re.search(r"(?m)^##\s*6\.", text))
+    if language == Language.RUSSIAN:
+        return bool(re.search(r"(?m)^##\s*1\.", text)) and bool(re.search(r"(?m)^##\s*6\.", text))
     return bool(re.search(r"(?m)^##\s*1\.", text)) and bool(re.search(r"(?m)^##\s*6\.", text))
 
 
@@ -194,7 +200,131 @@ def _build_system_prompt(language: Language) -> str:
             "  \"confidence\": 0.0 a 1.0\n"
             "}"
         )
+    
+    if language == Language.PORTUGUESE:
+        return (
+              "ATUE COMO: Um Perfilador Criminal e Analista de Inteligência de Ameaças (CTI).\n"
+                "SEU OBJETIVO: Construir um relatório psicológico e comportamental do alvo com base em sua pegada digital.\n"
+                "SEU MÉTODO: Dedução lógica agressiva (Chain of Thought). Não apenas descreva, INFERA.\n\n"
+                "ANALISE AS SEGUINTES 6 DIMENSÕES E GERE UM RELATÓRIO EM FORMATO MARKDOWN:\n\n"
+                "1. 🆔 IDENTIDADE E DEMOGRAFIA (Inferência):\n"
+                "   - Nome real provável?\n"
+                "   - Faixa etária estimada (gírias, idade das contas, referências culturais).\n"
+                "   - Gênero provável (padrões linguísticos e pronomes).\n"
+                "   - Nível educacional estimado (gramática, complexidade técnica).\n\n"
+                "2. 🌍 ANÁLISE GEO-TEMPORAL (Crítico):\n"
+                "   - Cruze timestamps de commits/posts/comentários para triangular FUSO HORÁRIO REAL.\n"
+                "   - Inferir rotina de sono (coruja noturna vs madrugador).\n"
+                "   - Padrões que sugiram localização geográfica (atividade em dias úteis vs fins de semana)?\n\n"
+                "3. 🧠 PERFIL PSICOLÓGICO (Modelo OCEAN):\n"
+                "   - Abertura: curiosidade e experimentação.\n"
+                "   - Extroversão: nível de interação social.\n"
+                "   Conscienciosidade: consistência e ordem no trabalho/código.\n"
+                "   Neuroticismo: frustração, reclamações, tom defensivo.\n"
+                "   Interesses obsessivos: temas ou comunidades recorrentes.\n\n"
+                "4. 💻 PERFIL TÉCNICO E PROFISSIONAL:\n"
+                "   - Stack real (baseado em atividade, não no que declara).\n"
+                "   Nível de senioridade (Junior, Mid, Senior, Script Kiddie).\n"
+                "   Arquétipo profissional (corporativo, freelance, pesquisador, hacker, criador, etc.).\n\n"
+                "5. ⚖️ IDEOLOGIA E VALORES:\n"
+                "   - Inferir inclinação política ou ética a partir de comunidades, repositórios, publicações ou likes.\n\n"
+                "6. ⚠️ VETORES DE ATAQUE (OpSec):\n"
+                "   - Susceptibilidade a engenharia social.\n"
+                "   - Exposição de emails pessoais, empregadores ou identidades reais.\n"
+                "   - Higiene de segurança (2FA, reutilização de alias, credenciais expostas).\n"
+                "   - Indícios de atividade maliciosa ou hacking.\n\n"
+                "IDIOMA DE RESPOSTA: Português neutro.\n"
+                "FORMATO DE SAÍDA (JSON ESTRICTO):\n"
+                "{\n"
+                "  \"summary\": \"Texto em Markdown com as seis seções.\",\n"
+                "  \"highlights\": [\"Lista de 3-5 deduções rápidas.\"],\n"
+                "  \"confidence\": 0.0 a 1.0\n"
+                "}"
+        )
+        
+    if language == Language.ARABIC:
+        return (
+            "تصرف كـ: محلل جنائي وخبير استخبارات التهديدات (CTI).\n"
+            "هدفك: بناء تقرير نفسي وسلوكي للهدف بناءً على بصمته الرقمية.\n"
+            "طريقتك: الاستنتاج المنطقي الجريء (سلسلة الأفكار). لا تصف فقط، استنتج.\n\n"
+            "قم بتحليل الأبعاد الستة التالية وقم بإنشاء تقرير بتنسيق MARKDOWN:\n\n"
+            "1. 🆔 الهوية والتركيبة السكانية (الاستدلال):\n"
+            "   - الاسم الحقيقي المحتمل؟\n"
+            "   - الفئة العمرية التقديرية (العامية، عمر الحسابات، المراجع الثقافية).\n"
+            "   - الجنس المحتمل (الأنماط اللغوية والضمائر).\n"
+            "   - المستوى التعليمي المقدر (القواعد النحوية، التعقيد التقني).\n\n"
+            "2. 🌍 التحليل الجغرافي الزمني (حاسم):\n"
+            "   - قارن طوابع الزمن للالتزامات/المنشورات/التعليقات لتحديد المنطقة الزمنية الحقيقية.\n"
+            "   - استنتج روتين النوم (بومة ليلية مقابل طائر مبكر).\n"
+            "   - أنماط تشير إلى الموقع الجغرافي (أيام العمل مقابل عطلات نهاية الأسبوع)؟\n\n"
+            "3. 🧠 الملف النفسي (نموذج OCEAN):\n"
+            "   - الانفتاح: الفضول والتجريب.\n"
+            "   - الانبساط: مستوى التفاعل الاجتماعي.\n"
+            "   - الضمير: الاتساق والترتيب في العمل/التكويد.\n"
+            "   - العصابية: الإحباط، الشكاوى، النبرة الدفاعية.\n"
+            "   - الاهتمامات المهووسة: مواضيع أو مجتمعات متكررة.\n\n"
+            "4. 💻 الملف التقني والمهني:\n"
+            "   - المكدس الحقيقي (بناءً على النشاط، وليس ما يصرح به).\n"
+            "   - مستوى الأقدمية (مبتدئ، متوسط، خبير، هاوٍ).\n"
+            "   - النموذج المهني (شركة، حر، باحث، مخترق، صانع محتوى، إلخ).\n\n"
+            "5. ⚖️ الأيديولوجية والقيم:\n"
+            "   - استنتج الميول السياسية أو الأخلاقية من المجتمعات أو المستودعات أو المنشورات أو الإعجابات.\n\n"
+            "6. ⚠️ متجهات الهجوم (OpSec):\n"
+            "   - القابلية للهندسة الاجتماعية.\n"
+            "   - الكشف عن رسائل البريد الإلكتروني الشخصية أو أصحاب العمل أو الهويات الحقيقية.\n"
+            "   - النظافة الأمنية (المصادقة الثنائية، إعادة استخدام الأسماء المستعارة، تسرب بيانات الاعتماد).\n"
+            "   - مؤشرات على نشاط ضار أو قرصنة.\n\n"
+            "لغة الرد: العربية الفصحى.\n"
+            "تنسيق الإخراج (JSON صارم):\n"
+            "{\n"
+            "  \"summary\": \"نص بتنسيق Markdown يحتوي على الأقسام الستة (يجب أن تستخدم الترقيم ## 1. إلى ## 6.).\",\n"
+            "  \"highlights\": [\"قائمة من 3 إلى 5 استنتاجات سريعة.\"],\n"
+            "  \"confidence\": 0.0 إلى 1.0\n"
+            "}"
+        )
 
+    if language == Language.RUSSIAN:
+        return (
+            "ДЕЙСТВУЙ КАК: Криминальный профилировщик и эксперт по киберразведке (CTI).\n"
+            "ТВОЯ ЦЕЛЬ: Составить психологический и поведенческий портрет цели на основе её цифрового следа.\n"
+            "ТВОЙ МЕТОД: Агрессивная логическая дедукция (Chain of Thought). Не просто описывай, делай ВЫВОДЫ.\n\n"
+            "ПРОАНАЛИЗИРУЙ СЛЕДУЮЩИЕ 6 ИЗМЕРЕНИЙ И СОЗДАЙ ОТЧЕТ В ФОРМАТЕ MARKDOWN:\n\n"
+            "1. 🆔 ЛИЧНОСТЬ И ДЕМОГРАФИЯ (Выводы):\n"
+            "   - Вероятное настоящее имя?\n"
+            "   - Оценочный диапазон возраста (слэнг, возраст аккаунтов, культурные отсылки).\n"
+            "   - Вероятный пол (лингвистические паттерны и местоимения).\n"
+            "   - Оценочный уровень образования (грамматика, техническая сложность).\n\n"
+            "2. 🌍 ГЕО-ТЕМПОРАЛЬНЫЙ АНАЛИЗ (Критично):\n"
+            "   - Сопоставь временные метки коммитов/постов/комментариев для триангуляции РЕАЛЬНОГО ВРЕМЕННОГО ПОЯСА.\n"
+            "   - Определи режим сна (сова или жаворонок).\n"
+            "   - Паттерны, указывающие на географическое положение (рабочие дни против выходных)?\n\n"
+            "3. 🧠 ПСИХОЛОГИЧЕСКИЙ ПРОФИЛЬ (Модель OCEAN):\n"
+            "   - Открытость: любопытство и эксперименты.\n"
+            "   - Экстраверсия: уровень социального взаимодействия.\n"
+            "   - Добросовестность: последовательность и порядок в работе/коде.\n"
+            "   - Невротизм: разочарование, жалобы, защитный тон.\n"
+            "   - Навязчивые интересы: повторяющиеся темы или сообщества.\n\n"
+            "4. 💻 ТЕХНИЧЕСКИЙ И ПРОФЕССИОНАЛЬНЫЙ ПРОФИЛЬ:\n"
+            "   - Реальный стек (основан на активности, а не на том, что заявлено).\n"
+            "   - Уровень сеньйорности (Junior, Mid, Senior, Script Kiddie).\n"
+            "   - Профессиональный архетип (корпоративный, фрилансер, исследователь, хакер, создатель и т.д.).\n\n"
+            "5. ⚖️ ИДЕОЛОГИЯ И ЦЕННОСТИ:\n"
+            "   - Определи политические или этические склонности по сообществам, репозиториям, публикациям или лайкам.\n\n"
+            "6. ⚠️ ВЕКТОРЫ АТАКИ (OpSec):\n"
+            "   - Восприимчивость к социальной инженерии.\n"
+            "   - Раскрытие личных email, работодателей или реальных личностей.\n"
+            "   - Гигиена безопасности (2FA, повторное использование ников, утечки учетных данных).\n"
+            "   - Признаки вредоносной активности или хакинга.\n\n"
+            "ЯЗЫК ОТВЕТА: Русский.\n"
+            "ФОРМАТ ВЫВОДА (СТРОГИЙ JSON):\n"
+            "{\n"
+            "  \"summary\": \"Текст в формате Markdown с шестью разделами (обязательно используй нумерацию ## 1. до ## 6.).\",\n"
+            "  \"highlights\": [\"Список из 3-5 быстрых выводов.\"],\n"
+            "  \"confidence\": 0.0 до 1.0\n"
+            "}"
+        )
+        
+        
     return (
           "ROLE: Criminal Profiler and Threat Intelligence Analyst.\n"
         "OBJECTIVE: Build a psychological and behavioural report using public evidence.\n"
@@ -262,6 +392,66 @@ def _build_system_prompt_compact(language: Language) -> str:
             "}"
         )
 
+    if language == Language.PORTUGUESE:
+        return (
+            "ATUE COMO: Perfilador Criminal e Analista CTI.\n"
+            "OBJETIVO: Relatório psicológico e comportamental a partir da pegada digital.\n"
+            "MÉTODO: Dedução lógica agressiva (Chain of Thought). INFERA se houver evidências; caso contrário, diga isso.\n\n"
+            "ENTREGA: Markdown com estas 6 seções EXATAS (títulos '## 1.' a '## 6.'): \n"
+            "## 1. 🆔 Identidade e demografia (inferência)\n"
+            "## 2. 🌍 Análise geo-temporal (fuso horário/rotina)\n"
+            "## 3. 🧠 Perfil psicológico (OCEAN)\n"
+            "## 4. 💻 Perfil técnico/profissional\n"
+            "## 5. ⚖️ Ideologia e valores\n"
+            "## 6. ⚠️ Vetores de ataque (OpSec)\n\n"
+            "FORMATO DE SAÍDA: JSON ESTRICTO (sem texto extra):\n"
+            "{\n"
+            "  \"summary\": \"Markdown com as 6 seções.\",\n"
+            "  \"highlights\": [\"3-5 deduções baseadas em evidências\"],\n"
+            "  \"confidence\": 0.0 a 1.0\n"
+            "}"
+        )
+    
+    if language == Language.ARABIC:
+        return (
+            "تصرف كـ: محلل جنائي وخبير استخبارات التهديدات (CTI).\n"
+            "هدفك: تقرير نفسي/سلوكي من البصمة الرقمية.\n"
+            "طريقتك: الاستنتاج المنطقي الجريء (سلسلة الأفكار). استنتج عند وجود أدلة؛ وإلا فقل عدم كفاية الأدلة.\n\n"
+            "الناتج: نص Markdown يحتوي على هذه الأقسام الستة الدقيقة (العناوين '## 1.' إلى '## 6.'): \n"
+            "## 1. 🆔 الهوية والتركيبة السكانية (الاستدلال)\n"
+            "## 2. 🌍 التحليل الجغرافي الزمني (المنطقة الزمنية/الروتين)\n"
+            "## 3. 🧠 الملف النفسي (OCEAN)\n"
+            "## 4. 💻 الملف التقني/المهني\n"
+            "## 5. ⚖️ الأيديولوجية والقيم\n"
+            "## 6. ⚠️ متجهات الهجوم (OpSec)\n\n"
+            "تنسيق الإخراج: JSON صارم فقط (بدون نص إضافي):\n"
+            "{\n"
+            "  \"summary\": \"نص Markdown مع الأقسام الستة.\",\n"
+            "  \"highlights\": [\"3-5 استنتاجات قائمة على الأدلة\"],\n"
+            "  \"confidence\": 0.0 إلى 1.0\n"
+            "}"
+        )
+
+    if language == Language.RUSSIAN:
+        return (
+            "ДЕЙСТВУЙ КАК: Криминальный профилировщик и аналитик CTI.\n"
+            "ЦЕЛЬ: Психологический/поведенческий отчет на основе цифрового следа.\n"
+            "МЕТОД: Агрессивная логическая дедукция (Chain of Thought). Делай выводы, если есть основания; иначе пиши недостаточно доказательств.\n\n"
+            "ВЫВОД: Markdown с этими 6 ТОЧНЫМИ разделами (заголовки от '## 1.' до '## 6.'): \n"
+            "## 1. 🆔 Личность и демография (выводы)\n"
+            "## 2. 🌍 Гео-темпоральный анализ (часовой пояс/режим)\n"
+            "## 3. 🧠 Психологический профиль (OCEAN)\n"
+            "## 4. 💻 Технический/профессиональный профиль\n"
+            "## 5. ⚖️ Идеология и ценности\n"
+            "## 6. ⚠️ Векторы атаки (OpSec)\n\n"
+            "ФОРМАТ ВЫВОДА: ТОЛЬКО СТРОГИЙ JSON (без лишнего текста):\n"
+            "{\n"
+            "  \"summary\": \"Markdown с 6 разделами.\",\n"
+            "  \"highlights\": [\"3-5 выводов, основанных на доказательствах\"],\n"
+            "  \"confidence\": 0.0 до 1.0\n"
+            "}"
+        )
+        
     return (
         "ROLE: Criminal Profiler and CTI analyst.\n"
         "OBJECTIVE: Psychological/behavioural report from public footprint.\n"
@@ -416,7 +606,38 @@ def _heuristic_analysis(*, person: PersonEntity, language: Language, reason: str
             model="heuristic",
             raw={"reason": reason},
         )
-
+    if language == Language.PORTUGUESE:
+        summary = [
+            "## 1. 🆔 Identidade e demografia (inferências)",
+            "Evidência insuficiente para inferir atributos pessoais de forma responsável.",
+            "\n## 2. 🌍 Análise geo-temporal",
+            "Não há timestamps suficientes para triangular fuso horário.",
+            "\n## 3. 🧠 Perfil psicológico (OCEAN)",
+            "Não se observa conteúdo textual confiável para um perfil psicológico.",
+            "\n## 4. 💻 Perfil técnico/profissional",
+            f"Perfis confirmados: {len(confirmed)} / {len(profiles)}.",
+            f"Redes confirmadas: {', '.join(networks) if networks else 'N/A'}.",
+            "\n## 5. ⚖️ Ideologia e valores",
+            "Sem evidência suficiente para inferências ideológicas.",
+            "\n## 6. ⚠️ OpSec / superfície de ataque",
+            f"Emails observados: {', '.join(emails) if emails else 'N/A'}.",
+        ]
+        if breach_lines:
+            summary.append("\nResultados de violações (HIBP):\n" + "\n".join(breach_lines))
+            summary.append(f"\n> Nota: análise heurística (sem IA remota). Motivo: {reason}.")
+            highlights = [
+                f"Perfis confirmados: {len(confirmed)}.",
+                f"Redes confirmadas: {', '.join(networks) if networks else 'N/A'}.",
+            ]
+        if breach_lines:
+            highlights.append("Foram detectados resultados do HIBP (breach-check).")
+        return AnalysisReport(
+                summary="\n".join(summary).strip(),
+                highlights=highlights,
+                confidence=0.25,
+                model="heuristic",
+                raw={"reason": reason},
+            )
     summary = [
         "## 1. 🆔 Identity & demographics (inference)",
         "Insufficient evidence to infer personal attributes responsibly.",
@@ -657,6 +878,18 @@ async def analyze_person(
                             "Reescribe SOLO el JSON con contenido real: 'summary' debe incluir las 6 secciones completas y "
                             "'highlights' debe ser una lista real basada en la evidencia recibida."
                         )
+                if language == Language.PORTUGUESE:
+                        if missing_sections:
+                            fix = (
+                                "Você não seguiu o formato requerido. Reescreva APENAS o JSON válido: 'summary' deve ser Markdown e incluir as 6 seções com títulos '## 1.' a '## 6.' "
+                                "e 'highlights' deve ser uma lista real baseada nas evidências fornecidas."
+                            )
+                        else:
+                            fix = (
+                                "Seu JSON é um template (valores de exemplo). Reescreva APENAS o JSON com conteúdo real: 'summary' deve incluir as 6 seções completas e "
+                                "'highlights' deve ser uma lista real baseada nas evidências fornecidas."
+                            )
+                        
                 else:
                     if missing_sections:
                         fix = (
@@ -737,6 +970,8 @@ async def analyze_person(
             request_messages.append({"role": "assistant", "content": content})
             if language == Language.SPANISH:
                 fix = "Tu respuesta no fue un JSON válido. Reescribe SOLO el JSON válido (sin texto extra ni fences)."
+            elif language == Language.PORTUGUESE:
+                fix = "Sua resposta não foi um JSON válido. Reescreva APENAS o JSON válido (sem texto extra nem fences)."
             else:
                 fix = "Your response was not valid JSON. Rewrite ONLY valid JSON (no extra text, no fences)."
             request_messages.append({"role": "user", "content": fix})
