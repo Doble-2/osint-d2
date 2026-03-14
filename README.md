@@ -15,7 +15,7 @@
 
 **Advanced identity correlation and cognitive profiling CLI**
 
-OSINT-D2 ingests usernames and/or emails, aggregates public evidence from multiple OSINT sources, and enriches the dataset with targeted scrapers. A DeepSeek/OpenAI-compatible analyst can turn the evidence into hypothesis-driven intelligence. The CLI defaults to English while still supporting a full Spanish experience (`--spanish`).
+OSINT-D2 ingests usernames and/or emails, aggregates public evidence from multiple OSINT sources, and enriches the dataset with targeted scrapers. A DeepSeek/OpenAI-compatible analyst can turn the evidence into hypothesis-driven intelligence. The CLI defaults to English while still supporting a full Spanish experience (`--language es`).
 
 ## Highlights
 
@@ -157,7 +157,7 @@ Key flags (apply to the relevant commands):
 - `--export-json` writes `reports/<target>.json`.
 - `--export-pdf` writes `reports/<target>.pdf` (falls back to HTML if PDF fails).
 - `--format json` produces machine-friendly output (recommended for automation).
-- `-s, --spanish / --english` toggles localized prompts and AI analysis.
+- `-l, --language [es|en|pt]` toggles localized prompts and AI analysis.
 
 AI flags (important):
 
@@ -181,12 +181,12 @@ poetry run osint-d2 hunt \
 poetry run osint-d2 scan-email user@example.com --no-deep-analyze
 
 # Re-run the AI profiler over an exported dossier in Spanish
-poetry run osint-d2 analyze reports/example.json --spanish
+poetry run osint-d2 analyze reports/example.json --language es
 ```
 
 ## AI and Language
 
-- English is the default CLI and AI language. Use `--spanish` (or `OSINT_D2_DEFAULT_LANGUAGE=es`) to switch.
+- English is the default CLI and AI language. Use `--language es` (or `OSINT_D2_DEFAULT_LANGUAGE=es`) to switch.
 
 ### Providers and presets
 

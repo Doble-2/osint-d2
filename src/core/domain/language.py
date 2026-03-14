@@ -16,6 +16,9 @@ class Language(str, Enum):
 
     ENGLISH = "en"
     SPANISH = "es"
+    PORTUGUESE = "pt"
+    ARABIC = "ar"
+    RUSSIAN = "ru"
 
     @classmethod
     def default(cls) -> "Language":
@@ -24,12 +27,26 @@ class Language(str, Enum):
         return cls.ENGLISH
 
     @classmethod
-    def from_bool(cls, spanish: bool) -> "Language":
-        """Derive a language value from a boolean flag."""
+    def from_str(cls, value: str) -> "Language":
+        """Parse a string into a Language, case-insensitive."""
 
-        return cls.SPANISH if spanish else cls.ENGLISH
+        value = value.strip().lower()
+        for lang in cls:
+            if value in (lang.value, lang.name.lower()):
+                return lang
+        raise ValueError(f"Unsupported language: {value}")
 
     def label(self) -> str:
         """Human readable label for prompts and logging."""
-
-        return "Spanish" if self is Language.SPANISH else "English"
+        Language = self.__class__
+        if self == Language.ENGLISH:
+            return "English"
+        elif self == Language.SPANISH:
+            return "Spanish"
+        elif self == Language.PORTUGUESE:
+            return "Portuguese"
+        elif self == Language.ARABIC:
+            return "Arabic"
+        elif self == Language.RUSSIAN:
+            return "Russian"
+        return Language(self.value).name.capitalize()

@@ -183,11 +183,9 @@ def _auto_output_format(output_format: OutputFormat) -> OutputFormat:
     return output_format
 
 
-def _resolve_language(spanish_flag: bool | None) -> Language:
-    if spanish_flag is True:
-        return Language.SPANISH
-    if spanish_flag is False:
-        return Language.ENGLISH
+def _resolve_language(language: Language | None) -> Language:
+    if language is not None:
+        return language
     return AppSettings().default_language
 
 
@@ -691,11 +689,11 @@ def scan(
         "--ai-save/--no-ai-save",
         help="Persist provider configuration in the user config (.env) for next runs.",
     ),
-    spanish: bool | None = typer.Option(
+    language: Language | None = typer.Option(
         None,
-        "--spanish/--english",
-        "-s",
-        help="Switch output language: --spanish for Spanish, --english for English (default).",
+        "--language",
+        "-l",
+        help="Switch output language: --language [es|en|pt|ar|ru] (default: en).",
         show_default=False,
     ),
     export_pdf: bool = typer.Option(
@@ -720,7 +718,7 @@ def scan(
     ),
 ) -> None:
     output_format = _auto_output_format(output_format)
-    language = _resolve_language(spanish)
+    language = _resolve_language(language)
     settings = AppSettings()
     if deep_analyze and ai_provider:
         settings = _configure_ai_for_run(
@@ -775,11 +773,11 @@ def scan_email(
         "--scan-localpart/--no-scan-localpart",
         help="Also try the username derived from the local part across username sources.",
     ),
-    spanish: bool | None = typer.Option(
+    language: Language | None = typer.Option(
         None,
-        "--spanish/--english",
-        "-s",
-        help="Switch output language: --spanish for Spanish, --english for English (default).",
+        "--language",
+        "-l",
+        help="Switch output language: --language [es|en|pt|ar|ru] (default: en).",
         show_default=False,
     ),
     export_json: bool = typer.Option(
@@ -805,7 +803,7 @@ def scan_email(
 ) -> None:
     normalized = _normalize_email(email)
     output_format = _auto_output_format(output_format)
-    language = _resolve_language(spanish)
+    language = _resolve_language(language)
     settings = AppSettings()
     if deep_analyze and ai_provider:
         settings = _configure_ai_for_run(
@@ -904,12 +902,12 @@ def hunt(
         "--nsfw",
         help="NSFW policy for site-lists: inherit|exclude|allow.",
     ),
-    spanish: bool | None = typer.Option(
+    language: Language | None = typer.Option(
         None,
-        "--spanish/--english",
-        "-s",
-        help="Switch output language: --spanish for Spanish, --english for English (default).",
-        show_default=False,
+        "--language",
+        "-l",
+        help="Switch output language: --language [es|en|pt|ar|ru] (default: en).",
+        show_default=True,
     ),
     export_json: bool = typer.Option(
         False,
@@ -957,7 +955,7 @@ def hunt(
         no_nsfw = False
 
     output_format = _auto_output_format(output_format)
-    language = _resolve_language(spanish)
+    language = _resolve_language(language)
     settings = AppSettings()
     if ai and ai_provider:
         settings = _configure_ai_for_run(
@@ -1026,11 +1024,11 @@ def wizard() -> None:
 
     default_language = settings.default_language.label().lower()
     language_choice = Prompt.ask(
-        "Output language (english/spanish)",
-        choices=["english", "spanish"],
+        "Output language (english/spanish/portuguese/arabic/russian)",
+        choices=["english", "spanish", "portuguese", "arabic", "russian"],
         default=default_language,
     )
-    language = Language.SPANISH if language_choice == "spanish" else Language.ENGLISH
+    language = Language.from_str(language_choice)
 
     use_site_lists = Confirm.ask("Enable large site-lists engine?", default=False)
     use_sherlock = Confirm.ask("Enable Sherlock (400+ sites)?", default=False)
@@ -1153,11 +1151,11 @@ def analyze(
         "--format",
         help="Terminal output format: table or json.",
     ),
-    spanish: bool | None = typer.Option(
+    language: Language | None = typer.Option(
         None,
-        "--spanish/--english",
-        "-s",
-        help="Switch output language: --spanish for Spanish, --english for English (default).",
+        "--language",
+        "-l",
+        help="Switch output language: --language [es|en|pt|ar|ru] (default: en).",
         show_default=False,
     ),
     json_raw: bool = typer.Option(
@@ -1186,7 +1184,7 @@ def analyze(
     raw = input_path.read_text(encoding="utf-8")
     person = PersonEntity.model_validate_json(raw)
     output_format = _auto_output_format(output_format)
-    language = _resolve_language(spanish)
+    language = _resolve_language(language)
     settings = AppSettings()
     if ai_provider:
         settings = _configure_ai_for_run(
