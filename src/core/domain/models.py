@@ -11,7 +11,7 @@ Nota:
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -87,7 +87,7 @@ class AnalysisReport(BaseModel):
         description="Confianza normalizada (0..1) del análisis.",
     )
     generated_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=lambda: datetime.now(timezone.utc),
         description="Momento de generación del reporte (UTC).",
     )
     model: str | None = Field(
