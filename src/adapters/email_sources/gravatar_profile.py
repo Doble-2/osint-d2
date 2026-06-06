@@ -79,8 +79,8 @@ class GravatarProfileScanner(OSINTScanner):
             url=str(response.url),
             username=email,
             network_name="gravatar_profile",
-            existe=exists,
+            exists=exists,
             metadata=metadata,
             bio=bio,
-            imagen_url=image_url,
+            image_url=image_url,
         )

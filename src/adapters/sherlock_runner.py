@@ -154,7 +154,6 @@ async def run_sherlock_username(
                         return None
 
                     html_meta = extract_html_metadata(html=text, base_url=final_url)
-                    #print(f"[debug] Sherlock: encontrado en {site_name} para {username}")
                     metadata: dict[str, Any] = {
                         "source": "sherlock",
                         "site_name": site_name,
@@ -169,10 +168,10 @@ async def run_sherlock_username(
                         url=final_url,
                         username=username,
                         network_name=_slug(site_name),
-                        existe=True,
+                        exists=True,
                         metadata=metadata,
                         bio=html_meta.get("meta_description"),
-                        imagen_url=html_meta.get("og_image"),
+                        image_url=html_meta.get("og_image"),
                     )
                 except Exception:
                     return None

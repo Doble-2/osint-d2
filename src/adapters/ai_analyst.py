@@ -10,10 +10,11 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import random
 import re
 from typing import Any
-#from bs4 import BeautifulSoup migrar a beatifulsoup 
+
 
 from pydantic import BaseModel, Field
 from openai import AsyncOpenAI
@@ -44,9 +45,11 @@ except Exception:  # pragma: no cover
     APIStatusError = _FallbackOpenAIError
     RateLimitError = _FallbackOpenAIError
 
-from core.config import AppSettings
-from core.domain.language import Language
-from core.domain.models import AnalysisReport, PersonEntity
+from core.config import AppSettings  # noqa: E402
+from core.domain.language import Language  # noqa: E402
+from core.domain.models import AnalysisReport, PersonEntity  # noqa: E402
+
+logger = logging.getLogger(__name__)
 
 
 def build_deepseek_client(*, api_key: str, base_url: str) -> AsyncOpenAI:
@@ -93,14 +96,7 @@ def _summary_has_six_sections(*, summary: str, language: Language) -> bool:
         return False
 
     # Exigimos al menos encabezados 1 y 6 para evitar falsos positivos.
-    if language == Language.SPANISH:
-        return bool(re.search(r"(?m)^##\s*1\.", text)) and bool(re.search(r"(?m)^##\s*6\.", text))
-    if language == Language.PORTUGUESE:
-        return bool(re.search(r"(?m)^##\s*1\.", text)) and bool(re.search(r"(?m)^##\s*6\.", text))
-    if language == Language.ARABIC:
-        return bool(re.search(r"(?m)^##\s*1\.", text)) and bool(re.search(r"(?m)^##\s*6\.", text))
-    if language == Language.RUSSIAN:
-        return bool(re.search(r"(?m)^##\s*1\.", text)) and bool(re.search(r"(?m)^##\s*6\.", text))
+    # El patrón es idéntico para todos los idiomas.
     return bool(re.search(r"(?m)^##\s*1\.", text)) and bool(re.search(r"(?m)^##\s*6\.", text))
 
 
@@ -200,7 +196,7 @@ def _build_system_prompt(language: Language) -> str:
             "  \"confidence\": 0.0 a 1.0\n"
             "}"
         )
-    
+
     if language == Language.PORTUGUESE:
         return (
               "ATUE COMO: Um Perfilador Criminal e Analista de Inteligência de Ameaças (CTI).\n"
@@ -241,7 +237,7 @@ def _build_system_prompt(language: Language) -> str:
                 "  \"confidence\": 0.0 a 1.0\n"
                 "}"
         )
-        
+
     if language == Language.ARABIC:
         return (
             "تصرف كـ: محلل جنائي وخبير استخبارات التهديدات (CTI).\n"
@@ -323,8 +319,8 @@ def _build_system_prompt(language: Language) -> str:
             "  \"confidence\": 0.0 до 1.0\n"
             "}"
         )
-        
-        
+
+
     return (
           "ROLE: Criminal Profiler and Threat Intelligence Analyst.\n"
         "OBJECTIVE: Build a psychological and behavioural report using public evidence.\n"
@@ -411,7 +407,7 @@ def _build_system_prompt_compact(language: Language) -> str:
             "  \"confidence\": 0.0 a 1.0\n"
             "}"
         )
-    
+
     if language == Language.ARABIC:
         return (
             "تصرف كـ: محلل جنائي وخبير استخبارات التهديدات (CTI).\n"
@@ -451,7 +447,7 @@ def _build_system_prompt_compact(language: Language) -> str:
             "  \"confidence\": 0.0 до 1.0\n"
             "}"
         )
-        
+
     return (
         "ROLE: Criminal Profiler and CTI analyst.\n"
         "OBJECTIVE: Psychological/behavioural report from public footprint.\n"
@@ -544,7 +540,7 @@ def _is_local_base_url(url: str) -> bool:
 
 def _heuristic_analysis(*, person: PersonEntity, language: Language, reason: str) -> AnalysisReport:
     profiles = list(person.profiles)
-    confirmed = [p for p in profiles if getattr(p, "existe", False)]
+    confirmed = [p for p in profiles if getattr(p, "exists", False)]
     networks = sorted({(p.network_name or "").lower() for p in confirmed if p.network_name})
     emails = sorted({p.username for p in profiles if isinstance(getattr(p, "username", None), str) and "@" in p.username})
 
@@ -624,20 +620,20 @@ def _heuristic_analysis(*, person: PersonEntity, language: Language, reason: str
         ]
         if breach_lines:
             summary.append("\nResultados de violações (HIBP):\n" + "\n".join(breach_lines))
-            summary.append(f"\n> Nota: análise heurística (sem IA remota). Motivo: {reason}.")
-            highlights = [
-                f"Perfis confirmados: {len(confirmed)}.",
-                f"Redes confirmadas: {', '.join(networks) if networks else 'N/A'}.",
-            ]
+        summary.append(f"\n> Nota: análise heurística (sem IA remota). Motivo: {reason}.")
+        highlights = [
+            f"Perfis confirmados: {len(confirmed)}.",
+            f"Redes confirmadas: {', '.join(networks) if networks else 'N/A'}.",
+        ]
         if breach_lines:
             highlights.append("Foram detectados resultados do HIBP (breach-check).")
         return AnalysisReport(
-                summary="\n".join(summary).strip(),
-                highlights=highlights,
-                confidence=0.25,
-                model="heuristic",
-                raw={"reason": reason},
-            )
+            summary="\n".join(summary).strip(),
+            highlights=highlights,
+            confidence=0.25,
+            model="heuristic",
+            raw={"reason": reason},
+        )
     summary = [
         "## 1. 🆔 Identity & demographics (inference)",
         "Insufficient evidence to infer personal attributes responsibly.",
@@ -704,18 +700,11 @@ async def analyze_person(
     """Genera un reporte de análisis IA a partir de evidencias públicas."""
 
     settings = settings or AppSettings()
-    
+
     clean_person = person.model_copy()
-        
-    while True:
-        to_remove = [p for p in clean_person.profiles if not p.existe]
-        if not to_remove:
-            break
-        for p in to_remove:
-            if p.existe == False:   
-                clean_person.profiles.remove(p)
-            
-            
+    clean_person.profiles = [p for p in clean_person.profiles if p.exists]
+
+
     api_key = (settings.ai_api_key or "").strip()
     if not api_key:
         # Sin API key: si es un provider local OpenAI-compatible, usamos dummy.
@@ -743,7 +732,7 @@ async def analyze_person(
     profiles_data: list[dict[str, Any]] = []
     for p in clean_person.profiles:
         meta = p.metadata if isinstance(p.metadata, dict) else {}
-        
+
         # Normaliza URL (evita querystrings ruidosas).
         clean_url = str(p.url).split('?')[0]
 
@@ -786,6 +775,9 @@ async def analyze_person(
 
     confirmed_networks = sorted({(p.network_name or "").lower() for p in clean_person.profiles if p.network_name})
     confirmed_urls = [str(p.url).split("?")[0] for p in clean_person.profiles if getattr(p, "url", None)]
+    # Cap to avoid giant payloads when Sherlock is enabled.
+    if len(confirmed_urls) > 60:
+        confirmed_urls = confirmed_urls[:60]
 
     handles: list[str] = []
     emails: list[str] = []
@@ -878,18 +870,17 @@ async def analyze_person(
                             "Reescribe SOLO el JSON con contenido real: 'summary' debe incluir las 6 secciones completas y "
                             "'highlights' debe ser una lista real basada en la evidencia recibida."
                         )
-                if language == Language.PORTUGUESE:
-                        if missing_sections:
-                            fix = (
-                                "Você não seguiu o formato requerido. Reescreva APENAS o JSON válido: 'summary' deve ser Markdown e incluir as 6 seções com títulos '## 1.' a '## 6.' "
-                                "e 'highlights' deve ser uma lista real baseada nas evidências fornecidas."
-                            )
-                        else:
-                            fix = (
-                                "Seu JSON é um template (valores de exemplo). Reescreva APENAS o JSON com conteúdo real: 'summary' deve incluir as 6 seções completas e "
-                                "'highlights' deve ser uma lista real baseada nas evidências fornecidas."
-                            )
-                        
+                elif language == Language.PORTUGUESE:
+                    if missing_sections:
+                        fix = (
+                            "Você não seguiu o formato requerido. Reescreva APENAS o JSON válido: 'summary' deve ser Markdown e incluir as 6 seções com títulos '## 1.' a '## 6.' "
+                            "e 'highlights' deve ser uma lista real baseada nas evidências fornecidas."
+                        )
+                    else:
+                        fix = (
+                            "Seu JSON é um template (valores de exemplo). Reescreva APENAS o JSON com conteúdo real: 'summary' deve incluir as 6 seções completas e "
+                            "'highlights' deve ser uma lista real baseada nas evidências fornecidas."
+                        )
                 else:
                     if missing_sections:
                         fix = (
@@ -979,7 +970,14 @@ async def analyze_person(
 
         except Exception as exc:
             last_error = exc
+            logger.error(
+                "AI analysis unexpected error: %s: %s",
+                type(exc).__name__, str(exc)[:300],
+            )
             break
+
+    error_detail = f"{type(last_error).__name__}: {str(last_error)[:100]}" if last_error else "unknown"
+    logger.warning("AI analysis fell back to heuristic. Reason: %s", error_detail)
 
     return _heuristic_analysis(
         person=clean_person,

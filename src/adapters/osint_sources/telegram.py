@@ -25,17 +25,16 @@ class TelegramScanner(OSINTScanner):
         self._settings = settings or AppSettings()
 
     async def scan(self, username: str) -> SocialProfile:
-        import re
         url = f"{self._base_url}/{username}"
 
         async with build_async_client(self._settings) as client:
             response = await client.get(url)
-            
+
             metadata: dict[str, Any] = {
             "status_code": response.status_code,
             "final_url": str(response.url),
             }
-             
+
             if response.status_code == 200:
                 # Extraer <title> del HTML
                 html = response.text if hasattr(response, "text") else await response.aread()
@@ -59,25 +58,24 @@ class TelegramScanner(OSINTScanner):
                             name = name_span.text
                     if name:
                         metadata["name"] = name
-                    #print(name)
 
                     #pattern_name = r'<meta name="title" content="(.*?)"'
                     #nn = re.search(pattern_name, html, re.IGNORECASE | re.DOTALL)
                     #name = nn.group(1)
-                    
+
                     avatar_soup = soup.find("meta", {"property": "og:image"})
                     #pattern_avatar = r'<meta property="og:image" content="(.*?)"'
                     #na = re.search(pattern_avatar, html, re.IGNORECASE | re.DOTALL)
                     if avatar_soup is not None:
                         avatar_url = avatar_soup.get("content")
                         metadata["avatar_url"] = avatar_url
-            
+
                 else:
-                    exists = False  
+                    exists = False
         return SocialProfile(
             url=str(response.url),
             username=username,
             network_name="telegram",
-            existe=exists,
+            exists=exists,
             metadata=metadata,
         )

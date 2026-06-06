@@ -12,7 +12,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Iterable, Sequence, cast
+from typing import Callable, Iterable, Sequence
 
 from adapters.email_sources import (
     GravatarProfileScanner,
@@ -28,6 +28,7 @@ from adapters.osint_sources import (
     GitHubGistScanner,
     GitHubScanner,
     GitLabScanner,
+    InstagramScanner,
     KaggleScanner,
     KeybaseScanner,
     MediumScanner,
@@ -117,6 +118,7 @@ _USERNAME_SCANNERS = (
     DribbbleScanner,
     BehanceScanner,
     XScanner,
+    InstagramScanner,
 )
 
 _EMAIL_SCANNERS = (
@@ -178,7 +180,7 @@ def dedupe_profiles(profiles: Iterable[SocialProfile]) -> list[SocialProfile]:
 
 
 def _strict_keep_profile(*, profile: SocialProfile, username: str) -> bool:
-    if not profile.existe:
+    if not profile.exists:
         return False
 
     metadata = profile.metadata if isinstance(profile.metadata, dict) else {}
@@ -245,8 +247,6 @@ async def hunt(
             for profile in collected:
                 if derived_from and isinstance(profile.metadata, dict):
                     profile.metadata = {**profile.metadata, "derived_from": derived_from}
-                if isinstance(profile.url, str) and "example.invalid/x/" in profile.url:
-                    profile.url = profile.url.replace("example.invalid/x/", "x.com/")
             return collected
         except Exception as exc:  # pragma: no cover - defensive fallback
             fallback_url = f"https://{network}.com/{value}"
@@ -260,7 +260,7 @@ async def hunt(
                     url=fallback_url,
                     username=value,
                     network_name=network,
-                    existe=False,
+                    exists=False,
                     metadata=metadata,
                 )
             ]
@@ -372,7 +372,7 @@ async def hunt(
                         no_nsfw=no_nsfw_effective,
                     )
                 )
-                
+
         if emails:
             email_path = request.site_lists.email_path
             if email_path and not email_path.exists():
@@ -432,7 +432,7 @@ async def hunt(
         breach_profiles = enrich_profiles_with_breach_data(emails=emails)
         profiles.extend(breach_profiles)
         profiles = dedupe_profiles(profiles)
-    
+
     if request.strict and usernames:
         profiles = [
             profile

@@ -1,11 +1,13 @@
 [tool.poetry]
 name = "osint-d2"
 version = "0.1.0"
-description = "CLI OSINT moderna para investigación de identidades (Clean Architecture)."
-authors = []
+description = "Modern OSINT CLI toolkit for identity investigation and profiling (Clean Architecture)."
+authors = ["Doble-2"]
+license = "MIT"
 readme = "README.md"
+repository = "https://github.com/Doble-2/osint-d2"
+keywords = ["osint", "intelligence", "cli", "identity", "recon"]
 include = [
-  "src/templates/*.html",
   "src/adapters/templates/*.html",
 ]
 packages = [
@@ -16,7 +18,7 @@ packages = [
 
 [tool.poetry.dependencies]
 python = "^3.11"
-click = "8.1.7"
+click = "^8.1"
 typer = "^0.12.3"
 rich = "^13.7.1"
 httpx = "^0.27.2"
@@ -24,10 +26,24 @@ pydantic = "^2.10.4"
 pydantic-settings = "^2.7.1"
 openai = "^1.59.9"
 jinja2 = "^3.1.5"
+# WeasyPrint pinned to 60.1 + pydyf <0.11 due to breaking API changes in
+# newer versions that affect PDF rendering.  Revisit when upgrading.
 weasyprint = "60.1"
 pydyf = "<0.11"
 beautifulsoup4 = "^4.12.3"
-tls-client = "^1.0.1"
+markdown = "^3.6"
+
+[tool.poetry.dependencies.tls-client]
+version = "^1.0.1"
+optional = true
+
+[tool.poetry.extras]
+tls = ["tls-client"]
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^9.0"
+pytest-asyncio = "^1.0"
+ruff = "^0.11"
 
 [tool.poetry.scripts]
 osint-d2 = "cli.main:run"

@@ -1,45 +1,104 @@
-# OSINT-D2
+<p align="center">
+  <img src="assets/demo.png" alt="OSINT-D2 Demo" width="700" />
+</p>
 
-[![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)](#installation)
-[![Poetry](https://img.shields.io/badge/Poetry-enabled-60A5FA?logo=poetry&logoColor=white)](#installation)
-[![DeepSeek](https://img.shields.io/badge/AI-DeepSeek%20(OpenAI%20compatible)-111827?logo=openai&logoColor=white)](#ai-and-language)
-[![License](https://img.shields.io/badge/License-MIT-success)](LICENSE)
+<h1 align="center">OSINT-D2</h1>
 
-```text
-   ____  ____ ___ _   _ _____     ____  ____
-  / __ \/ __ `__ \ | | |_   _|   / __ \/ __ \
- / / / / / / / / / | | | | |    / / / / / / /
-/ /_/ / /_/ /_/ /| |_| | | |   / /_/ / /_/ /
-\____/\__,_|\__,_| \__,_| |_|   \____/\____/
+<p align="center">
+  <strong>Agentic OSINT • Identity Intelligence • Cognitive Profiling</strong>
+</p>
+
+<p align="center">
+  <a href="#installation"><img src="https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white" alt="Python" /></a>
+  <a href="#installation"><img src="https://img.shields.io/badge/Poetry-enabled-60A5FA?logo=poetry&logoColor=white" alt="Poetry" /></a>
+  <a href="#ai-analysis--language"><img src="https://img.shields.io/badge/AI-DeepSeek%20%7C%20Groq%20%7C%20OpenRouter-111827?logo=openai&logoColor=white" alt="AI" /></a>
+  <a href="#-agent-mode--agentic-ai"><img src="https://img.shields.io/badge/Agentic_AI-Function_Calling-8B5CF6?logo=openai&logoColor=white" alt="Agentic AI" /></a>
+  <a href="https://scrapingant.com/?ref=osint-d2"><img src="https://img.shields.io/badge/Proxies-ScrapingAnt-FF6B35" alt="ScrapingAnt" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-success" alt="License" /></a>
+</p>
+
+---
+
+OSINT-D2 is an **advanced open-source intelligence platform** that transforms usernames and emails into structured identity dossiers. Powered by **agentic AI** and backed by [**ScrapingAnt**](https://scrapingant.com/?ref=osint-d2)'s enterprise-grade proxy infrastructure, it delivers intelligence-grade identity correlation, cognitive profiling, and breach analysis — all from a single CLI command.
+
+## Why OSINT-D2?
+
+| Capability | What it does |
+|---|---|
+| 🔍 **Multi-source correlation** | Links usernames, emails, and derived aliases across 30+ platforms in a single run |
+| 🤖 **Agentic AI** | Autonomous investigation — the LLM decides which tools to invoke and pivots across identities automatically |
+| 🧠 **6-dimension cognitive profiling** | Identity, Geo-temporal, OCEAN psychology, Technical stack, Ideology, and OpSec analysis |
+| 🛡️ **Trust anchors** | Define verified identity sources to filter false positives and focus on real targets |
+| 🌐 **ScrapingAnt proxy integration** | Residential & datacenter proxies to bypass rate limits and anti-bot blocks worldwide |
+| 📊 **Premium PDF dossiers** | Classified-style reports with identity cards, OCEAN profiles, OpSec risk matrices, and rendered Markdown |
+| 💀 **Breach exposure (HIBP)** | Query HaveIBeenPwned to find data breaches linked to discovered emails |
+| 🌍 **5 languages** | English, Spanish, Portuguese, Arabic, and Russian — CLI, wizard, AI, and reports |
+| 📦 **Cross-platform binaries** | Ship standalone executables via PyInstaller for Linux, macOS, and Windows |
+
+---
+
+## Table of Contents
+
+- [Quick Start](#quick-start)
+- [Installation](#installation)
+- [Proxy: Powered by ScrapingAnt](#-proxy-powered-by-scrapingant)
+- [Command Reference](#command-reference)
+- [Agent Mode (Agentic AI)](#-agent-mode--agentic-ai)
+- [Trust Anchors](#-trust-anchors)
+- [AI Analysis & Language](#ai-analysis--language)
+- [Premium PDF Dossiers](#-premium-pdf-dossiers)
+- [Breach Checking (HIBP)](#-breach-checking-hibp)
+- [Interactive Wizard](#-interactive-wizard)
+- [Architecture](#architecture)
+- [Packaging (PyInstaller)](#packaging-pyinstaller)
+- [Troubleshooting](#troubleshooting)
+- [Disclaimer](#disclaimer)
+
+---
+
+## Quick Start
+
+```bash
+# Clone and install
+git clone https://github.com/Doble-2/osint-d2.git && cd osint-d2
+poetry install
+
+# Configure AI (interactive — no manual editing)
+poetry run osint-d2 doctor setup-ai
+
+# Launch the interactive wizard
+poetry run osint-d2
+
+# Or go straight to agent mode
+poetry run osint-d2 agent "target-username" --export-pdf --export-json
 ```
 
-**Advanced identity correlation and cognitive profiling CLI**
+![Command walkthrough showing the initial hunt invocation](assets/command_image.png)
 
-OSINT-D2 ingests usernames and/or emails, aggregates public evidence from multiple OSINT sources, and enriches the dataset with targeted scrapers. A DeepSeek/OpenAI-compatible analyst can turn the evidence into hypothesis-driven intelligence. The CLI defaults to English while still supporting a full Spanish experience (`--language es`).
-
-## Highlights
-
-- Multi-source correlation that links usernames, emails, and derived aliases in a single run.
-- Modular async pipeline with reusable services, Sherlock integration, and support for WhatsMyName-style site lists.
-- Cognitive AI analysis (`--deep-analyze`) generating structured summaries, highlights, and confidence levels.
-- Professional dossier exports (JSON + PDF/HTML) suitable for incident response or executive briefings.
-- Typer + Rich CLI with contextual help, interactive wizard, and JSON-first automation outputs.
-
-![Social footprint list for torvalds without Sherlock](assets/socials_list.png)
+---
 
 ## Installation
 
-**Prerequisites**
+### Prerequisites
 
-- Python 3.11 or newer
-- Poetry
-- WeasyPrint system dependencies (for PDF generation)
+- **Python 3.11** or newer
+- **Poetry** (dependency manager)
+- System libraries for PDF generation (WeasyPrint)
 
-### WeasyPrint dependencies (Linux)
+### 1. System dependencies (PDF export)
 
-PDF export uses WeasyPrint and requires system libraries.
+PDF dossiers are rendered via WeasyPrint, which requires native libraries:
 
-Ubuntu/Debian:
+<details>
+<summary><strong>macOS (Homebrew)</strong></summary>
+
+```bash
+brew install cairo pango gdk-pixbuf libffi
+```
+</details>
+
+<details>
+<summary><strong>Ubuntu / Debian</strong></summary>
 
 ```bash
 sudo apt-get update
@@ -47,20 +106,25 @@ sudo apt-get install -y \
   libcairo2 libpango-1.0-0 libpangoft2-1.0-0 \
   libgdk-pixbuf2.0-0 libffi-dev shared-mime-info
 ```
+</details>
 
-Fedora:
+<details>
+<summary><strong>Fedora</strong></summary>
 
 ```bash
 sudo dnf install -y cairo pango gdk-pixbuf2 libffi shared-mime-info
 ```
+</details>
 
-Arch:
+<details>
+<summary><strong>Arch</strong></summary>
 
 ```bash
 sudo pacman -S --needed cairo pango gdk-pixbuf2 libffi shared-mime-info
 ```
+</details>
 
-**Setup**
+### 2. Install OSINT-D2
 
 ```bash
 git clone https://github.com/Doble-2/osint-d2.git
@@ -68,108 +132,128 @@ cd osint-d2
 poetry install
 ```
 
-Verify your environment:
+### 3. Configure environment
 
 ```bash
-poetry run osint-d2 doctor run
+cp .env.example .env
 ```
 
-Copy `.env.example` to `.env` and configure at least:
-
-- (Optional) `OSINT_D2_AI_API_KEY` (required only if you want remote AI)
-
-Optional overrides:
-
-- `OSINT_D2_AI_BASE_URL`
-- `OSINT_D2_AI_MODEL`
-- `OSINT_D2_AI_TIMEOUT_SECONDS`
-- `OSINT_D2_DEFAULT_LANGUAGE` (`en` or `es`)
-
-AI note:
-
-- Remote AI requires a provider account + API key (even on free tiers).
-- If no key is configured, OSINT-D2 automatically falls back to a local heuristic summary (no network calls).
-
-PyInstaller / non-Python users (recommended):
-
-- Run `osint-d2 doctor setup-ai` once and paste your provider key.
-- This saves a user config `.env` file (no manual editing).
-
-User config `.env` locations:
-
-- Linux: `~/.config/osint-d2/.env` (or `$XDG_CONFIG_HOME/osint-d2/.env`)
-- macOS: `~/Library/Application Support/osint-d2/.env`
-- Windows: `%APPDATA%\\osint-d2\\.env`
-
-> PDF exports rely on WeasyPrint 60.1 and pydyf < 0.11 for compatibility.
-
-## Quick Start
-
-Interactive wizard (default command):
+Edit `.env` with your keys (or use the interactive setup):
 
 ```bash
-poetry run osint-d2
+poetry run osint-d2 doctor setup-ai    # AI key (interactive)
+poetry run osint-d2 doctor run         # Validate everything
 ```
 
-Direct help:
+### Environment variables
+
+| Variable | Required | Description |
+|---|---|---|
+| `OSINT_D2_AI_API_KEY` | For AI | API key for DeepSeek, Groq, OpenRouter, or any OpenAI-compatible provider |
+| `OSINT_D2_AI_BASE_URL` | No | Custom API endpoint (auto-detected from provider preset) |
+| `OSINT_D2_AI_MODEL` | No | Model name override (default: `deepseek-chat`) |
+| `OSINT_D2_AI_TIMEOUT_SECONDS` | No | API timeout (default: 120) |
+| `OSINT_D2_PROXY_API_KEY` | For proxy | ScrapingAnt API key |
+| `OSINT_D2_PROXY_MODE` | No | `residential` or `datacenter` (default: `residential`) |
+| `OSINT_D2_PROXY_COUNTRY` | No | 2-letter country code for geo-targeted proxy |
+| `OSINT_D2_DEFAULT_LANGUAGE` | No | Default language: `en`, `es`, `pt`, `ar`, `ru` |
+
+---
+
+## 🌐 Proxy: Powered by ScrapingAnt
+
+<p align="center">
+  <a href="https://scrapingant.com/?ref=osint-d2">
+    <img src="https://img.shields.io/badge/Powered_by-ScrapingAnt-FF6B35?style=for-the-badge&logoColor=white" alt="ScrapingAnt" />
+  </a>
+</p>
+
+OSINT-D2's web scraping capabilities are powered by [**ScrapingAnt**](https://scrapingant.com/?ref=osint-d2) — an enterprise-grade proxy and web scraping platform trusted by thousands of developers worldwide.
+
+### Why ScrapingAnt?
+
+| Feature | Benefit for OSINT-D2 |
+|---|---|
+| 🏠 **Residential proxies** | Access social platforms like Instagram, X/Twitter, and LinkedIn that block datacenter IPs |
+| 🌍 **190+ countries** | Geo-targeted requests to see region-specific content |
+| ♻️ **Automatic rotation** | Fresh IPs on every request — no bans, no CAPTCHAs |
+| 🛡️ **Anti-bot bypass** | Built-in JavaScript rendering and browser fingerprint rotation |
+| ⚡ **99.9% uptime** | Enterprise reliability for production OSINT workflows |
+| 💰 **Free tier available** | Start investigating immediately — upgrade when you scale |
+
+### Setup
 
 ```bash
-poetry run osint-d2 --help
-poetry run osint-d2 hunt --help
+# Add to your .env
+OSINT_D2_PROXY_API_KEY=your-scrapingant-api-key
+
+# Optional configuration
+OSINT_D2_PROXY_MODE=residential    # or 'datacenter'
+OSINT_D2_PROXY_COUNTRY=us          # 2-letter country code
 ```
 
-Remote AI setup (no manual `.env` editing):
+When configured, **all HTTP requests are automatically routed through ScrapingAnt** — no code changes needed. The proxy status is visible in the doctor diagnostics:
 
 ```bash
-poetry run osint-d2 doctor setup-ai
+osint-d2 doctor run
+
+# Output:
+# ┌───────────────┬────────┬───────────────────────┐
+# │ Proxy mode    │ OK     │ residential (ScrapingAnt) │
+# │ Proxy API key │ OK     │ ****14c8              │
+# │ Proxy country │ OK     │ us                    │
+# └───────────────┴────────┴───────────────────────┘
 ```
 
-One-shot preset (prompts for key if missing):
+### Per-run overrides
 
 ```bash
-poetry run osint-d2 scan-email user@example.com --deep-analyze --ai-provider groq
+# Force datacenter proxy for Germany
+osint-d2 hunt -u torvalds --proxy datacenter --proxy-country de
+
+# Disable proxy for this run
+osint-d2 agent "torvalds" --no-proxy
+
+# Use residential US proxy with agent mode
+osint-d2 agent "target" --proxy residential --proxy-country us
 ```
 
-Full hunt with AI + breaches:
+> 💡 **Get your ScrapingAnt API key** → [scrapingant.com](https://scrapingant.com/?ref=osint-d2)
 
-```bash
-poetry run osint-d2 hunt -e user@example.com --ai --ai-provider groq --breach-check --no-ai-save
-```
-
-![Command walkthrough showing the initial hunt invocation](assets/command_image.png)
+---
 
 ## Command Reference
 
-| Command | Summary |
-| --- | --- |
-| `wizard` | Guided workflow asking for usernames/emails, language, Sherlock, site-lists, and exports. |
-| `scan` | Lightweight username sweep across built-in sources. |
-| `scan-email` | Email-centric scan with optional local-part username pivot. |
-| `hunt` | Full pipeline orchestrating usernames, emails, Sherlock, and site-lists with optional AI. |
-| `analyze` | Re-run AI analysis against a previously exported JSON dossier. |
-| `doctor` | Environment diagnostics (HTTP connectivity, WeasyPrint smoke test, config checks). |
+| Command | Description |
+|---|---|
+| `wizard` | 🧙 Interactive guided workflow — choose mode, sources, language, trust anchors, and exports step by step |
+| `scan` | ⚡ Lightweight username sweep across 18+ built-in social networks |
+| `scan-email` | 📧 Email-centric scan with optional local-part username pivot |
+| `hunt` | 🎯 Full pipeline: usernames + emails + Sherlock + site-lists + AI + PDF |
+| `agent` | 🤖 **Autonomous AI investigation** — the LLM decides everything |
+| `analyze` | 🔄 Re-run AI analysis on a previously exported JSON dossier |
+| `doctor` | 🩺 Environment diagnostics, AI setup wizard, connectivity checks |
 
-Key flags (apply to the relevant commands):
+### Key flags
 
-- `--site-lists / --no-site-lists` enables large data-driven site manifests.
-- `--sherlock / --no-sherlock` downloads and executes the Sherlock manifest (~400 sites).
-- `--strict / --no-strict` applies defensive heuristics to reduce false positives.
-- `--export-json` writes `reports/<target>.json`.
-- `--export-pdf` writes `reports/<target>.pdf` (falls back to HTML if PDF fails).
-- `--format json` produces machine-friendly output (recommended for automation).
-- `-l, --language [es|en|pt]` toggles localized prompts and AI analysis.
+| Flag | Available in | Description |
+|---|---|---|
+| `--site-lists / --no-site-lists` | `hunt`, `wizard` | Enable WhatsMyName-style data-driven site manifests |
+| `--sherlock / --no-sherlock` | `hunt`, `wizard` | Download and execute the Sherlock manifest (~400 sites) |
+| `--strict / --no-strict` | `hunt`, `wizard` | Apply defensive heuristics to reduce false positives |
+| `--export-json` | `hunt`, `agent`, `wizard` | Write JSON dossier to `reports/` |
+| `--export-pdf` | `hunt`, `agent`, `wizard` | Write PDF/HTML dossier to `reports/` |
+| `--format json` | `hunt`, `scan`, `scan-email` | Machine-readable JSON output for automation |
+| `-l, --language` | All | `en`, `es`, `pt`, `ar`, `ru` — affects CLI, AI, and reports |
+| `--breach-check` | `hunt`, `agent` | Enable HaveIBeenPwned breach queries |
+| `--trust` | `hunt`, `agent` | Define trusted identity sources (repeatable) |
+| `--proxy` / `--no-proxy` | All | Override or disable ScrapingAnt proxy |
 
-AI flags (important):
-
-- `scan` and `scan-email` use `--deep-analyze/--no-deep-analyze`.
-- `hunt` uses `--ai/--noai`.
-- All of them accept `--ai-provider`, `--ai-save/--no-ai-save`, and `--ai-key`.
-
-Examples:
+### Usage examples
 
 ```bash
-# Full hunt: usernames, email, Sherlock, site lists, PDF dossier
-poetry run osint-d2 hunt \
+# Full hunt: usernames + email + Sherlock + site lists + PDF dossier
+osint-d2 hunt \
   --usernames exampleuser \
   --emails user@example.com \
   --site-lists \
@@ -177,184 +261,422 @@ poetry run osint-d2 hunt \
   --strict \
   --export-pdf
 
-# Quick email triage with AI analysis disabled
-poetry run osint-d2 scan-email user@example.com --no-deep-analyze
+# Quick email triage without AI
+osint-d2 scan-email user@example.com --no-deep-analyze
 
-# Re-run the AI profiler over an exported dossier in Spanish
-poetry run osint-d2 analyze reports/example.json --language es
+# Re-run AI profiler on an exported dossier in Spanish
+osint-d2 analyze reports/example.json --language es
+
+# Autonomous agent with breach checking + exports
+osint-d2 agent "doble-2" --breach-check --export-json --export-pdf -l es
 ```
 
-## AI and Language
+![Social footprint list for torvalds without Sherlock](assets/socials_list.png)
 
-- English is the default CLI and AI language. Use `--language es` (or `OSINT_D2_DEFAULT_LANGUAGE=es`) to switch.
+---
 
-### Providers and presets
+## 🤖 Agent Mode — Agentic AI
 
-Supported presets (examples):
+Agent mode is where OSINT-D2 truly shines. Instead of manually specifying what to scan, **the AI decides everything autonomously**: which usernames to scan, which emails to investigate, which URLs to fetch, and when to pivot to new leads.
 
-- `--ai-provider deepseek` → `deepseek-chat`
-- `--ai-provider groq` / `groq-70b` → `llama-3.1-70b-versatile` (recommended quality)
-- `--ai-provider groq-fast` → `llama-3.1-8b-instant` (fast/cheap)
-- `--ai-provider openrouter` → `openai/gpt-4o-mini`
-- `--ai-provider huggingface` → `meta-llama/Llama-3.1-8B-Instruct`
+```
+osint-d2 agent "doble-2" -l es --max-steps 10
 
-### Rate limits (TPM) and token usage
+╭─────────────────────────────────────────────╮
+│  OSINT-D2 Agent Mode 🤖                    │
+│  Objective: doble-2                         │
+│  Max steps: 10 | Model: deepseek-chat       │
+╰─────────────────────────────────────────────╯
 
-Most free tiers rate-limit by **TPM (tokens per minute)** and/or request rate. Token usage roughly is:
+  🔍 Step 1/10: scan_username(username="doble-2")
+     → 10 confirmed / 30 scanned
+  🔍 Step 1/10: scan_username(username="angelcalderon.dev")
+     → 4 confirmed / 19 scanned
+  🔍 Step 2/10: fetch_url(url="https://angelcalderon.dev")
+     → extracted emails, social links, phone numbers
+  🔍 Step 3/10: scan_email(email="hola@angelcalderon.dev")
+     → 14 confirmed / 23 scanned
+  🔍 Step 3/10: breach_check(email="hola@angelcalderon.dev")
+     → 0 breaches found ✅
+  🔍 Step 4/10: scan_username(username="doblevneko")
+     → 2 confirmed / 19 scanned
+  📋 Step 8/10: generate_report(confidence=0.92)
 
-$$T_{total} \approx T_{system\_prompt} + T_{evidence} + T_{output}$$
+  🛡️ Trust anchors discarded 26 false positive(s)
+  ✓ Agent concluded in 16 tool calls. Confidence: 92%
+```
 
-If you hit `RateLimitError`/HTTP 429, OSINT-D2 falls back to a local heuristic summary so your run still completes.
+### Agent tools
 
-Tips to avoid TPM limits:
+The agent has access to 5 tools that it orchestrates autonomously:
 
-- Prefer `--ai-provider groq` for better output quality.
-- If you must use small models (like `groq-fast`), OSINT-D2 automatically switches to a **compact prompt** and trims evidence to reduce tokens.
-- Wait 30–90 seconds and retry when you get a 429.
+| Tool | Description |
+|---|---|
+| `scan_username` | Scan 18+ social networks for a username (GitHub, X, Instagram, Twitch, Telegram, etc.) |
+| `scan_email` | Scan Gravatar, PGP keyservers + pivot the local-part as a username |
+| `fetch_url` | Scrape any URL and extract social links, emails, phone numbers, and metadata |
+| `breach_check` | Query HaveIBeenPwned for data breaches (requires `--breach-check`) |
+| `generate_report` | Submit the final 6-dimension intelligence report (ends investigation) |
 
-### Keys and saving config
+### How it works
 
-AI analysis is optional. When enabled:
+```
+┌──────────────┐     ┌──────────────────┐     ┌───────────────┐
+│  User gives  │────▶│  LLM receives    │────▶│  LLM calls    │
+│  objective   │     │  objective +     │     │  tools via    │
+│  "doble-2"   │     │  available tools │     │  function     │
+│              │     │                  │     │  calling      │
+└──────────────┘     └──────────────────┘     └───────┬───────┘
+                                                      │
+                     ┌──────────────────┐             │
+                     │  LLM analyzes    │◀────────────┘
+                     │  results and     │
+                     │  decides next    │──── pivots to new usernames,
+                     │  action          │     emails, URLs discovered
+                     └───────┬──────────┘
+                             │
+                     ┌───────▼──────────┐
+                     │  generate_report │
+                     │  6-dimension     │
+                     │  intelligence    │
+                     │  dossier         │
+                     └──────────────────┘
+```
 
-- If no `OSINT_D2_AI_API_KEY` is set, OSINT-D2 falls back to a local heuristic summary (no network calls).
-- For non-Python / PyInstaller installs, run `osint-d2 doctor setup-ai` and paste the key once.
-- Use `--ai-save/--no-ai-save` to control whether provider configuration is persisted.
-- `--ai-key` exists but is discouraged because it may end up in shell history; prefer the prompt/wizard.
+1. You provide an **objective** (username, email, or free text)
+2. The LLM receives the objective + available tools
+3. The LLM calls tools (e.g., `scan_username("doble-2")`) and receives structured results
+4. Based on findings, the LLM **pivots** — discovers new aliases, emails, and linked profiles
+5. When enough evidence is gathered, the LLM generates a **structured 6-dimension cognitive profile**
 
-`--json-raw` embeds the provider payload under `analysis.raw` for auditing.
+### Agent examples
 
-Treat AI output as hypothesis generation; always confirm with primary evidence.
+```bash
+# Quick investigation (default 10 steps)
+osint-d2 agent "torvalds"
+
+# Spanish output, 10 steps, with breach checking + exports
+osint-d2 agent "doble-2" -l es --max-steps 10 --breach-check --export-pdf --export-json
+
+# With trusted sources to filter false positives
+osint-d2 agent "janedoe" \
+  --trust instagram:janedoe \
+  --trust email:jane.doe@gmail.com \
+  -l es
+
+# Using Groq as AI provider
+osint-d2 agent "target" --ai-provider groq --max-steps 8
+```
+
+The wizard also supports agent mode — select `"agent"` when prompted for hunt type.
+
+![Agent mode step-by-step investigation](assets/agent_mode.png)
+
+---
+
+## 🛡️ Trust Anchors
+
+Trust anchors let you define **verified sources of truth** for an identity. When active, OSINT-D2 uses these anchors to **automatically discard false positives** — profiles on other networks that don't match the verified identity.
+
+### How it works
+
+If you know that `janedoe` is the real Instagram handle, you can tell OSINT-D2:
+
+```bash
+osint-d2 agent "janedoe" \
+  --trust instagram:janedoe \
+  --trust twitter:janedoe13 \
+  --trust email:jane.doe@gmail.com
+```
+
+OSINT-D2 will:
+1. Extract the **real name** from trusted profiles (e.g., from Instagram bio)
+2. Compare discovered profiles against the trusted identity
+3. **Discard profiles** that belong to a different person (e.g., a Pinterest user named "John Smith" when the target is "Jane Doe")
+4. Report how many false positives were filtered: `🛡️ Trust anchors discarded 26 false positive(s)`
+
+### Supported formats
+
+```
+instagram:username
+github:username
+twitter:username
+email:user@domain.com
+```
+
+In the wizard, you can enter multiple anchors per line (comma or space separated):
+
+```
+Trust anchor(s) (): github:doble-2, instagram:angelcalderon.dev
+  + github:doble-2
+  + instagram:angelcalderon.dev
+```
+
+![Trust anchors filtering false positives](assets/trust_anchors.png)
+
+---
+
+## AI Analysis & Language
+
+OSINT-D2 produces structured intelligence reports using **any OpenAI-compatible LLM**. The AI generates a **6-dimension cognitive profile**:
+
+| Dimension | What it covers |
+|---|---|
+| 🆔 **Identity** | Real name, aliases, emails, phone numbers, demographics |
+| 🌍 **Geo-temporal** | Location inference, timezone, activity patterns, sleep schedule |
+| 🧠 **Psychological (OCEAN)** | Openness, Conscientiousness, Extraversion, Agreeableness, Neuroticism |
+| 💻 **Technical/Professional** | Tech stack, seniority level, professional archetype |
+| ⚖️ **Ideology** | Political/ethical leanings, values, cultural affiliations |
+| ⚠️ **OpSec** | Attack surface, social engineering susceptibility, exposure risks |
+
+### Supported AI providers
+
+| Preset | Model | Best for |
+|---|---|---|
+| `deepseek` | `deepseek-chat` | Best quality/cost ratio (recommended) |
+| `groq` | `llama-3.1-70b-versatile` | Fast, high quality |
+| `groq-fast` | `llama-3.1-8b-instant` | Ultra-fast, lower quality |
+| `openrouter` | `openai/gpt-4o-mini` | OpenAI models via OpenRouter |
+| `huggingface` | `meta-llama/Llama-3.1-8B-Instruct` | Open-source models |
+
+### Key AI flags
+
+```bash
+# scan/scan-email: --deep-analyze / --no-deep-analyze
+# hunt: --ai / --noai
+# agent: always uses AI
+
+# All commands accept:
+--ai-provider deepseek|groq|groq-fast|openrouter|huggingface
+--ai-key "your-key"          # prefer doctor setup-ai instead
+--ai-save / --no-ai-save     # persist provider config
+--json-raw                   # embed raw AI payload in JSON for auditing
+```
+
+### Fallback behavior
+
+- If **no AI key** is configured → automatic heuristic summary (no network calls, still useful)
+- If AI **rate-limited** (HTTP 429) → automatic heuristic fallback, run still completes
+- If AI returns **invalid JSON** → retry up to 3 times, then heuristic fallback
+
+### Languages
+
+Full support for **5 languages** — CLI prompts, wizard, AI analysis, and PDF reports:
+
+```bash
+osint-d2 agent "target" -l es    # Spanish
+osint-d2 agent "target" -l pt    # Portuguese
+osint-d2 agent "target" -l ar    # Arabic
+osint-d2 agent "target" -l ru    # Russian
+osint-d2 agent "target" -l en    # English (default)
+```
 
 ![CLI AI analysis panel screenshot](assets/ai_analysis.png)
 
-## Reports
+---
 
-- JSON exports mirror the internal Pydantic models, making them easy to post-process.
-- PDF/HTML dossiers are rendered via Jinja2 templates and WeasyPrint, including summary tables and AI narratives when available.
-- Exports are written under `reports/` with filenames sanitised via the pipeline helpers.
+## 📄 Premium PDF Dossiers
 
-## Breach checking (HIBP)
+OSINT-D2 generates **classified-style intelligence dossiers** in PDF and HTML format. The reports include:
 
-OSINT-D2 can query Have I Been Pwned (HIBP) unified search and render results:
-
-- CLI tables: `hunt ... --breach-check`
-- Reports: breach results are included in HTML/PDF dossiers when available
-
-Example:
+- **Classified cover page** with target avatar, network badges, and case metadata
+- **Executive summary** with confidence meter, stat boxes, and identity card
+- **Parsed AI sections** — Identity, Geo-temporal, OCEAN Profile, Tech Stack, Ideology, OpSec — each rendered as formatted Markdown with tables and lists
+- **Highlights** as accent-bordered insight cards
+- **Confirmed footprint matrix** with network badges and clickable URLs
+- **Breach exposure table** with HaveIBeenPwned results
+- **Methodology and limitations** appendix
 
 ```bash
-poetry run osint-d2 hunt -e user@example.com --breach-check --no-sherlock --no-site-lists
+# Generate PDF + JSON
+osint-d2 agent "doble-2" --export-pdf --export-json -l es
+
+# Re-generate PDF from existing JSON
+osint-d2 analyze reports/doble-2.json --language es --export-pdf
 ```
+
+Reports are saved under `reports/` with sanitized filenames.
+
+> PDF rendering requires WeasyPrint system libraries. See [Installation](#installation).
+
+![PDF dossier cover rendered with the classified layout](assets/pdf.png)
+
+---
+
+## 💀 Breach Checking (HIBP)
+
+OSINT-D2 queries [Have I Been Pwned](https://haveibeenpwned.com/) to find data breaches linked to discovered email addresses.
+
+```bash
+# With hunt
+osint-d2 hunt -e user@example.com --breach-check --export-pdf
+
+# With agent (agent discovers emails automatically)
+osint-d2 agent "target" --breach-check
+```
+
+Results appear in:
+- **CLI table**: breach names, domains, dates, record counts, exposed data classes
+- **PDF dossier**: dedicated breach section with formatted tables
+- **JSON export**: full breach data under each profile entry
+
+---
+
+## 🧙 Interactive Wizard
+
+The wizard guides you through a complete investigation without memorizing flags:
+
+```bash
+osint-d2 wizard    # or just: osint-d2
+```
+
+The wizard prompts for:
+
+1. **Hunt type**: `username`, `email`, `both`, or `agent`
+2. **Target(s)**: one or more usernames/emails
+3. **Language**: English, Spanish, Portuguese, Arabic, Russian
+4. **Sherlock**: enable/disable the ~400-site Sherlock manifest
+5. **Site lists**: enable/disable WhatsMyName-style data-driven lists
+6. **Agent mode**: max steps, breach checking
+7. **Proxy**: enable/disable ScrapingAnt, mode, and country
+8. **Trust anchors**: define verified identity sources
+9. **Exports**: JSON and/or PDF to `reports/`
+
+All features available via CLI flags are also accessible through the wizard.
+
+---
+
+## Architecture
+
+```
+src/
+├── core/                          # Domain logic (framework-agnostic)
+│   ├── domain/
+│   │   ├── models.py              # PersonEntity, SocialProfile, AnalysisReport
+│   │   └── language.py            # Language enum + i18n
+│   ├── services/
+│   │   ├── identity_pipeline.py   # Orchestrates scan → correlate → analyze
+│   │   ├── agent_engine.py        # Agentic AI loop (function calling)
+│   │   ├── agent_tools.py         # Tool definitions for the agent
+│   │   └── trust_anchor.py        # Trust anchor filtering logic
+│   ├── config.py                  # Pydantic settings (env vars)
+│   └── resources/                 # Bundled data (site lists, Sherlock)
+│
+├── adapters/                      # External integrations
+│   ├── ai_analyst.py              # LLM interaction (OpenAI SDK)
+│   ├── http_client.py             # Async HTTP with proxy support
+│   ├── sherlock_runner.py         # Sherlock manifest executor
+│   ├── site_list_scanner.py       # WhatsMyName-style scanner
+│   ├── specific_scrapers.py       # GitHub, GitLab, Twitch, etc.
+│   ├── report_exporter.py         # PDF/HTML/JSON export
+│   ├── osint_sources/             # Per-network adapters
+│   └── templates/
+│       └── report.html            # Jinja2 PDF template
+│
+└── cli/                           # User interface
+    ├── main.py                    # Typer commands + wizard
+    └── doctor.py                  # Diagnostics + AI setup
+```
+
+The CLI delegates business logic to the service layer, keeping commands thin and testable. Async operations use `asyncio.run()` for Typer compatibility. The architecture follows **hexagonal/ports-and-adapters** design — core logic has zero dependencies on CLI or HTTP libraries.
+
+---
 
 ## Packaging (PyInstaller)
 
-You can ship OSINT-D2 to “simple users” as a standalone executable bundle.
+Ship OSINT-D2 as a **standalone executable** — no Python required for end users.
 
-Key design points:
-
-- AI keys are stored in the user config `.env` (no need to edit the project `.env`).
-- Runtime datasets (like `sherlock.json`) are stored in a writable user data dir when frozen.
-- Report templates are bundled into the executable.
-
-### Linux build (folder distribution)
-
-Build in a clean environment that matches your target distro/glibc:
+<details>
+<summary><strong>Linux build</strong></summary>
 
 ```bash
-python -m venv .venv-build
-source .venv-build/bin/activate
-
-pip install -U pip
-pip install -e .
-
+python -m venv .venv-build && source .venv-build/bin/activate
+pip install -U pip && pip install -e .
 bash scripts/build_pyinstaller_linux.sh
 ```
+</details>
 
-### macOS build
+<details>
+<summary><strong>macOS build</strong></summary>
 
 ```bash
-python -m venv .venv-build
-source .venv-build/bin/activate
-
-pip install -U pip
-pip install -e .
-
+python -m venv .venv-build && source .venv-build/bin/activate
+pip install -U pip && pip install -e .
 bash scripts/build_pyinstaller_macos.sh
 ```
+</details>
 
-### Windows build (PowerShell)
+<details>
+<summary><strong>Windows build (PowerShell)</strong></summary>
 
 ```powershell
 python -m venv .venv-build
 .\.venv-build\Scripts\Activate.ps1
-
-pip install -U pip
-pip install -e .
-
+pip install -U pip && pip install -e .
 .\scripts\build_pyinstaller_windows.ps1
 ```
+</details>
 
-The artifact will be available at:
-
-- `dist/osint-d2/` (ship this folder as a `.zip` or `.tar.gz`)
+**Output**: `dist/osint-d2/` — ship this folder as a `.zip` or `.tar.gz`.
 
 ### First-run setup for end users
 
-Inside the shipped folder:
-
 ```bash
-./osint-d2 doctor setup-ai
-./osint-d2 hunt -e user@example.com --ai --ai-provider groq --breach-check
+./osint-d2 doctor setup-ai              # Configure AI key (interactive)
+./osint-d2 doctor run                    # Verify environment
+./osint-d2 agent "target" --export-pdf   # Start investigating
 ```
 
-### GitHub Releases (recommended for multiplatform)
+### GitHub Releases
 
-This repo includes a GitHub Actions workflow that builds PyInstaller bundles for:
-
-- Linux (`.tar.gz`)
-- macOS (`.tar.gz`)
-- Windows (`.zip`)
-
-To publish a new release, push a tag like:
+This repo includes a **GitHub Actions workflow** that builds PyInstaller bundles for Linux, macOS, and Windows automatically. Push a version tag to publish:
 
 ```bash
 git tag v0.1.0
 git push origin v0.1.0
 ```
 
-The workflow will upload artifacts to the GitHub Release automatically.
-
-![PDF dossier cover rendered with the classified layout](assets/pdf.png)
-
-## Architecture
-
-- `src/core/` domain models, configuration, resources loader, and orchestrating services (identity pipeline, language utilities).
-- `src/adapters/` integrations: HTTP client, Sherlock runner, site lists, AI analyst, exporters, specific scrapers.
-- `src/cli/` Typer commands, interactive wizard, doctor utilities, and Rich UI components.
-
-The CLI delegates business logic to the service layer (`core/services/identity_pipeline.py`), keeping commands thin and testable. Async operations are wrapped with `asyncio.run(...)` to stay Typer-friendly.
+---
 
 ## Troubleshooting
 
-- `poetry run osint-d2 doctor run` validates AI config presence, HTTP connectivity, and WeasyPrint PDF support.
-- Enable `--format json` to capture exact outputs for bug reports or automated pipelines.
-- Use `--no-deep-analyze` if you prefer to skip AI calls during debugging.
+| Issue | Solution |
+|---|---|
+| `WeasyPrint could not import...` | Install system libs: `brew install cairo pango gdk-pixbuf libffi` (see [Installation](#installation)) |
+| AI returns heuristic instead of full analysis | Check API key: `osint-d2 doctor run`. May also be rate limiting — wait 30s and retry |
+| `RateLimitError` / HTTP 429 | OSINT-D2 auto-falls back to heuristic. Wait 30-90s or use a different provider |
+| Instagram shows "blocked" | Enable ScrapingAnt residential proxy: `--proxy residential --proxy-country us` |
+| `Aborted` when piping output | Use `--format json` and redirect to a file instead of piping Rich tables |
+| PDF is empty/malformed | Run `osint-d2 doctor run` to verify WeasyPrint status |
 
-### "Aborted" when piping output
+### Diagnostics
 
-If you pipe output (e.g. `... | head` / `sed -n ...`) you may see `Aborted.`. This is usually SIGPIPE when the downstream command closes early.
+```bash
+osint-d2 doctor run        # Full environment check
+osint-d2 doctor setup-ai   # Reconfigure AI provider
+```
 
-Workarounds:
+![Doctor diagnostics showing all checks passing](assets/doctor.png)
 
-- Prefer `--format json` and redirect to a file.
-- Avoid piping Rich tables when possible.
+---
 
 ## Disclaimer
 
-OSINT-D2 is intended for lawful defensive and investigative use (incident response, fraud, brand protection, self-audits). Respect privacy, terms of service, and local regulations.
+OSINT-D2 is intended for **lawful defensive and investigative use**: incident response, fraud detection, brand protection, competitive intelligence, and personal security audits.
 
-- Do not use this tool for harassment, doxxing, or unauthorized intrusion.
-- Correlation workflows can produce false positives; verify with additional evidence.
-- AI-generated content can be biased or incorrect; treat it as guidance rather than fact.
+- ❌ Do **not** use this tool for harassment, doxxing, stalking, or unauthorized intrusion
+- ⚠️ Correlation workflows can produce false positives — always verify with additional evidence
+- ⚠️ AI-generated content can be biased or incorrect — treat it as hypothesis generation, not fact
+- ✅ Respect privacy, terms of service, and local regulations at all times
 
-Released under the MIT License. See [LICENSE](LICENSE) for details.
+---
+
+<p align="center">
+  <strong>Built with ❤️ by <a href="https://github.com/Doble-2">Doble-2</a></strong>
+  <br />
+  Proxy infrastructure powered by <a href="https://scrapingant.com/?ref=osint-d2"><strong>ScrapingAnt</strong></a>
+</p>
+
+<p align="center">
+  Released under the <a href="LICENSE">MIT License</a>
+</p>

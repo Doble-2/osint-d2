@@ -80,7 +80,7 @@ async def run_username_sites(
                 try:
                     resp = await client.get(url)
                     text = resp.text or ""
-                   
+
                     found = _match_found(
                         text=text,
                         status_code=resp.status_code,
@@ -102,18 +102,17 @@ async def run_username_sites(
                         "site_name": site.name,
                         **html_meta,
                     }
-                    print(f"[debug] Sherlock: metadata: {metadata}")
-                    
+
                     return SocialProfile(
                         url=str(resp.url),
                         username=username,
                         network_name=_slug(site.name),
-                        existe=True,
+                        exists=True,
                         metadata=metadata,
                         bio=html_meta.get("meta_description"),
-                        imagen_url=html_meta.get("og_image"),
+                        image_url=html_meta.get("og_image"),
                     )
-                except Exception as exc:
+                except Exception:
                     # Errores: para masivo preferimos no contaminar con cientos de errores.
                     return None
 
@@ -185,10 +184,10 @@ async def run_email_sites(
                         url=str(resp.url),
                         username=email,
                         network_name=_slug(site.name),
-                        existe=True,
+                        exists=True,
                         metadata=metadata,
                         bio=html_meta.get("meta_description"),
-                        imagen_url=html_meta.get("og_image"),
+                        image_url=html_meta.get("og_image"),
                     )
                 except Exception:
                     return None

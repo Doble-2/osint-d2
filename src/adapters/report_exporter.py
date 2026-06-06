@@ -16,7 +16,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 try:
     from weasyprint import HTML
 except (ImportError, OSError):
-    # On Windows, missing GTK libraries can cause OSError during import.
+    # Missing system libraries (cairo, pango, gdk-pixbuf) cause OSError.
     HTML = None
 
 from core.domain.language import Language
@@ -249,7 +249,7 @@ _STRINGS: dict[Language, dict[str, object]] = {
             "classes": "Datos expuestos",
         },
     },
-    
+
     Language.PORTUGUESE: {
         "lang_code": "pt",
         "title_prefix": "OSINT-D2 • Dossiê",
@@ -312,7 +312,7 @@ _STRINGS: dict[Language, dict[str, object]] = {
         },
         "unconfirmed_source_label": "Fonte",
         "textual_title": "04 // Evidências Textuais",
-        "textual_hint": "Amostras recentes quando a fonte as expõe.",   
+        "textual_hint": "Amostras recentes quando a fonte as expõe.",
         "textual_none": "Não há evidências textuais adicionais neste escaneamento.",
         "textual_commits": "Commits recentes",
         "textual_comments": "Comentários recentes",
@@ -538,11 +538,135 @@ _STRINGS: dict[Language, dict[str, object]] = {
 
 
 def _get_env() -> Environment:
+    import markupsafe
+
     templates_dir = _resolve_templates_dir()
-    return Environment(
+    env = Environment(
         loader=FileSystemLoader(str(templates_dir)),
         autoescape=select_autoescape(["html", "xml"]),
     )
+
+    # ── Markdown → HTML filter ──
+    try:
+        import markdown as _md
+
+        def _md_filter(text: str) -> markupsafe.Markup:
+            """Convert markdown text to safe HTML."""
+            if not text:
+                return markupsafe.Markup("")
+            html = _md.markdown(
+                text,
+                extensions=["tables", "fenced_code", "nl2br"],
+            )
+            return markupsafe.Markup(html)
+    except ImportError:
+        def _md_filter(text: str) -> markupsafe.Markup:  # type: ignore[misc]
+            return markupsafe.Markup(f"<pre>{text}</pre>") if text else markupsafe.Markup("")
+
+    env.filters["markdown"] = _md_filter
+    return env
+
+
+def _extract_identity_card(person: PersonEntity) -> dict[str, object]:
+    """Extract enriched identity data from profile metadata for the PDF card."""
+    card: dict[str, object] = {
+        "avatar_url": None,
+        "name": None,
+        "bio": None,
+        "location": None,
+        "blog": None,
+        "emails": [],
+        "handles": [],
+        "github_stats": None,
+        "confirmed_networks": [],
+        "created_at": None,
+    }
+
+    emails_set: set[str] = set()
+    handles_set: set[str] = set()
+    networks_set: set[str] = set()
+
+    for p in person.profiles:
+        if not p.exists:
+            continue
+
+        net = (p.network_name or "").lower()
+        networks_set.add(net)
+
+        u = (p.username or "").strip()
+        if u:
+            if "@" in u:
+                emails_set.add(u.lower())
+            else:
+                handles_set.add(u)
+
+        md = p.metadata if isinstance(p.metadata, dict) else {}
+
+        # Priority: GitHub > GitLab > others for identity data.
+        if net in ("github", "github_user") and md.get("name"):
+            if not card["name"]:
+                card["name"] = md.get("name")
+            if not card["avatar_url"]:
+                card["avatar_url"] = md.get("avatar") or md.get("avatar_url")
+            if not card["bio"]:
+                card["bio"] = md.get("bio")
+            if not card["location"]:
+                card["location"] = md.get("location")
+            if not card["blog"]:
+                card["blog"] = md.get("blog") or md.get("website")
+            if not card["created_at"]:
+                card["created_at"] = md.get("created_at")
+            if md.get("public_repos") is not None or md.get("followers") is not None:
+                card["github_stats"] = {
+                    "repos": md.get("public_repos") or md.get("repos") or 0,
+                    "followers": md.get("followers") or 0,
+                    "following": md.get("following") or 0,
+                }
+        elif net == "gitlab" and not card["name"] and md.get("name"):
+            card["name"] = md.get("name")
+            if not card["avatar_url"]:
+                card["avatar_url"] = md.get("avatar")
+            if not card["bio"]:
+                card["bio"] = md.get("bio")
+
+    card["emails"] = sorted(emails_set)
+    card["handles"] = sorted(handles_set)
+    card["confirmed_networks"] = sorted(networks_set)
+    return card
+
+
+def _parse_ai_sections(summary: str) -> dict[str, str]:
+    """Parse AI summary into named sections based on ## N. headers."""
+    import re
+
+    sections: dict[str, str] = {}
+    if not summary:
+        return sections
+
+    parts = re.split(r"(?=^## \d+\.)", summary, flags=re.MULTILINE)
+
+    section_keys = {
+        "1": "identity", "2": "geotemporal", "3": "psychological",
+        "4": "technical", "5": "ideology", "6": "opsec",
+    }
+
+    for part in parts:
+        part = part.strip()
+        if not part:
+            continue
+        m = re.match(r"^## (\d+)\.", part)
+        if m:
+            num = m.group(1)
+            key = section_keys.get(num, f"section_{num}")
+            lines = part.split("\n", 1)
+            sections[key] = lines[1].strip() if len(lines) > 1 else ""
+        elif not sections:
+            sections["intro"] = part
+
+    return sections
+
+
+_MAX_UNCONFIRMED = 20
 
 
 def render_person_html(*, person: PersonEntity, language: Language) -> str:
@@ -552,8 +676,8 @@ def render_person_html(*, person: PersonEntity, language: Language) -> str:
     generated_at_local = datetime.now().astimezone().isoformat(timespec="seconds")
 
     profiles_total = len(person.profiles)
-    profiles_confirmed = [p for p in person.profiles if p.existe]
-    profiles_unconfirmed = [p for p in person.profiles if not p.existe]
+    profiles_confirmed = [p for p in person.profiles if p.exists]
+    profiles_unconfirmed = [p for p in person.profiles if not p.exists]
 
     def _source_for_profile(profile) -> str:
         md = getattr(profile, "metadata", None)
@@ -567,7 +691,6 @@ def render_person_html(*, person: PersonEntity, language: Language) -> str:
         try:
             setattr(p, "_source", _source_for_profile(p))
         except Exception:
-            # Best-effort: si el modelo es inmutable, omitimos el campo.
             pass
 
     unconfirmed_by_source_map: dict[str, list] = {}
@@ -579,6 +702,16 @@ def render_person_html(*, person: PersonEntity, language: Language) -> str:
         unconfirmed_by_source_map.items(),
         key=lambda kv: (kv[0] != "sherlock", kv[0]),
     )
+
+    # Cap unconfirmed leads.
+    total_unconfirmed = len(profiles_unconfirmed)
+    capped_unconfirmed: list[tuple[str, list]] = []
+    remaining = _MAX_UNCONFIRMED
+    for source, items in unconfirmed_by_source:
+        if remaining <= 0:
+            break
+        capped_unconfirmed.append((source, items[:remaining]))
+        remaining -= min(len(items), remaining)
 
     breach_entries: list[dict[str, object]] = []
     for profile in person.profiles:
@@ -596,11 +729,18 @@ def render_person_html(*, person: PersonEntity, language: Language) -> str:
                 "error": md.get("error"),
                 "breach_count": md.get("breach_count"),
                 "breaches": (md.get("breaches") or {}),
-                "ok": bool(getattr(profile, "existe", False)),
+                "ok": bool(getattr(profile, "exists", False)),
             }
         )
 
     breach_entries.sort(key=lambda item: str(item.get("email") or ""))
+
+    # ── Enriched data ──
+    identity_card = _extract_identity_card(person)
+    ai_sections: dict[str, str] = {}
+    if person.analysis and person.analysis.summary:
+        ai_sections = _parse_ai_sections(person.analysis.summary)
+    confidence_pct = int(person.analysis.confidence * 100) if person.analysis else 0
 
     report_id = f"{person.target}:{generated_at}"
     template = _get_env().get_template("report.html")
@@ -613,10 +753,15 @@ def render_person_html(*, person: PersonEntity, language: Language) -> str:
         profiles_total=profiles_total,
         profiles_confirmed=profiles_confirmed,
         profiles_confirmed_count=len(profiles_confirmed),
-        profiles_unconfirmed_count=len(profiles_unconfirmed),
-        unconfirmed_by_source=unconfirmed_by_source,
+        profiles_unconfirmed_count=total_unconfirmed,
+        unconfirmed_by_source=capped_unconfirmed,
+        unconfirmed_capped=total_unconfirmed > _MAX_UNCONFIRMED,
+        unconfirmed_cap=_MAX_UNCONFIRMED,
         breach_entries=breach_entries,
         strings=strings,
+        identity_card=identity_card,
+        ai_sections=ai_sections,
+        confidence_pct=confidence_pct,
     )
 
 
@@ -648,7 +793,8 @@ def export_person_pdf(*, person: PersonEntity, output_path: Path, language: Lang
 
     if HTML is None:
         raise ImportError(
-            "WeasyPrint is not available (likely missing GTK libraries on Windows). "
+            "WeasyPrint is not available (likely missing system libraries: "
+            "cairo, pango, gdk-pixbuf). Install them and retry. "
             "PDF export is disabled."
         )
 

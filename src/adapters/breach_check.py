@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from typing import Iterable
 
 import httpx
@@ -16,23 +17,29 @@ from core.domain.models import (
 )
 from core.config import AppSettings
 
-HEADERS = {
-    "accept": "*/*",
-    "priority": "u=1, i",
-    "referer": "https://haveibeenpwned.com/",
-    "request-id": "|ab766925a29d41a7ade9eeeb057ee8e9.babb405ff61f4ee3",
-    "sec-ch-ua": '"Not(A:Brand";v="8", "Chromium";v="144", "Microsoft Edge";v="144"',
-    "sec-ch-ua-mobile": "?0",
-    "sec-ch-ua-platform": '"Windows"',
-    "sec-fetch-dest": "empty",
-    "sec-fetch-mode": "cors",
-    "sec-fetch-site": "same-origin",
-    "traceparent": "00-ab766925a29d41a7ade9eeeb057ee8e9-babb405ff61f4ee3-01",
-    "user-agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36 Edg/144.0.0.0"
-    ),
-}
+
+def _build_hibp_headers() -> dict[str, str]:
+    """Generate fresh HIBP headers with random identifiers per request."""
+
+    trace_id = uuid.uuid4().hex
+    span_id = uuid.uuid4().hex[:16]
+    return {
+        "accept": "*/*",
+        "priority": "u=1, i",
+        "referer": "https://haveibeenpwned.com/",
+        "request-id": f"|{trace_id}.{span_id}",
+        "sec-ch-ua": '"Not(A:Brand";v="8", "Chromium";v="136", "Google Chrome";v="136"',
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": '"Windows"',
+        "sec-fetch-dest": "empty",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-site": "same-origin",
+        "traceparent": f"00-{trace_id}-{span_id}-01",
+        "user-agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36"
+        ),
+    }
 
 
 def enrich_profiles_with_breach_data(
@@ -60,25 +67,21 @@ def enrich_profiles_with_breach_data(
     profiles: list[SocialProfile] = []
     try:
         for email in emails:
-            #api_url = f"https://haveibeenpwned.com/api/v3/breachedaccount/{email}"
             unified_url = f"https://haveibeenpwned.com/unifiedsearch/{email}"
-
-            url = unified_url
 
             status_code: int | None = None
             payload: object | None = None
             error: str | None = None
+            headers = _build_hibp_headers()
 
-
-            
             try:
                 if tls_session is not None:
-                    response = tls_session.get(unified_url, headers=HEADERS)
+                    response = tls_session.get(unified_url, headers=headers)
                     status_code = response.status_code or 0
                     payload = response.json() if status_code == 200 else None
                 else:
                     assert httpx_client is not None
-                    response = httpx_client.get(unified_url, headers=HEADERS)
+                    response = httpx_client.get(unified_url, headers=headers)
                     status_code = response.status_code
                     payload = response.json() if status_code == 200 else None
             except OSError:
@@ -90,7 +93,7 @@ def enrich_profiles_with_breach_data(
                             timeout=httpx.Timeout(settings.http_timeout_seconds),
                             follow_redirects=True,
                         )
-                    response = httpx_client.get(unified_url, headers=HEADERS)
+                    response = httpx_client.get(unified_url, headers=headers)
                     status_code = response.status_code
                     payload = response.json() if status_code == 200 else None
                 except Exception:
@@ -106,7 +109,7 @@ def enrich_profiles_with_breach_data(
                         url=unified_url,
                         username=email,
                         network_name="hibp",
-                        existe=False,
+                        exists=False,
                         metadata={
                             "source": "haveibeenpwned_unifiedsearch",
                             "status_code": status_code,
@@ -133,7 +136,7 @@ def enrich_profiles_with_breach_data(
                     url=unified_url,
                     username=email,
                     network_name="hibp",
-                    existe=True,
+                    exists=True,
                     metadata={
                         "source": "haveibeenpwned_unifiedsearch",
                         "status_code": status_code,

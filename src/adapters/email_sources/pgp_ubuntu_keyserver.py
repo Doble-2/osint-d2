@@ -44,6 +44,6 @@ class UbuntuKeyserverScanner(OSINTScanner):
             url=str(response.url),
             username=email,
             network_name="ubuntu_keyserver",
-            existe=found,
+            exists=found,
             metadata=metadata,
         )

@@ -30,10 +30,10 @@ async def enrich_profiles_from_html(
     async with build_async_client(settings) as client:
 
         async def enrich_one(p: SocialProfile) -> None:
-            if not p.existe:
+            if not p.exists:
                 return
             # Si ya tenemos bio o imagen, no insistimos.
-            if p.bio or p.imagen_url:
+            if p.bio or p.image_url:
                 return
 
             # Solo HTTP(S)
@@ -61,10 +61,10 @@ async def enrich_profiles_from_html(
                         if isinstance(md, str) and md.strip():
                             p.bio = md.strip()
 
-                    if not p.imagen_url:
+                    if not p.image_url:
                         og = meta.get("og_image")
                         if isinstance(og, str) and og.strip():
-                            p.imagen_url = og.strip()
+                            p.image_url = og.strip()
                 except Exception:
                     return
 

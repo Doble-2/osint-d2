@@ -74,6 +74,37 @@ app.add_typer(doctor_app, name="doctor")
 _console = Console()
 
 
+def _apply_proxy_overrides(
+    settings: AppSettings,
+    *,
+    proxy: str | None,
+    no_proxy: bool,
+    proxy_country: str | None,
+) -> AppSettings:
+    """Apply CLI proxy overrides to settings via env vars, then reload."""
+    if no_proxy:
+        os.environ["OSINT_D2_PROXY_MODE"] = ""
+        os.environ["OSINT_D2_PROXY_API_KEY"] = ""
+        return AppSettings()
+    if proxy:
+        os.environ["OSINT_D2_PROXY_MODE"] = proxy
+    if proxy_country:
+        os.environ["OSINT_D2_PROXY_COUNTRY"] = proxy_country
+    if proxy or proxy_country:
+        return AppSettings()
+    return settings
+
+
+def _print_proxy_status(settings: AppSettings, console: Console) -> None:
+    mode = settings.effective_proxy_mode
+    if mode:
+        country = f" ({settings.proxy_country.upper()})" if settings.proxy_country else ""
+        console.print(
+            f"  [bright_cyan]🔒 Proxy:[/bright_cyan] "
+            f"[green]{mode}{country}[/green] via ScrapingAnt\n"
+        )
+
+
 AI_PROVIDER_PRESETS: dict[str, dict[str, str]] = {
     # Nota: los modelos disponibles cambian según el proveedor/plan.
     "deepseek": {"base_url": "https://api.deepseek.com", "model": "deepseek-chat"},
@@ -119,7 +150,7 @@ def _configure_ai_for_run(
     model = preset["model"]
 
     key = (ai_key or "").strip() or (settings.ai_api_key or "").strip()
-    
+
     # Para proveedores locales (Ollama), la key es opcional/dummy.
     if provider == "ollama" and not key:
         key = "ollama"
@@ -232,7 +263,7 @@ def _print_profiles_table(*, person: PersonEntity, primary_usernames: list[str])
         table.add_row(
             profile.network_name,
             profile.username,
-            "YES" if profile.existe else "NO",
+            "YES" if profile.exists else "NO",
             str(profile.url),
             err,
         )
@@ -354,6 +385,43 @@ def _handle_exports(
             console.print(f"\n[red]JSON export failed:[/red] {exc}")
 
 
+def _ask_trust_anchors(console: Console) -> list[str]:
+    """Interactive prompt to collect trust anchors.
+
+    Handles multiple anchors per line (comma or space separated).
+    """
+    anchors: list[str] = []
+    use_trust = Confirm.ask(
+        "Add trusted identity sources? (e.g. instagram:user, email:user@mail.com)",
+        default=False,
+    )
+    if not use_trust:
+        return anchors
+
+    console.print(
+        "  [dim]Format: network:username or email:user@domain.com[/dim]\n"
+        "  [dim]Examples: instagram:xkissmely  email:kissmelymarcano@gmail.com[/dim]\n"
+        "  [dim]You can enter multiple per line (comma or space separated).[/dim]\n"
+        "  [dim]Empty line to finish.[/dim]"
+    )
+    while True:
+        raw = Prompt.ask("  Trust anchor(s)", default="").strip()
+        if not raw:
+            break
+        # Split by comma or whitespace
+        parts = [p.strip() for p in raw.replace(",", " ").split() if p.strip()]
+        for part in parts:
+            if ":" not in part:
+                console.print(f"  [yellow]Skipped '{part}' — invalid format. Use network:username[/yellow]")
+                continue
+            anchors.append(part)
+            console.print(f"  [green]  + {part}[/green]")
+
+    if anchors:
+        console.print(f"  [green]✓ {len(anchors)} trust anchor(s) registered[/green]")
+    return anchors
+
+
 async def _hunt_async(
     *,
     settings: AppSettings,
@@ -375,6 +443,7 @@ async def _hunt_async(
     strict: bool,
     language: Language,
     breach_check: bool = False,
+    trust_anchors: list[str] | None = None,
 ) -> None:
     if not usernames and not emails:
         raise typer.BadParameter("Provide at least one username or email to hunt.")
@@ -465,6 +534,25 @@ async def _hunt_async(
         _print_profiles_table(person=person, primary_usernames=primary_usernames)
         _print_breaches_table(person=person)
 
+    # ── Trust anchor filtering ──
+    if trust_anchors:
+        from core.services.trust_anchor import (
+            TrustAnchor, build_reference_from_profiles, filter_profiles_by_trust,
+        )
+        anchors = [TrustAnchor.parse(a) for a in trust_anchors]
+        ref = build_reference_from_profiles(person.profiles, anchors)
+        if not ref.is_empty():
+            filter_profiles_by_trust(person.profiles, ref, remove=True)
+            discarded = sum(
+                1 for p in person.profiles
+                if isinstance(p.metadata, dict) and p.metadata.get("trust_discarded")
+            )
+            if discarded and human:
+                console.print(
+                    f"  [yellow]🛡️ Trust anchors discarded {discarded} "
+                    f"false positive(s)[/yellow]\n"
+                )
+
     if deep_analyze:
         await _analyze_async(
             settings=settings,
@@ -499,6 +587,7 @@ async def _scan_async(
     output_format: OutputFormat,
     include_raw_in_json: bool,
     language: Language,
+    trust_anchors: list[str] | None = None,
 ) -> None:
     output_format = _auto_output_format(output_format)
     human = output_format == OutputFormat.table
@@ -517,6 +606,25 @@ async def _scan_async(
             status_ctx.__exit__(None, None, None)
 
     person = result.person
+
+    # ── Trust anchor filtering ──
+    if trust_anchors:
+        from core.services.trust_anchor import (
+            TrustAnchor, build_reference_from_profiles, filter_profiles_by_trust,
+        )
+        anchors = [TrustAnchor.parse(a) for a in trust_anchors]
+        ref = build_reference_from_profiles(person.profiles, anchors)
+        if not ref.is_empty():
+            filter_profiles_by_trust(person.profiles, ref, remove=True)
+            discarded = sum(
+                1 for p in person.profiles
+                if isinstance(p.metadata, dict) and p.metadata.get("trust_discarded")
+            )
+            if discarded and human:
+                console.print(
+                    f"  [yellow]🛡️ Trust anchors discarded {discarded} "
+                    f"false positive(s)[/yellow]\n"
+                )
 
     if human:
         _print_profiles_table(person=person, primary_usernames=[target])
@@ -716,10 +824,35 @@ def scan(
         "--json-raw/--no-json-raw",
         help="(--format json) Include analysis.raw with the raw AI provider payload.",
     ),
+    proxy: str | None = typer.Option(
+        None,
+        "--proxy",
+        help="Override proxy mode: residential, datacenter (auto-detected from OSINT_D2_PROXY_API_KEY by default).",
+        show_default=False,
+    ),
+    no_proxy: bool = typer.Option(
+        False,
+        "--no-proxy",
+        help="Disable proxy for this run even if configured in .env.",
+    ),
+    proxy_country: str | None = typer.Option(
+        None,
+        "--proxy-country",
+        help="2-letter country code for geo-targeted proxy (e.g. 'us').",
+        show_default=False,
+    ),
+    trust: list[str] | None = typer.Option(
+        None,
+        "--trust",
+        help="Trusted source of truth (repeatable). Format: network:username (e.g. --trust instagram:xkissmely).",
+        show_default=False,
+    ),
 ) -> None:
     output_format = _auto_output_format(output_format)
     language = _resolve_language(language)
-    settings = AppSettings()
+    settings = _apply_proxy_overrides(
+        AppSettings(), proxy=proxy, no_proxy=no_proxy, proxy_country=proxy_country,
+    )
     if deep_analyze and ai_provider:
         settings = _configure_ai_for_run(
             settings=settings,
@@ -739,6 +872,7 @@ def scan(
             output_format=output_format,
             include_raw_in_json=json_raw,
             language=language,
+            trust_anchors=trust or [],
         )
     )
 
@@ -800,11 +934,30 @@ def scan_email(
         "--json-raw/--no-json-raw",
         help="(--format json) Include analysis.raw with the raw AI provider payload.",
     ),
+    proxy: str | None = typer.Option(
+        None,
+        "--proxy",
+        help="Override proxy mode: residential, datacenter.",
+        show_default=False,
+    ),
+    no_proxy: bool = typer.Option(
+        False,
+        "--no-proxy",
+        help="Disable proxy for this run.",
+    ),
+    proxy_country: str | None = typer.Option(
+        None,
+        "--proxy-country",
+        help="2-letter country code for geo-targeted proxy.",
+        show_default=False,
+    ),
 ) -> None:
     normalized = _normalize_email(email)
     output_format = _auto_output_format(output_format)
     language = _resolve_language(language)
-    settings = AppSettings()
+    settings = _apply_proxy_overrides(
+        AppSettings(), proxy=proxy, no_proxy=no_proxy, proxy_country=proxy_country,
+    )
     if deep_analyze and ai_provider:
         settings = _configure_ai_for_run(
             settings=settings,
@@ -944,6 +1097,29 @@ def hunt(
         "--breach-check/--no-breach-check",
         help="Query HaveIBeenPwned unifiedsearch for emails (best-effort; may be rate-limited).",
     ),
+    proxy: str | None = typer.Option(
+        None,
+        "--proxy",
+        help="Override proxy mode: residential, datacenter.",
+        show_default=False,
+    ),
+    no_proxy: bool = typer.Option(
+        False,
+        "--no-proxy",
+        help="Disable proxy for this run.",
+    ),
+    proxy_country: str | None = typer.Option(
+        None,
+        "--proxy-country",
+        help="2-letter country code for geo-targeted proxy.",
+        show_default=False,
+    ),
+    trust: list[str] | None = typer.Option(
+        None,
+        "--trust",
+        help="Trusted source of truth (repeatable). Format: network:username (e.g. --trust instagram:xkissmely).",
+        show_default=False,
+    ),
 ) -> None:
     normalized_emails = [_normalize_email(e) for e in emails] if emails else None
     categories = {c.strip().lower() for c in (category or []) if c.strip()} or None
@@ -956,7 +1132,9 @@ def hunt(
 
     output_format = _auto_output_format(output_format)
     language = _resolve_language(language)
-    settings = AppSettings()
+    settings = _apply_proxy_overrides(
+        AppSettings(), proxy=proxy, no_proxy=no_proxy, proxy_country=proxy_country,
+    )
     if ai and ai_provider:
         settings = _configure_ai_for_run(
             settings=settings,
@@ -987,7 +1165,256 @@ def hunt(
             strict=strict,
             language=language,
             breach_check=breach_check,
+            trust_anchors=trust or [],
         )
+    )
+
+
+@app.command(help="Autonomous OSINT investigation powered by agentic AI.")
+def agent(
+    objective: str = typer.Argument(
+        ...,
+        help="Investigation target or free-form objective (e.g. 'torvalds', 'angel@email.com').",
+    ),
+    ai_provider: str | None = typer.Option(
+        None,
+        "--ai-provider",
+        help="AI provider preset: deepseek|groq|groq-70b|openrouter|huggingface.",
+        show_default=False,
+    ),
+    ai_key: str | None = typer.Option(
+        None,
+        "--ai-key",
+        help="AI API key (optional). Prefer `osint-d2 doctor setup-ai`.",
+        show_default=False,
+    ),
+    ai_save: bool = typer.Option(
+        True,
+        "--ai-save/--no-ai-save",
+        help="Persist provider configuration for next runs.",
+    ),
+    max_steps: int = typer.Option(
+        10,
+        "--max-steps",
+        min=1,
+        max=50,
+        help="Maximum reasoning steps before the agent must conclude.",
+    ),
+    language: Language | None = typer.Option(
+        None,
+        "--language",
+        "-l",
+        help="Output language: en|es|pt|ar|ru.",
+    ),
+    breach_check: bool = typer.Option(
+        False,
+        "--breach-check/--no-breach-check",
+        help="Allow the agent to query HaveIBeenPwned for breaches.",
+    ),
+    proxy: str | None = typer.Option(
+        None,
+        "--proxy",
+        help="Override proxy mode: residential, datacenter.",
+        show_default=False,
+    ),
+    no_proxy: bool = typer.Option(
+        False,
+        "--no-proxy",
+        help="Disable proxy for this run.",
+    ),
+    proxy_country: str | None = typer.Option(
+        None,
+        "--proxy-country",
+        help="2-letter country code for geo-targeted proxy.",
+        show_default=False,
+    ),
+    export_json: bool = typer.Option(
+        False,
+        "--export-json/--no-export-json",
+        help="Export the investigation as JSON in reports/.",
+    ),
+    export_pdf: bool = typer.Option(
+        False,
+        "--export-pdf/--no-export-pdf",
+        help="Export a PDF/HTML dossier.",
+    ),
+    trust: list[str] | None = typer.Option(
+        None,
+        "--trust",
+        help="Trusted source of truth (repeatable). Format: network:username (e.g. --trust instagram:xkissmely --trust github:doble-2).",
+        show_default=False,
+    ),
+) -> None:
+    language = _resolve_language(language)
+    settings = _apply_proxy_overrides(
+        AppSettings(), proxy=proxy, no_proxy=no_proxy, proxy_country=proxy_country,
+    )
+    if ai_provider:
+        settings = _configure_ai_for_run(
+            settings=settings,
+            ai_provider=ai_provider,
+            ai_key=ai_key,
+            ai_save=ai_save,
+            interactive=sys.stdin.isatty() and sys.stdout.isatty(),
+            console=_console,
+        )
+
+    if not settings.ai_api_key:
+        _console.print(
+            "[red]Error:[/red] Agent mode requires an AI provider. "
+            "Run [bold]osint-d2 doctor setup-ai[/bold] or use --ai-provider.",
+        )
+        raise typer.Exit(1)
+
+    asyncio.run(
+        _agent_async(
+            settings=settings,
+            objective=objective,
+            max_steps=max_steps,
+            language=language,
+            breach_check=breach_check,
+            export_json=export_json,
+            export_pdf=export_pdf,
+            trust_anchors=trust or [],
+        )
+    )
+
+
+async def _agent_async(
+    *,
+    settings: AppSettings,
+    objective: str,
+    max_steps: int,
+    language: Language,
+    breach_check: bool,
+    export_json: bool,
+    export_pdf: bool,
+    trust_anchors: list[str] | None = None,
+) -> None:
+    from core.services.agent_engine import AgentEngine, AgentStep
+
+    console = _console
+    console.print()
+    console.print(
+        "[bold bright_cyan]╭─────────────────────────────────────────────╮[/bold bright_cyan]"
+    )
+    console.print(
+        "[bold bright_cyan]│[/bold bright_cyan]  "
+        "[bold white]OSINT-D2 Agent Mode[/bold white] 🤖"
+        "                    [bold bright_cyan]│[/bold bright_cyan]"
+    )
+    console.print(
+        f"[bold bright_cyan]│[/bold bright_cyan]  "
+        f"Objective: [yellow]{objective[:38]}[/yellow]"
+        f"{'…' if len(objective) > 38 else ''}"
+        f"{' ' * max(0, 38 - len(objective))}"
+        f"[bold bright_cyan]│[/bold bright_cyan]"
+    )
+    console.print(
+        f"[bold bright_cyan]│[/bold bright_cyan]  "
+        f"Max steps: [green]{max_steps}[/green] | "
+        f"Model: [green]{settings.ai_model}[/green]"
+        f"{' ' * max(0, 20 - len(settings.ai_model))}"
+        f"[bold bright_cyan]│[/bold bright_cyan]"
+    )
+    console.print(
+        "[bold bright_cyan]╰─────────────────────────────────────────────╯[/bold bright_cyan]"
+    )
+    console.print()
+
+    def on_step(step: AgentStep) -> None:
+        if step.tool_name:
+            args_str = ", ".join(f'{k}="{v}"' for k, v in step.tool_args.items())
+            icon = "📋" if step.tool_name == "generate_report" else "🔍"
+            console.print(
+                f"  {icon} [bold]Step {step.step_number}/{max_steps}:[/bold] "
+                f"[cyan]{step.tool_name}[/cyan]({args_str})"
+            )
+            if step.tool_result and step.tool_name != "generate_report":
+                try:
+                    data = json.loads(step.tool_result)
+                    confirmed = data.get("confirmed", "?")
+                    total = data.get("total_scanned", "?")
+                    console.print(
+                        f"     → [green]{confirmed}[/green] confirmed / {total} scanned"
+                    )
+                except Exception:
+                    pass
+        elif step.reasoning:
+            console.print(
+                f"\n  🧠 [bold]Step {step.step_number}/{max_steps}:[/bold] [dim]Reasoning...[/dim]"
+            )
+            # Show first 200 chars of reasoning.
+            preview = step.reasoning[:200].replace("\n", " ")
+            console.print(f"     [italic dim]{preview}[/italic dim]\n")
+
+    engine = AgentEngine(
+        settings=settings,
+        enable_breach_check=breach_check,
+        on_step=on_step,
+    )
+
+    with console.status("[bold green]Agent is thinking...", spinner="dots"):
+        result = await engine.run(
+            objective,
+            language=language,
+            max_steps=max_steps,
+            trust_anchors=trust_anchors,
+        )
+
+    console.print()
+    person = result.person
+
+    # ── Trust anchor filtering ──
+    if trust_anchors:
+        from core.services.trust_anchor import (
+            TrustAnchor, build_reference_from_profiles, filter_profiles_by_trust,
+        )
+        anchors = [TrustAnchor.parse(a) for a in trust_anchors]
+        ref = build_reference_from_profiles(person.profiles, anchors)
+        if not ref.is_empty():
+            before_count = sum(1 for p in person.profiles if p.exists)
+            filter_profiles_by_trust(person.profiles, ref, remove=True)
+            after_count = sum(
+                1 for p in person.profiles
+                if p.exists and not (
+                    isinstance(p.metadata, dict) and p.metadata.get("trust_discarded")
+                )
+            )
+            discarded = before_count - after_count
+            if discarded:
+                console.print(
+                    f"  [yellow]🛡️ Trust anchors discarded {discarded} "
+                    f"false positive(s)[/yellow]\n"
+                )
+
+    if result.finished_naturally:
+        console.print(
+            f"  [bold green]✓[/bold green] Agent concluded in "
+            f"[bold]{result.total_steps}[/bold] steps.\n"
+        )
+    else:
+        console.print(
+            f"  [bold yellow]⚠[/bold yellow] Agent reached max steps "
+            f"({result.total_steps}/{max_steps}).\n"
+        )
+
+    # Show profiles table.
+    if person.profiles:
+        _print_profiles_table(person=person, primary_usernames=[objective])
+
+    # Show analysis.
+    if person.analysis:
+        panel = build_analysis_panel(person.analysis)
+        console.print(panel)
+
+    # Exports.
+    _handle_exports(
+        person=person,
+        console=console,
+        export_pdf=export_pdf,
+        export_json=export_json,
+        language=language,
     )
 
 
@@ -999,12 +1426,114 @@ def wizard() -> None:
     settings = AppSettings()
     mode = Prompt.ask(
         "What do you want to hunt?",
-        choices=["username", "email", "both"],
+        choices=["username", "email", "both", "agent"],
         default="both",
     )
 
+    # ── Agent mode (autonomous AI investigation) ──────────────────────
+    if mode == "agent":
+        objective = Prompt.ask("Investigation objective (username, email, or free text)").strip()
+        if not objective:
+            console.print("[red]Need an objective for the agent.[/red]")
+            raise typer.Exit(code=2)
+
+        default_language = settings.default_language.label().lower()
+        language_choice = Prompt.ask(
+            "Output language (english/spanish/portuguese/arabic/russian)",
+            choices=["english", "spanish", "portuguese", "arabic", "russian"],
+            default=default_language,
+        )
+        language = Language.from_str(language_choice)
+
+        max_steps = IntPrompt.ask("Max reasoning steps", default=10)
+        breach_check = Confirm.ask("Allow agent to check breaches (HIBP)?", default=False)
+
+        # ── Proxy ──
+        proxy_mode: str | None = None
+        proxy_country: str | None = None
+        if settings.proxy_api_key:
+            use_proxy = Confirm.ask(
+                "Use proxy? (ScrapingAnt detected in .env)", default=True,
+            )
+            if use_proxy:
+                proxy_mode = Prompt.ask(
+                    "Proxy mode",
+                    choices=["residential", "datacenter"],
+                    default="residential",
+                )
+                pc = Prompt.ask(
+                    "Proxy country (2-letter code, or empty for any)",
+                    default="",
+                ).strip()
+                if pc:
+                    proxy_country = pc
+
+        # ── Trust anchors ──
+        trust_anchors = _ask_trust_anchors(console)
+
+        export_json = Confirm.ask("Export JSON to reports/?", default=False)
+        export_pdf = Confirm.ask("Export PDF/HTML to reports/?", default=False)
+
+        # Ensure AI is configured.
+        settings_now = AppSettings()
+        if not (settings_now.ai_api_key or "").strip():
+            console.print(
+                "[yellow]Agent mode requires an AI provider.[/yellow]"
+            )
+            if Confirm.ask("Configure AI provider now?", default=True):
+                provider = Prompt.ask(
+                    "Provider",
+                    choices=["groq", "groq-70b", "groq-fast", "deepseek", "openrouter", "huggingface"],
+                    default="deepseek",
+                ).strip().lower()
+
+                presets: dict[str, dict[str, str]] = {
+                    "deepseek": {"OSINT_D2_AI_BASE_URL": "https://api.deepseek.com", "OSINT_D2_AI_MODEL": "deepseek-chat"},
+                    "groq": {"OSINT_D2_AI_BASE_URL": "https://api.groq.com/openai/v1", "OSINT_D2_AI_MODEL": "llama-3.1-70b-versatile"},
+                    "groq-70b": {"OSINT_D2_AI_BASE_URL": "https://api.groq.com/openai/v1", "OSINT_D2_AI_MODEL": "llama-3.1-70b-versatile"},
+                    "groq-fast": {"OSINT_D2_AI_BASE_URL": "https://api.groq.com/openai/v1", "OSINT_D2_AI_MODEL": "llama-3.1-8b-instant"},
+                    "openrouter": {"OSINT_D2_AI_BASE_URL": "https://openrouter.ai/api/v1", "OSINT_D2_AI_MODEL": "openai/gpt-4o-mini"},
+                    "huggingface": {"OSINT_D2_AI_BASE_URL": "https://api-inference.huggingface.co/v1", "OSINT_D2_AI_MODEL": "meta-llama/Llama-3.1-8B-Instruct"},
+                }
+                preset = presets.get(provider, {})
+                base_url = Prompt.ask("AI base URL", default=preset.get("OSINT_D2_AI_BASE_URL", "")).strip()
+                model = Prompt.ask("AI model", default=preset.get("OSINT_D2_AI_MODEL", "")).strip()
+                api_key = Prompt.ask("AI API key", password=True).strip()
+
+                if base_url and model and api_key:
+                    env_path = write_user_env_vars({
+                        "OSINT_D2_AI_BASE_URL": base_url,
+                        "OSINT_D2_AI_MODEL": model,
+                        "OSINT_D2_AI_API_KEY": api_key,
+                    })
+                    _console.print(f"[green]AI config saved to:[/green] {env_path}")
+                else:
+                    console.print("[red]AI provider is required for agent mode.[/red]")
+                    raise typer.Exit(code=2)
+
+        final_settings = _apply_proxy_overrides(
+            AppSettings(),
+            proxy=proxy_mode,
+            no_proxy=False,
+            proxy_country=proxy_country,
+        )
+
+        asyncio.run(
+            _agent_async(
+                settings=final_settings,
+                objective=objective,
+                max_steps=max_steps,
+                language=language,
+                breach_check=breach_check,
+                export_json=export_json,
+                export_pdf=export_pdf,
+                trust_anchors=trust_anchors,
+            )
+        )
+        return
+
+    # ── Classic modes (username/email/both) ───────────────────────────
     usernames: list[str] | None
-    emails: list[str] | None
 
     if mode in ("username", "both"):
         u = Prompt.ask("Comma-separated usernames", default="").strip()
@@ -1089,7 +1618,7 @@ def wizard() -> None:
                     default="groq",
                 ).strip().lower()
 
-                presets: dict[str, dict[str, str]] = {
+                presets_classic: dict[str, dict[str, str]] = {
                     "deepseek": {"OSINT_D2_AI_BASE_URL": "https://api.deepseek.com", "OSINT_D2_AI_MODEL": "deepseek-chat"},
                     "groq": {"OSINT_D2_AI_BASE_URL": "https://api.groq.com/openai/v1", "OSINT_D2_AI_MODEL": "llama-3.1-70b-versatile"},
                     "groq-70b": {"OSINT_D2_AI_BASE_URL": "https://api.groq.com/openai/v1", "OSINT_D2_AI_MODEL": "llama-3.1-70b-versatile"},
@@ -1097,7 +1626,7 @@ def wizard() -> None:
                     "openrouter": {"OSINT_D2_AI_BASE_URL": "https://openrouter.ai/api/v1", "OSINT_D2_AI_MODEL": "openai/gpt-4o-mini"},
                     "huggingface": {"OSINT_D2_AI_BASE_URL": "https://api-inference.huggingface.co/v1", "OSINT_D2_AI_MODEL": "meta-llama/Llama-3.1-8B-Instruct"},
                 }
-                preset = presets.get(provider, {})
+                preset = presets_classic.get(provider, {})
                 base_url = Prompt.ask("AI base URL", default=preset.get("OSINT_D2_AI_BASE_URL", "")).strip()
                 model = Prompt.ask("AI model", default=preset.get("OSINT_D2_AI_MODEL", "")).strip()
                 api_key = Prompt.ask("AI API key", password=True).strip()
@@ -1116,9 +1645,40 @@ def wizard() -> None:
     export_json = Confirm.ask("Export JSON to reports/?", default=False)
     export_pdf = Confirm.ask("Export PDF/HTML to reports/?", default=False)
 
+    # ── Proxy ──
+    wiz_proxy_mode: str | None = None
+    wiz_proxy_country: str | None = None
+    if settings.proxy_api_key:
+        wiz_use_proxy = Confirm.ask(
+            "Use proxy? (ScrapingAnt detected in .env)", default=True,
+        )
+        if wiz_use_proxy:
+            wiz_proxy_mode = Prompt.ask(
+                "Proxy mode",
+                choices=["residential", "datacenter"],
+                default="residential",
+            )
+            wpc = Prompt.ask(
+                "Proxy country (2-letter code, or empty for any)",
+                default="",
+            ).strip()
+            if wpc:
+                wiz_proxy_country = wpc
+
+    # ── Trust anchors ──
+    wiz_trust_anchors = _ask_trust_anchors(console)
+
+
+    wiz_final_settings = _apply_proxy_overrides(
+        AppSettings(),
+        proxy=wiz_proxy_mode,
+        no_proxy=False,
+        proxy_country=wiz_proxy_country,
+    )
+
     asyncio.run(
         _hunt_async(
-            settings=AppSettings(),
+            settings=wiz_final_settings,
             usernames=usernames,
             emails=emails,
             deep_analyze=deep_analyze,
@@ -1137,6 +1697,7 @@ def wizard() -> None:
             strict=strict,
             language=language,
             breach_check=breach_check,
+            trust_anchors=wiz_trust_anchors,
         )
     )
 

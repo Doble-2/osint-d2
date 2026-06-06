@@ -36,6 +36,6 @@ class DevToScanner(OSINTScanner):
             url=str(response.url),
             username=username,
             network_name="devto",
-            existe=exists,
+            exists=exists,
             metadata=metadata,
         )

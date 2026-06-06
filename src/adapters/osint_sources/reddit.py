@@ -45,8 +45,8 @@ class RedditScanner(OSINTScanner):
             url=public_url,
             username=username,
             network_name="reddit",
-            existe=exists,
+            exists=exists,
             metadata=metadata,
             bio=bio,
-            imagen_url=image_url,
+            image_url=image_url,
         )
