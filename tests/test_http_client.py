@@ -28,7 +28,10 @@ class TestBuildProxyUrl:
             proxy_mode="residential",
         )
         url = _build_proxy_url(settings)
-        assert url == "http://scrapingant:my-api-key@residential.scrapingant.com:8080"
+        assert url == (
+            "http://scrapingant&browser=false&proxy_type=residential"
+            ":my-api-key@proxy.scrapingant.com:8080"
+        )
 
     def test_datacenter_proxy(self):
         settings = AppSettings(
@@ -36,7 +39,10 @@ class TestBuildProxyUrl:
             proxy_mode="datacenter",
         )
         url = _build_proxy_url(settings)
-        assert url == "http://scrapingant:my-api-key@datacenter.scrapingant.com:8080"
+        assert url == (
+            "http://scrapingant&browser=false&proxy_type=datacenter"
+            ":my-api-key@proxy.scrapingant.com:8080"
+        )
 
     def test_residential_with_country(self):
         settings = AppSettings(

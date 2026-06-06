@@ -25,14 +25,14 @@ except Exception:  # pragma: no cover
 # ScrapingAnt Proxy
 # ---------------------------------------------------------------------------
 
-_PROXY_ENDPOINTS: dict[str, str] = {
-    "residential": "residential.scrapingant.com:8080",
-    "datacenter": "datacenter.scrapingant.com:8080",
-}
+_PROXY_ENDPOINT = "proxy.scrapingant.com:8080"
 
 
 def _build_proxy_url(settings: AppSettings) -> str | None:
     """Build a ScrapingAnt proxy URL from settings.
+
+    Uses ScrapingAnt's **Proxy Mode** (``proxy.scrapingant.com:8080``).
+    Parameters are passed via the username field separated by ``&``.
 
     Returns an ``http://user:pass@host:port`` string suitable for
     ``httpx.AsyncClient(proxy=...)``, or ``None`` when proxy is disabled.
@@ -41,19 +41,20 @@ def _build_proxy_url(settings: AppSettings) -> str | None:
     if not mode or not settings.proxy_api_key:
         return None
 
-    endpoint = _PROXY_ENDPOINTS.get(mode)
-    if not endpoint:
+    if mode not in ("residential", "datacenter"):
         return None
 
-    # Username carries config flags; password is the API key.
-    username = "scrapingant"
-    password = settings.proxy_api_key
+    # ScrapingAnt Proxy Mode: username carries config flags, password is API key.
+    # browser=false saves credits (1 instead of 10) and is faster for OSINT checks.
+    username = f"scrapingant&browser=false&proxy_type={mode}"
 
-    # Geo-targeting via username suffix (ScrapingAnt convention).
+    # Geo-targeting via proxy_country parameter.
     if settings.proxy_country:
         username += f"&proxy_country={settings.proxy_country}"
 
-    return f"http://{username}:{password}@{endpoint}"
+    password = settings.proxy_api_key
+
+    return f"http://{username}:{password}@{_PROXY_ENDPOINT}"
 
 
 # ---------------------------------------------------------------------------
