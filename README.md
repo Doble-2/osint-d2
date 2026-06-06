@@ -370,6 +370,8 @@ osint-d2 agent "target" --ai-provider groq --max-steps 8
 
 The wizard also supports agent mode — select `"agent"` when prompted for hunt type.
 
+![Agent mode step-by-step investigation](assets/agent_mode.png)
+
 ---
 
 ## 🛡️ Trust Anchors
@@ -409,6 +411,8 @@ Trust anchor(s) (): github:doble-2, instagram:angelcalderon.dev
   + github:doble-2
   + instagram:angelcalderon.dev
 ```
+
+![Trust anchors filtering false positives](assets/trust_anchors.png)
 
 ---
 
@@ -651,6 +655,8 @@ git push origin v0.1.0
 osint-d2 doctor run        # Full environment check
 osint-d2 doctor setup-ai   # Reconfigure AI provider
 ```
+
+![Doctor diagnostics showing all checks passing](assets/doctor.png)
 
 ---
 
