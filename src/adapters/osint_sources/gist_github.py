@@ -39,6 +39,6 @@ class GitHubGistScanner(OSINTScanner):
             url=str(response.url),
             username=username,
             network_name="github_gist",
-            existe=exists,
+            exists=exists,
             metadata=metadata,
         )

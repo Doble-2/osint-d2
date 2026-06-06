@@ -39,6 +39,6 @@ class KaggleScanner(OSINTScanner):
             url=str(response.url),
             username=username,
             network_name="kaggle",
-            existe=exists,
+            exists=exists,
             metadata=metadata,
         )

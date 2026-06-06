@@ -39,6 +39,6 @@ class BehanceScanner(OSINTScanner):
             url=str(response.url),
             username=username,
             network_name="behance",
-            existe=exists,
+            exists=exists,
             metadata=metadata,
         )

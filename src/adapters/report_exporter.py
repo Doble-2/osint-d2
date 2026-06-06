@@ -552,8 +552,8 @@ def render_person_html(*, person: PersonEntity, language: Language) -> str:
     generated_at_local = datetime.now().astimezone().isoformat(timespec="seconds")
 
     profiles_total = len(person.profiles)
-    profiles_confirmed = [p for p in person.profiles if p.existe]
-    profiles_unconfirmed = [p for p in person.profiles if not p.existe]
+    profiles_confirmed = [p for p in person.profiles if p.exists]
+    profiles_unconfirmed = [p for p in person.profiles if not p.exists]
 
     def _source_for_profile(profile) -> str:
         md = getattr(profile, "metadata", None)
@@ -596,7 +596,7 @@ def render_person_html(*, person: PersonEntity, language: Language) -> str:
                 "error": md.get("error"),
                 "breach_count": md.get("breach_count"),
                 "breaches": (md.get("breaches") or {}),
-                "ok": bool(getattr(profile, "existe", False)),
+                "ok": bool(getattr(profile, "exists", False)),
             }
         )
 

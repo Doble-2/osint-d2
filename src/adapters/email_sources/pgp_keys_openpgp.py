@@ -46,6 +46,6 @@ class OpenPGPKeysScanner(OSINTScanner):
             url=str(response.url),
             username=email,
             network_name="openpgp_keys",
-            existe=found,
+            exists=found,
             metadata=metadata,
         )

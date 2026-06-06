@@ -59,7 +59,6 @@ class TelegramScanner(OSINTScanner):
                             name = name_span.text
                     if name:
                         metadata["name"] = name
-                    #print(name)
 
                     #pattern_name = r'<meta name="title" content="(.*?)"'
                     #nn = re.search(pattern_name, html, re.IGNORECASE | re.DOTALL)
@@ -78,6 +77,6 @@ class TelegramScanner(OSINTScanner):
             url=str(response.url),
             username=username,
             network_name="telegram",
-            existe=exists,
+            exists=exists,
             metadata=metadata,
         )

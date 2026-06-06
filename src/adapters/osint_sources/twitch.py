@@ -68,6 +68,6 @@ class TwitchScanner(OSINTScanner):
             url=str(response.url),
             username=username,
             network_name="twitch",
-            existe=exists,
+            exists=exists,
             metadata=metadata,
         )

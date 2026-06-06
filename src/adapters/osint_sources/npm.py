@@ -39,6 +39,6 @@ class NpmScanner(OSINTScanner):
             url=str(response.url),
             username=username,
             network_name="npm",
-            existe=exists,
+            exists=exists,
             metadata=metadata,
         )

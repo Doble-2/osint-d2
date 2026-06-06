@@ -69,10 +69,10 @@ class GitHubScanner(OSINTScanner):
             url=public_url,
             username=username,
             network_name="github",
-            existe=exists,
+            exists=exists,
             metadata=metadata,
             bio=bio,
-            imagen_url=image_url,
+            image_url=image_url,
         )
 
         # Creamos perfiles adicionales para que aparezcan en la tabla
@@ -82,7 +82,7 @@ class GitHubScanner(OSINTScanner):
                 url="https://github.com/" + username,
                 username=email,
                 network_name="github_email",
-                existe=True,
+                exists=True,
                 metadata={"source": "github_api", "from_username": username},
             ))
         for user in other_users:
@@ -90,7 +90,7 @@ class GitHubScanner(OSINTScanner):
                 url="https://github.com/" + user,
                 username=user,
                 network_name="github_user",
-                existe=True,
+                exists=True,
                 metadata={"source": "github_api", "from_username": username},
             ))
 

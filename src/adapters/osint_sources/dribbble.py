@@ -39,6 +39,6 @@ class DribbbleScanner(OSINTScanner):
             url=str(response.url),
             username=username,
             network_name="dribbble",
-            existe=exists,
+            exists=exists,
             metadata=metadata,
         )

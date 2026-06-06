@@ -232,7 +232,7 @@ def _print_profiles_table(*, person: PersonEntity, primary_usernames: list[str])
         table.add_row(
             profile.network_name,
             profile.username,
-            "YES" if profile.existe else "NO",
+            "YES" if profile.exists else "NO",
             str(profile.url),
             err,
         )

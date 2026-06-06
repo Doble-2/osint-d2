@@ -49,6 +49,6 @@ class GitLabScanner(OSINTScanner):
             url=str(response.url),
             username=username,
             network_name="gitlab",
-            existe=exists,
+            exists=exists,
             metadata=metadata,
         )

@@ -39,6 +39,6 @@ class ProductHuntScanner(OSINTScanner):
             url=str(response.url),
             username=username,
             network_name="producthunt",
-            existe=exists,
+            exists=exists,
             metadata=metadata,
         )

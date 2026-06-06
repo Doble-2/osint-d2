@@ -54,7 +54,7 @@ class GravatarScanner(OSINTScanner):
             url=str(response.url),
             username=email,
             network_name="gravatar",
-            existe=exists,
+            exists=exists,
             metadata=metadata,
-            imagen_url=str(response.url) if exists else None,
+            image_url=str(response.url) if exists else None,
         )

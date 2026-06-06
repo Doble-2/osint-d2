@@ -37,6 +37,6 @@ class KeybaseScanner(OSINTScanner):
             url=str(response.url),
             username=username,
             network_name="keybase",
-            existe=exists,
+            exists=exists,
             metadata=metadata,
         )

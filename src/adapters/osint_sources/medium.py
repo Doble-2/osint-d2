@@ -90,6 +90,6 @@ class MediumScanner(OSINTScanner):
             url=str(response.url),
             username=username,
             network_name="medium",
-            existe=exists,
+            exists=exists,
             metadata=metadata,
         )

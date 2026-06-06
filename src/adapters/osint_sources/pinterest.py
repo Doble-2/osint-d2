@@ -88,6 +88,6 @@ class PinterestScanner(OSINTScanner):
             url=str(response.url),
             username=username,
             network_name="pinterest",
-            existe=exists,
+            exists=exists,
             metadata=metadata,
         )

@@ -40,6 +40,6 @@ class XScanner(OSINTScanner):
             url=str(response.url),
             username=username,
             network_name="x",
-            existe=exists,
+            exists=exists,
             metadata=metadata,
         )
