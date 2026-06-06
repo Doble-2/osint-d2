@@ -97,6 +97,29 @@ AGENT_TOOLS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "fetch_url",
+            "description": (
+                "Fetch a URL (website, blog, portfolio) and extract intelligence: "
+                "page title, meta description, emails found in the page, social "
+                "media links with usernames (GitHub, Twitter, LinkedIn, Instagram, "
+                "etc.), and external links. Use this when you find a personal "
+                "website, blog, or portfolio URL in scan results."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "description": "The full URL to fetch (e.g. https://angelcalderon.dev).",
+                    },
+                },
+                "required": ["url"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "generate_report",
             "description": (
                 "FINAL STEP: Call this when you have gathered enough evidence. "
@@ -243,6 +266,31 @@ async def execute_tool(
             "target": email,
             "results": profiles,
         }, ensure_ascii=False)
+
+    if name == "fetch_url":
+        url = arguments.get("url", "")
+        if not url:
+            return json.dumps({"error": "url is required"})
+        if not (url.startswith("http://") or url.startswith("https://")):
+            url = f"https://{url}"
+        from adapters.http_client import build_async_client, extract_html_metadata
+        try:
+            async with build_async_client(settings) as client:
+                resp = await client.get(url)
+            if resp.status_code >= 400:
+                return json.dumps({
+                    "url": url,
+                    "error": f"HTTP {resp.status_code}",
+                })
+            html = resp.text or ""
+            meta = extract_html_metadata(html=html, base_url=str(resp.url))
+            return json.dumps({
+                "url": str(resp.url),
+                "status_code": resp.status_code,
+                **meta,
+            }, ensure_ascii=False)
+        except Exception as exc:
+            return json.dumps({"url": url, "error": str(exc)})
 
     if name == "generate_report":
         # This is handled by the engine — just echo back.

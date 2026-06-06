@@ -29,6 +29,7 @@ class TestToolSchemas:
         assert "scan_username" in names
         assert "scan_email" in names
         assert "breach_check" in names
+        assert "fetch_url" in names
         assert "generate_report" in names
 
     def test_all_tools_have_required_params(self):

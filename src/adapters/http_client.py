@@ -122,6 +122,9 @@ def extract_html_metadata(*, html: str, base_url: str | None = None) -> dict[str
     - title
     - meta_description
     - og_image
+    - emails           (list[str])
+    - social_links     (list[dict] con {network, url, username})
+    - external_links   (list[str])
     """
 
     if not html:
@@ -147,6 +150,69 @@ def extract_html_metadata(*, html: str, base_url: str | None = None) -> dict[str
         if base_url:
             og_image = urljoin(base_url, og_image)
 
+    # ── Extract emails from full page text ──
+    import re as _re  # noqa: E402 — lazy import to keep top-level light
+    page_text = soup.get_text(" ", strip=True) + " "
+    # Also scan href="mailto:..." links.
+    for a in soup.find_all("a", href=True):
+        href = str(a["href"])
+        if href.startswith("mailto:"):
+            page_text += " " + href.replace("mailto:", "") + " "
+    email_pattern = _re.compile(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}")
+    emails_found = sorted(set(email_pattern.findall(page_text)))
+
+    # ── Extract social media links ──
+    _SOCIAL_PATTERNS: dict[str, _re.Pattern[str]] = {
+        "github": _re.compile(r"github\.com/([a-zA-Z0-9_\-]+)"),
+        "gitlab": _re.compile(r"gitlab\.com/([a-zA-Z0-9_\-]+)"),
+        "twitter": _re.compile(r"(?:twitter|x)\.com/([a-zA-Z0-9_]+)"),
+        "linkedin": _re.compile(r"linkedin\.com/in/([a-zA-Z0-9_\-]+)"),
+        "instagram": _re.compile(r"instagram\.com/([a-zA-Z0-9_.]+)"),
+        "youtube": _re.compile(r"youtube\.com/(?:@|channel/|c/)([a-zA-Z0-9_\-]+)"),
+        "tiktok": _re.compile(r"tiktok\.com/@([a-zA-Z0-9_.]+)"),
+        "facebook": _re.compile(r"facebook\.com/([a-zA-Z0-9_.]+)"),
+        "medium": _re.compile(r"medium\.com/@([a-zA-Z0-9_.\-]+)"),
+        "dev.to": _re.compile(r"dev\.to/([a-zA-Z0-9_]+)"),
+        "behance": _re.compile(r"behance\.net/([a-zA-Z0-9_\-]+)"),
+        "dribbble": _re.compile(r"dribbble\.com/([a-zA-Z0-9_\-]+)"),
+        "soundcloud": _re.compile(r"soundcloud\.com/([a-zA-Z0-9_\-]+)"),
+        "twitch": _re.compile(r"twitch\.tv/([a-zA-Z0-9_]+)"),
+        "telegram": _re.compile(r"t\.me/([a-zA-Z0-9_]+)"),
+        "reddit": _re.compile(r"reddit\.com/(?:u|user)/([a-zA-Z0-9_\-]+)"),
+        "keybase": _re.compile(r"keybase\.io/([a-zA-Z0-9_]+)"),
+        "mastodon": _re.compile(r"(@[a-zA-Z0-9_]+@[a-zA-Z0-9.\-]+)"),
+    }
+
+    social_links: list[dict[str, str]] = []
+    seen_socials: set[tuple[str, str]] = set()
+
+    all_links = [str(a.get("href", "")) for a in soup.find_all("a", href=True)]
+    full_html = html  # also scan raw HTML for social references
+
+    for network, pattern in _SOCIAL_PATTERNS.items():
+        for source in all_links + [full_html]:
+            for match in pattern.finditer(source):
+                username = match.group(1)
+                if (network, username.lower()) in seen_socials:
+                    continue
+                seen_socials.add((network, username.lower()))
+                # Reconstruct URL from match.
+                url_match = match.group(0)
+                if not url_match.startswith("http"):
+                    url_match = f"https://{url_match}"
+                social_links.append({
+                    "network": network,
+                    "url": url_match,
+                    "username": username,
+                })
+
+    # ── Collect external links (up to 20) ──
+    external_links: list[str] = []
+    for a in soup.find_all("a", href=True):
+        href = str(a["href"])
+        if href.startswith("http") and len(external_links) < 20:
+            external_links.append(href)
+
     out: dict[str, Any] = {}
     if title:
         out["title"] = title
@@ -154,4 +220,11 @@ def extract_html_metadata(*, html: str, base_url: str | None = None) -> dict[str
         out["meta_description"] = meta_description
     if og_image:
         out["og_image"] = og_image
+    if emails_found:
+        out["emails"] = emails_found
+    if social_links:
+        out["social_links"] = social_links
+    if external_links:
+        out["external_links"] = external_links
     return out
+
