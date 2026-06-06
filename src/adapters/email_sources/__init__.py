@@ -9,8 +9,8 @@ from adapters.email_sources.pgp_keys_openpgp import OpenPGPKeysScanner
 from adapters.email_sources.pgp_ubuntu_keyserver import UbuntuKeyserverScanner
 
 __all__ = [
-	"GravatarScanner",
-	"GravatarProfileScanner",
-	"OpenPGPKeysScanner",
-	"UbuntuKeyserverScanner",
+    "GravatarScanner",
+    "GravatarProfileScanner",
+    "OpenPGPKeysScanner",
+    "UbuntuKeyserverScanner",
 ]

@@ -119,7 +119,7 @@ def _configure_ai_for_run(
     model = preset["model"]
 
     key = (ai_key or "").strip() or (settings.ai_api_key or "").strip()
-    
+
     # Para proveedores locales (Ollama), la key es opcional/dummy.
     if provider == "ollama" and not key:
         key = "ollama"

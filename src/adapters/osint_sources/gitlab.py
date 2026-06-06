@@ -38,7 +38,7 @@ class GitLabScanner(OSINTScanner):
             title_soup = soup.find("title")
             if title_soup:
                 name = title_soup.text.replace("· GitLab", "").strip(" ·-")
-                
+
         metadata: dict[str, Any] = {
             "status_code": response.status_code,
             "final_url": str(response.url),

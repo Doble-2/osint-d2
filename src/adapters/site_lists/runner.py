@@ -80,7 +80,7 @@ async def run_username_sites(
                 try:
                     resp = await client.get(url)
                     text = resp.text or ""
-                   
+
                     found = _match_found(
                         text=text,
                         status_code=resp.status_code,
@@ -102,7 +102,7 @@ async def run_username_sites(
                         "site_name": site.name,
                         **html_meta,
                     }
-                    
+
                     return SocialProfile(
                         url=str(resp.url),
                         username=username,
@@ -112,7 +112,7 @@ async def run_username_sites(
                         bio=html_meta.get("meta_description"),
                         image_url=html_meta.get("og_image"),
                     )
-                except Exception as exc:
+                except Exception:
                     # Errores: para masivo preferimos no contaminar con cientos de errores.
                     return None
 

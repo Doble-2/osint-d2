@@ -44,9 +44,9 @@ except Exception:  # pragma: no cover
     APIStatusError = _FallbackOpenAIError
     RateLimitError = _FallbackOpenAIError
 
-from core.config import AppSettings
-from core.domain.language import Language
-from core.domain.models import AnalysisReport, PersonEntity
+from core.config import AppSettings  # noqa: E402
+from core.domain.language import Language  # noqa: E402
+from core.domain.models import AnalysisReport, PersonEntity  # noqa: E402
 
 
 def build_deepseek_client(*, api_key: str, base_url: str) -> AsyncOpenAI:
@@ -193,7 +193,7 @@ def _build_system_prompt(language: Language) -> str:
             "  \"confidence\": 0.0 a 1.0\n"
             "}"
         )
-    
+
     if language == Language.PORTUGUESE:
         return (
               "ATUE COMO: Um Perfilador Criminal e Analista de Inteligência de Ameaças (CTI).\n"
@@ -234,7 +234,7 @@ def _build_system_prompt(language: Language) -> str:
                 "  \"confidence\": 0.0 a 1.0\n"
                 "}"
         )
-        
+
     if language == Language.ARABIC:
         return (
             "تصرف كـ: محلل جنائي وخبير استخبارات التهديدات (CTI).\n"
@@ -316,8 +316,8 @@ def _build_system_prompt(language: Language) -> str:
             "  \"confidence\": 0.0 до 1.0\n"
             "}"
         )
-        
-        
+
+
     return (
           "ROLE: Criminal Profiler and Threat Intelligence Analyst.\n"
         "OBJECTIVE: Build a psychological and behavioural report using public evidence.\n"
@@ -404,7 +404,7 @@ def _build_system_prompt_compact(language: Language) -> str:
             "  \"confidence\": 0.0 a 1.0\n"
             "}"
         )
-    
+
     if language == Language.ARABIC:
         return (
             "تصرف كـ: محلل جنائي وخبير استخبارات التهديدات (CTI).\n"
@@ -444,7 +444,7 @@ def _build_system_prompt_compact(language: Language) -> str:
             "  \"confidence\": 0.0 до 1.0\n"
             "}"
         )
-        
+
     return (
         "ROLE: Criminal Profiler and CTI analyst.\n"
         "OBJECTIVE: Psychological/behavioural report from public footprint.\n"
@@ -697,11 +697,11 @@ async def analyze_person(
     """Genera un reporte de análisis IA a partir de evidencias públicas."""
 
     settings = settings or AppSettings()
-    
+
     clean_person = person.model_copy()
     clean_person.profiles = [p for p in clean_person.profiles if p.exists]
-            
-            
+
+
     api_key = (settings.ai_api_key or "").strip()
     if not api_key:
         # Sin API key: si es un provider local OpenAI-compatible, usamos dummy.
@@ -729,7 +729,7 @@ async def analyze_person(
     profiles_data: list[dict[str, Any]] = []
     for p in clean_person.profiles:
         meta = p.metadata if isinstance(p.metadata, dict) else {}
-        
+
         # Normaliza URL (evita querystrings ruidosas).
         clean_url = str(p.url).split('?')[0]
 

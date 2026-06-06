@@ -12,7 +12,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Iterable, Sequence, cast
+from typing import Callable, Iterable, Sequence
 
 from adapters.email_sources import (
     GravatarProfileScanner,
@@ -370,7 +370,7 @@ async def hunt(
                         no_nsfw=no_nsfw_effective,
                     )
                 )
-                
+
         if emails:
             email_path = request.site_lists.email_path
             if email_path and not email_path.exists():
@@ -430,7 +430,7 @@ async def hunt(
         breach_profiles = enrich_profiles_with_breach_data(emails=emails)
         profiles.extend(breach_profiles)
         profiles = dedupe_profiles(profiles)
-    
+
     if request.strict and usernames:
         profiles = [
             profile

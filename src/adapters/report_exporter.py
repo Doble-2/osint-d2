@@ -249,7 +249,7 @@ _STRINGS: dict[Language, dict[str, object]] = {
             "classes": "Datos expuestos",
         },
     },
-    
+
     Language.PORTUGUESE: {
         "lang_code": "pt",
         "title_prefix": "OSINT-D2 • Dossiê",
@@ -312,7 +312,7 @@ _STRINGS: dict[Language, dict[str, object]] = {
         },
         "unconfirmed_source_label": "Fonte",
         "textual_title": "04 // Evidências Textuais",
-        "textual_hint": "Amostras recentes quando a fonte as expõe.",   
+        "textual_hint": "Amostras recentes quando a fonte as expõe.",
         "textual_none": "Não há evidências textuais adicionais neste escaneamento.",
         "textual_commits": "Commits recentes",
         "textual_comments": "Comentários recentes",
