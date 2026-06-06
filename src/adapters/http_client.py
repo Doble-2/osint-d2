@@ -25,14 +25,24 @@ except Exception:  # pragma: no cover
 # ScrapingAnt Proxy
 # ---------------------------------------------------------------------------
 
-_PROXY_ENDPOINT = "proxy.scrapingant.com:8080"
+_PROXY_ENDPOINTS: dict[str, str] = {
+    "residential": "residential.scrapingant.com:8080",
+    "datacenter": "datacenter.scrapingant.com:8080",
+}
+
+# Fallback for Web Scraping API Proxy Mode (when no username is provided).
+_API_PROXY_ENDPOINT = "proxy.scrapingant.com:8080"
 
 
 def _build_proxy_url(settings: AppSettings) -> str | None:
     """Build a ScrapingAnt proxy URL from settings.
 
-    Uses ScrapingAnt's **Proxy Mode** (``proxy.scrapingant.com:8080``).
-    Parameters are passed via the username field separated by ``&``.
+    Supports two modes:
+
+    1. **Standalone proxies** (when ``proxy_username`` is set):
+       ``http://customer-USER-country-CC:KEY@residential.scrapingant.com:8080``
+    2. **API Proxy Mode** (fallback, when only ``proxy_api_key`` is set):
+       ``http://scrapingant&browser=false&proxy_type=MODE:KEY@proxy.scrapingant.com:8080``
 
     Returns an ``http://user:pass@host:port`` string suitable for
     ``httpx.AsyncClient(proxy=...)``, or ``None`` when proxy is disabled.
@@ -44,17 +54,23 @@ def _build_proxy_url(settings: AppSettings) -> str | None:
     if mode not in ("residential", "datacenter"):
         return None
 
-    # ScrapingAnt Proxy Mode: username carries config flags, password is API key.
-    # browser=false saves credits (1 instead of 10) and is faster for OSINT checks.
-    username = f"scrapingant&browser=false&proxy_type={mode}"
-
-    # Geo-targeting via proxy_country parameter.
-    if settings.proxy_country:
-        username += f"&proxy_country={settings.proxy_country}"
-
     password = settings.proxy_api_key
 
-    return f"http://{username}:{password}@{_PROXY_ENDPOINT}"
+    if settings.proxy_username:
+        # ── Standalone residential/datacenter proxy product ──
+        # Format: customer-USERNAME[-country-CC][-sessionid-ID]
+        username = f"customer-{settings.proxy_username}"
+        if settings.proxy_country:
+            username += f"-country-{settings.proxy_country}"
+        endpoint = _PROXY_ENDPOINTS[mode]
+    else:
+        # ── API Proxy Mode (legacy / no username) ──
+        username = f"scrapingant&browser=false&proxy_type={mode}"
+        if settings.proxy_country:
+            username += f"&proxy_country={settings.proxy_country}"
+        endpoint = _API_PROXY_ENDPOINT
+
+    return f"http://{username}:{password}@{endpoint}"
 
 
 # ---------------------------------------------------------------------------

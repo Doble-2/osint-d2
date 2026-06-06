@@ -169,7 +169,11 @@ class AppSettings(BaseSettings):
     )
     proxy_api_key: str | None = Field(
         default=None,
-        description="ScrapingAnt API key for proxy mode.",
+        description="ScrapingAnt API/proxy key (password for proxy auth).",
+    )
+    proxy_username: str | None = Field(
+        default=None,
+        description="ScrapingAnt proxy username (e.g. 'angeldOzt2u').",
     )
     proxy_country: str = Field(
         default="",
