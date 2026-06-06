@@ -16,7 +16,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 try:
     from weasyprint import HTML
 except (ImportError, OSError):
-    # On Windows, missing GTK libraries can cause OSError during import.
+    # Missing system libraries (cairo, pango, gdk-pixbuf) cause OSError.
     HTML = None
 
 from core.domain.language import Language
@@ -648,7 +648,8 @@ def export_person_pdf(*, person: PersonEntity, output_path: Path, language: Lang
 
     if HTML is None:
         raise ImportError(
-            "WeasyPrint is not available (likely missing GTK libraries on Windows). "
+            "WeasyPrint is not available (likely missing system libraries: "
+            "cairo, pango, gdk-pixbuf). Install them and retry. "
             "PDF export is disabled."
         )
 
