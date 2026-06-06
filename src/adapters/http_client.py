@@ -3,8 +3,7 @@
 Por qué un wrapper:
 - Estandariza timeouts, headers, retries, logging y políticas de proxy/Tor.
 - Facilita testeo: se puede sustituir por un stub/mocked client.
-
-Nota: implementación pendiente (solo andamiaje).
+- Centraliza la configuración de proxy (ScrapingAnt) en un solo punto.
 """
 
 from __future__ import annotations
@@ -22,16 +21,55 @@ except Exception:  # pragma: no cover
     BeautifulSoup = None  # type: ignore
 
 
+# ---------------------------------------------------------------------------
+# ScrapingAnt Proxy
+# ---------------------------------------------------------------------------
+
+_PROXY_ENDPOINTS: dict[str, str] = {
+    "residential": "residential.scrapingant.com:8080",
+    "datacenter": "datacenter.scrapingant.com:8080",
+}
+
+
+def _build_proxy_url(settings: AppSettings) -> str | None:
+    """Build a ScrapingAnt proxy URL from settings.
+
+    Returns an ``http://user:pass@host:port`` string suitable for
+    ``httpx.AsyncClient(proxy=...)``, or ``None`` when proxy is disabled.
+    """
+    mode = settings.effective_proxy_mode
+    if not mode or not settings.proxy_api_key:
+        return None
+
+    endpoint = _PROXY_ENDPOINTS.get(mode)
+    if not endpoint:
+        return None
+
+    # Username carries config flags; password is the API key.
+    username = "scrapingant"
+    password = settings.proxy_api_key
+
+    # Geo-targeting via username suffix (ScrapingAnt convention).
+    if settings.proxy_country:
+        username += f"&proxy_country={settings.proxy_country}"
+
+    return f"http://{username}:{password}@{endpoint}"
+
+
+# ---------------------------------------------------------------------------
+# Async HTTP Client Builder
+# ---------------------------------------------------------------------------
+
 def build_async_client(
     settings: AppSettings | None = None,
     *,
     extra_headers: dict[str, str] | None = None,
 ) -> httpx.AsyncClient:
-    """Crea un `httpx.AsyncClient` con defaults seguros.
+    """Crea un ``httpx.AsyncClient`` con defaults seguros.
 
     Por qué un builder:
     - Centraliza timeouts/headers para que todas las fuentes se comporten igual.
-    - Facilita testeo y futuras políticas (retries, proxies, Tor).
+    - Inyecta proxy ScrapingAnt de forma transparente si está configurado.
     """
 
     settings = settings or AppSettings()
@@ -41,18 +79,27 @@ def build_async_client(
     }
     if extra_headers:
         headers.update(extra_headers)
+
+    proxy_url = _build_proxy_url(settings)
+
     return httpx.AsyncClient(
         timeout=httpx.Timeout(settings.http_timeout_seconds),
         follow_redirects=True,
         headers=headers,
+        proxy=proxy_url,
+        verify=proxy_url is None,  # Proxy handles TLS termination.
     )
 
+
+# ---------------------------------------------------------------------------
+# HTML Metadata Extraction
+# ---------------------------------------------------------------------------
 
 def extract_html_metadata(*, html: str, base_url: str | None = None) -> dict[str, Any]:
     """Extrae metadata ligera de HTML.
 
     Requisitos:
-    - `beautifulsoup4` instalado.
+    - ``beautifulsoup4`` instalado.
 
     Devuelve keys opcionales:
     - title

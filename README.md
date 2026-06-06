@@ -3,6 +3,7 @@
 [![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)](#installation)
 [![Poetry](https://img.shields.io/badge/Poetry-enabled-60A5FA?logo=poetry&logoColor=white)](#installation)
 [![DeepSeek](https://img.shields.io/badge/AI-DeepSeek%20(OpenAI%20compatible)-111827?logo=openai&logoColor=white)](#ai-and-language)
+[![ScrapingAnt](https://img.shields.io/badge/Proxies-ScrapingAnt-FF6B35?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0id2hpdGUiPjxjaXJjbGUgY3g9IjEyIiBjeT0iMTIiIHI9IjEwIi8+PC9zdmc+&logoColor=white)](https://scrapingant.com/?ref=osint-d2)
 [![License](https://img.shields.io/badge/License-MIT-success)](LICENSE)
 
 ```text
@@ -84,6 +85,33 @@ Optional overrides:
 - `OSINT_D2_AI_MODEL`
 - `OSINT_D2_AI_TIMEOUT_SECONDS`
 - `OSINT_D2_DEFAULT_LANGUAGE` (`en` or `es`)
+
+### Proxy (ScrapingAnt)
+
+OSINT-D2 natively supports [ScrapingAnt](https://scrapingant.com/?ref=osint-d2) residential and datacenter proxies to bypass rate limits and anti-bot blocks on social platforms.
+
+```bash
+# Add to your .env:
+OSINT_D2_PROXY_API_KEY=your-scrapingant-api-key
+# Optional:
+OSINT_D2_PROXY_MODE=residential   # or 'datacenter' (default: residential)
+OSINT_D2_PROXY_COUNTRY=us          # 2-letter country code
+```
+
+When `OSINT_D2_PROXY_API_KEY` is set, all HTTP requests are automatically routed through ScrapingAnt's rotating proxy network. No code changes needed.
+
+You can also override per-run:
+
+```bash
+osint-d2 scan torvalds --proxy datacenter --proxy-country de
+osint-d2 hunt -u torvalds --no-proxy   # disable for this run
+```
+
+Verify proxy status:
+
+```bash
+osint-d2 doctor run
+```
 
 AI note:
 

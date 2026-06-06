@@ -72,6 +72,17 @@ def run() -> None:
     ok_pdf, detail_pdf = _check_pdf()
     table.add_row("WeasyPrint PDF", "OK" if ok_pdf else "FAIL", detail_pdf)
 
+    # Proxy (ScrapingAnt)
+    proxy_mode = settings.effective_proxy_mode
+    if proxy_mode:
+        key_masked = "****" + (settings.proxy_api_key or "")[-4:] if settings.proxy_api_key else "(none)"
+        country = settings.proxy_country.upper() if settings.proxy_country else "auto"
+        table.add_row("Proxy mode", "OK", f"{proxy_mode} (ScrapingAnt)")
+        table.add_row("Proxy API key", "OK", key_masked)
+        table.add_row("Proxy country", "OK", country)
+    else:
+        table.add_row("Proxy mode", "OFF", "Direct connections (no proxy)")
+
     _console.print(table)
 
     if not ok_pdf:

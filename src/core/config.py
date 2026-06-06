@@ -158,3 +158,30 @@ class AppSettings(BaseSettings):
         default=Language.ENGLISH,
         description="Idioma por defecto para prompts y reportes (en/es).",
     )
+
+    # ── ScrapingAnt Proxy ──────────────────────────────────────────────
+    proxy_mode: str | None = Field(
+        default=None,
+        description=(
+            "Proxy mode: 'residential', 'datacenter', or None (direct). "
+            "Auto-detected from proxy_api_key if not set explicitly."
+        ),
+    )
+    proxy_api_key: str | None = Field(
+        default=None,
+        description="ScrapingAnt API key for proxy mode.",
+    )
+    proxy_country: str = Field(
+        default="",
+        description="2-letter country code for geo-targeted proxies (e.g. 'us').",
+    )
+
+    @property
+    def effective_proxy_mode(self) -> str | None:
+        """Return the proxy mode to use, auto-detecting from key if needed."""
+        if self.proxy_mode:
+            return self.proxy_mode
+        if self.proxy_api_key:
+            return "residential"  # default when key is set
+        return None
+

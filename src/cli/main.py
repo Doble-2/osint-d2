@@ -74,6 +74,37 @@ app.add_typer(doctor_app, name="doctor")
 _console = Console()
 
 
+def _apply_proxy_overrides(
+    settings: AppSettings,
+    *,
+    proxy: str | None,
+    no_proxy: bool,
+    proxy_country: str | None,
+) -> AppSettings:
+    """Apply CLI proxy overrides to settings via env vars, then reload."""
+    if no_proxy:
+        os.environ["OSINT_D2_PROXY_MODE"] = ""
+        os.environ["OSINT_D2_PROXY_API_KEY"] = ""
+        return AppSettings()
+    if proxy:
+        os.environ["OSINT_D2_PROXY_MODE"] = proxy
+    if proxy_country:
+        os.environ["OSINT_D2_PROXY_COUNTRY"] = proxy_country
+    if proxy or proxy_country:
+        return AppSettings()
+    return settings
+
+
+def _print_proxy_status(settings: AppSettings, console: Console) -> None:
+    mode = settings.effective_proxy_mode
+    if mode:
+        country = f" ({settings.proxy_country.upper()})" if settings.proxy_country else ""
+        console.print(
+            f"  [bright_cyan]🔒 Proxy:[/bright_cyan] "
+            f"[green]{mode}{country}[/green] via ScrapingAnt\n"
+        )
+
+
 AI_PROVIDER_PRESETS: dict[str, dict[str, str]] = {
     # Nota: los modelos disponibles cambian según el proveedor/plan.
     "deepseek": {"base_url": "https://api.deepseek.com", "model": "deepseek-chat"},
@@ -716,10 +747,29 @@ def scan(
         "--json-raw/--no-json-raw",
         help="(--format json) Include analysis.raw with the raw AI provider payload.",
     ),
+    proxy: str | None = typer.Option(
+        None,
+        "--proxy",
+        help="Override proxy mode: residential, datacenter (auto-detected from OSINT_D2_PROXY_API_KEY by default).",
+        show_default=False,
+    ),
+    no_proxy: bool = typer.Option(
+        False,
+        "--no-proxy",
+        help="Disable proxy for this run even if configured in .env.",
+    ),
+    proxy_country: str | None = typer.Option(
+        None,
+        "--proxy-country",
+        help="2-letter country code for geo-targeted proxy (e.g. 'us').",
+        show_default=False,
+    ),
 ) -> None:
     output_format = _auto_output_format(output_format)
     language = _resolve_language(language)
-    settings = AppSettings()
+    settings = _apply_proxy_overrides(
+        AppSettings(), proxy=proxy, no_proxy=no_proxy, proxy_country=proxy_country,
+    )
     if deep_analyze and ai_provider:
         settings = _configure_ai_for_run(
             settings=settings,
@@ -800,11 +850,30 @@ def scan_email(
         "--json-raw/--no-json-raw",
         help="(--format json) Include analysis.raw with the raw AI provider payload.",
     ),
+    proxy: str | None = typer.Option(
+        None,
+        "--proxy",
+        help="Override proxy mode: residential, datacenter.",
+        show_default=False,
+    ),
+    no_proxy: bool = typer.Option(
+        False,
+        "--no-proxy",
+        help="Disable proxy for this run.",
+    ),
+    proxy_country: str | None = typer.Option(
+        None,
+        "--proxy-country",
+        help="2-letter country code for geo-targeted proxy.",
+        show_default=False,
+    ),
 ) -> None:
     normalized = _normalize_email(email)
     output_format = _auto_output_format(output_format)
     language = _resolve_language(language)
-    settings = AppSettings()
+    settings = _apply_proxy_overrides(
+        AppSettings(), proxy=proxy, no_proxy=no_proxy, proxy_country=proxy_country,
+    )
     if deep_analyze and ai_provider:
         settings = _configure_ai_for_run(
             settings=settings,
@@ -944,6 +1013,23 @@ def hunt(
         "--breach-check/--no-breach-check",
         help="Query HaveIBeenPwned unifiedsearch for emails (best-effort; may be rate-limited).",
     ),
+    proxy: str | None = typer.Option(
+        None,
+        "--proxy",
+        help="Override proxy mode: residential, datacenter.",
+        show_default=False,
+    ),
+    no_proxy: bool = typer.Option(
+        False,
+        "--no-proxy",
+        help="Disable proxy for this run.",
+    ),
+    proxy_country: str | None = typer.Option(
+        None,
+        "--proxy-country",
+        help="2-letter country code for geo-targeted proxy.",
+        show_default=False,
+    ),
 ) -> None:
     normalized_emails = [_normalize_email(e) for e in emails] if emails else None
     categories = {c.strip().lower() for c in (category or []) if c.strip()} or None
@@ -956,7 +1042,9 @@ def hunt(
 
     output_format = _auto_output_format(output_format)
     language = _resolve_language(language)
-    settings = AppSettings()
+    settings = _apply_proxy_overrides(
+        AppSettings(), proxy=proxy, no_proxy=no_proxy, proxy_country=proxy_country,
+    )
     if ai and ai_provider:
         settings = _configure_ai_for_run(
             settings=settings,
