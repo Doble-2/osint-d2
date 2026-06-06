@@ -189,3 +189,8 @@ class AppSettings(BaseSettings):
             return "residential"  # default when key is set
         return None
 
+    # ── Agent Mode ───────────────────────────────────────────────────
+    agent_max_steps: int = Field(
+        default=10,
+        description="Max reasoning steps for the autonomous agent mode.",
+    )

@@ -1079,6 +1079,222 @@ def hunt(
     )
 
 
+@app.command(help="Autonomous OSINT investigation powered by agentic AI.")
+def agent(
+    objective: str = typer.Argument(
+        ...,
+        help="Investigation target or free-form objective (e.g. 'torvalds', 'angel@email.com').",
+    ),
+    ai_provider: str | None = typer.Option(
+        None,
+        "--ai-provider",
+        help="AI provider preset: deepseek|groq|groq-70b|openrouter|huggingface.",
+        show_default=False,
+    ),
+    ai_key: str | None = typer.Option(
+        None,
+        "--ai-key",
+        help="AI API key (optional). Prefer `osint-d2 doctor setup-ai`.",
+        show_default=False,
+    ),
+    ai_save: bool = typer.Option(
+        True,
+        "--ai-save/--no-ai-save",
+        help="Persist provider configuration for next runs.",
+    ),
+    max_steps: int = typer.Option(
+        10,
+        "--max-steps",
+        min=1,
+        max=50,
+        help="Maximum reasoning steps before the agent must conclude.",
+    ),
+    language: Language | None = typer.Option(
+        None,
+        "--language",
+        "-l",
+        help="Output language: en|es|pt|ar|ru.",
+    ),
+    breach_check: bool = typer.Option(
+        False,
+        "--breach-check/--no-breach-check",
+        help="Allow the agent to query HaveIBeenPwned for breaches.",
+    ),
+    proxy: str | None = typer.Option(
+        None,
+        "--proxy",
+        help="Override proxy mode: residential, datacenter.",
+        show_default=False,
+    ),
+    no_proxy: bool = typer.Option(
+        False,
+        "--no-proxy",
+        help="Disable proxy for this run.",
+    ),
+    proxy_country: str | None = typer.Option(
+        None,
+        "--proxy-country",
+        help="2-letter country code for geo-targeted proxy.",
+        show_default=False,
+    ),
+    export_json: bool = typer.Option(
+        False,
+        "--export-json/--no-export-json",
+        help="Export the investigation as JSON in reports/.",
+    ),
+    export_pdf: bool = typer.Option(
+        False,
+        "--export-pdf/--no-export-pdf",
+        help="Export a PDF/HTML dossier.",
+    ),
+) -> None:
+    language = _resolve_language(language)
+    settings = _apply_proxy_overrides(
+        AppSettings(), proxy=proxy, no_proxy=no_proxy, proxy_country=proxy_country,
+    )
+    if ai_provider:
+        settings = _configure_ai_for_run(
+            settings=settings,
+            ai_provider=ai_provider,
+            ai_key=ai_key,
+            ai_save=ai_save,
+            interactive=sys.stdin.isatty() and sys.stdout.isatty(),
+            console=_console,
+        )
+
+    if not settings.ai_api_key:
+        _console.print(
+            "[red]Error:[/red] Agent mode requires an AI provider. "
+            "Run [bold]osint-d2 doctor setup-ai[/bold] or use --ai-provider.",
+        )
+        raise typer.Exit(1)
+
+    asyncio.run(
+        _agent_async(
+            settings=settings,
+            objective=objective,
+            max_steps=max_steps,
+            language=language,
+            breach_check=breach_check,
+            export_json=export_json,
+            export_pdf=export_pdf,
+        )
+    )
+
+
+async def _agent_async(
+    *,
+    settings: AppSettings,
+    objective: str,
+    max_steps: int,
+    language: Language,
+    breach_check: bool,
+    export_json: bool,
+    export_pdf: bool,
+) -> None:
+    from core.services.agent_engine import AgentEngine, AgentStep
+
+    console = _console
+    console.print()
+    console.print(
+        "[bold bright_cyan]╭─────────────────────────────────────────────╮[/bold bright_cyan]"
+    )
+    console.print(
+        "[bold bright_cyan]│[/bold bright_cyan]  "
+        "[bold white]OSINT-D2 Agent Mode[/bold white] 🤖"
+        "                    [bold bright_cyan]│[/bold bright_cyan]"
+    )
+    console.print(
+        f"[bold bright_cyan]│[/bold bright_cyan]  "
+        f"Objective: [yellow]{objective[:38]}[/yellow]"
+        f"{'…' if len(objective) > 38 else ''}"
+        f"{' ' * max(0, 38 - len(objective))}"
+        f"[bold bright_cyan]│[/bold bright_cyan]"
+    )
+    console.print(
+        f"[bold bright_cyan]│[/bold bright_cyan]  "
+        f"Max steps: [green]{max_steps}[/green] | "
+        f"Model: [green]{settings.ai_model}[/green]"
+        f"{' ' * max(0, 20 - len(settings.ai_model))}"
+        f"[bold bright_cyan]│[/bold bright_cyan]"
+    )
+    console.print(
+        "[bold bright_cyan]╰─────────────────────────────────────────────╯[/bold bright_cyan]"
+    )
+    console.print()
+
+    def on_step(step: AgentStep) -> None:
+        if step.tool_name:
+            args_str = ", ".join(f'{k}="{v}"' for k, v in step.tool_args.items())
+            icon = "📋" if step.tool_name == "generate_report" else "🔍"
+            console.print(
+                f"  {icon} [bold]Step {step.step_number}/{max_steps}:[/bold] "
+                f"[cyan]{step.tool_name}[/cyan]({args_str})"
+            )
+            if step.tool_result and step.tool_name != "generate_report":
+                try:
+                    data = json.loads(step.tool_result)
+                    confirmed = data.get("confirmed", "?")
+                    total = data.get("total_scanned", "?")
+                    console.print(
+                        f"     → [green]{confirmed}[/green] confirmed / {total} scanned"
+                    )
+                except Exception:
+                    pass
+        elif step.reasoning:
+            console.print(
+                f"\n  🧠 [bold]Step {step.step_number}/{max_steps}:[/bold] [dim]Reasoning...[/dim]"
+            )
+            # Show first 200 chars of reasoning.
+            preview = step.reasoning[:200].replace("\n", " ")
+            console.print(f"     [italic dim]{preview}[/italic dim]\n")
+
+    engine = AgentEngine(
+        settings=settings,
+        enable_breach_check=breach_check,
+        on_step=on_step,
+    )
+
+    with console.status("[bold green]Agent is thinking...", spinner="dots"):
+        result = await engine.run(
+            objective,
+            language=language,
+            max_steps=max_steps,
+        )
+
+    console.print()
+    person = result.person
+
+    if result.finished_naturally:
+        console.print(
+            f"  [bold green]✓[/bold green] Agent concluded in "
+            f"[bold]{result.total_steps}[/bold] steps.\n"
+        )
+    else:
+        console.print(
+            f"  [bold yellow]⚠[/bold yellow] Agent reached max steps "
+            f"({result.total_steps}/{max_steps}).\n"
+        )
+
+    # Show profiles table.
+    if person.profiles:
+        _print_profiles_table(person=person, primary_usernames=[objective])
+
+    # Show analysis.
+    if person.analysis:
+        panel = build_analysis_panel(person.analysis)
+        console.print(panel)
+
+    # Exports.
+    _handle_exports(
+        person=person,
+        console=console,
+        export_pdf=export_pdf,
+        export_json=export_json,
+        language=language,
+    )
+
+
 @app.command(help="Step-by-step interactive assistant for newcomers.")
 def wizard() -> None:
     console = _console
