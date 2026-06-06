@@ -13,7 +13,7 @@ import json
 import random
 import re
 from typing import Any
-#from bs4 import BeautifulSoup migrar a beatifulsoup 
+
 
 from pydantic import BaseModel, Field
 from openai import AsyncOpenAI
@@ -93,14 +93,7 @@ def _summary_has_six_sections(*, summary: str, language: Language) -> bool:
         return False
 
     # Exigimos al menos encabezados 1 y 6 para evitar falsos positivos.
-    if language == Language.SPANISH:
-        return bool(re.search(r"(?m)^##\s*1\.", text)) and bool(re.search(r"(?m)^##\s*6\.", text))
-    if language == Language.PORTUGUESE:
-        return bool(re.search(r"(?m)^##\s*1\.", text)) and bool(re.search(r"(?m)^##\s*6\.", text))
-    if language == Language.ARABIC:
-        return bool(re.search(r"(?m)^##\s*1\.", text)) and bool(re.search(r"(?m)^##\s*6\.", text))
-    if language == Language.RUSSIAN:
-        return bool(re.search(r"(?m)^##\s*1\.", text)) and bool(re.search(r"(?m)^##\s*6\.", text))
+    # El patrón es idéntico para todos los idiomas.
     return bool(re.search(r"(?m)^##\s*1\.", text)) and bool(re.search(r"(?m)^##\s*6\.", text))
 
 
@@ -544,7 +537,7 @@ def _is_local_base_url(url: str) -> bool:
 
 def _heuristic_analysis(*, person: PersonEntity, language: Language, reason: str) -> AnalysisReport:
     profiles = list(person.profiles)
-    confirmed = [p for p in profiles if getattr(p, "existe", False)]
+    confirmed = [p for p in profiles if getattr(p, "exists", False)]
     networks = sorted({(p.network_name or "").lower() for p in confirmed if p.network_name})
     emails = sorted({p.username for p in profiles if isinstance(getattr(p, "username", None), str) and "@" in p.username})
 
@@ -624,20 +617,20 @@ def _heuristic_analysis(*, person: PersonEntity, language: Language, reason: str
         ]
         if breach_lines:
             summary.append("\nResultados de violações (HIBP):\n" + "\n".join(breach_lines))
-            summary.append(f"\n> Nota: análise heurística (sem IA remota). Motivo: {reason}.")
-            highlights = [
-                f"Perfis confirmados: {len(confirmed)}.",
-                f"Redes confirmadas: {', '.join(networks) if networks else 'N/A'}.",
-            ]
+        summary.append(f"\n> Nota: análise heurística (sem IA remota). Motivo: {reason}.")
+        highlights = [
+            f"Perfis confirmados: {len(confirmed)}.",
+            f"Redes confirmadas: {', '.join(networks) if networks else 'N/A'}.",
+        ]
         if breach_lines:
             highlights.append("Foram detectados resultados do HIBP (breach-check).")
         return AnalysisReport(
-                summary="\n".join(summary).strip(),
-                highlights=highlights,
-                confidence=0.25,
-                model="heuristic",
-                raw={"reason": reason},
-            )
+            summary="\n".join(summary).strip(),
+            highlights=highlights,
+            confidence=0.25,
+            model="heuristic",
+            raw={"reason": reason},
+        )
     summary = [
         "## 1. 🆔 Identity & demographics (inference)",
         "Insufficient evidence to infer personal attributes responsibly.",
@@ -706,14 +699,7 @@ async def analyze_person(
     settings = settings or AppSettings()
     
     clean_person = person.model_copy()
-        
-    while True:
-        to_remove = [p for p in clean_person.profiles if not p.existe]
-        if not to_remove:
-            break
-        for p in to_remove:
-            if p.existe == False:   
-                clean_person.profiles.remove(p)
+    clean_person.profiles = [p for p in clean_person.profiles if p.exists]
             
             
     api_key = (settings.ai_api_key or "").strip()
@@ -878,18 +864,17 @@ async def analyze_person(
                             "Reescribe SOLO el JSON con contenido real: 'summary' debe incluir las 6 secciones completas y "
                             "'highlights' debe ser una lista real basada en la evidencia recibida."
                         )
-                if language == Language.PORTUGUESE:
-                        if missing_sections:
-                            fix = (
-                                "Você não seguiu o formato requerido. Reescreva APENAS o JSON válido: 'summary' deve ser Markdown e incluir as 6 seções com títulos '## 1.' a '## 6.' "
-                                "e 'highlights' deve ser uma lista real baseada nas evidências fornecidas."
-                            )
-                        else:
-                            fix = (
-                                "Seu JSON é um template (valores de exemplo). Reescreva APENAS o JSON com conteúdo real: 'summary' deve incluir as 6 seções completas e "
-                                "'highlights' deve ser uma lista real baseada nas evidências fornecidas."
-                            )
-                        
+                elif language == Language.PORTUGUESE:
+                    if missing_sections:
+                        fix = (
+                            "Você não seguiu o formato requerido. Reescreva APENAS o JSON válido: 'summary' deve ser Markdown e incluir as 6 seções com títulos '## 1.' a '## 6.' "
+                            "e 'highlights' deve ser uma lista real baseada nas evidências fornecidas."
+                        )
+                    else:
+                        fix = (
+                            "Seu JSON é um template (valores de exemplo). Reescreva APENAS o JSON com conteúdo real: 'summary' deve incluir as 6 seções completas e "
+                            "'highlights' deve ser uma lista real baseada nas evidências fornecidas."
+                        )
                 else:
                     if missing_sections:
                         fix = (

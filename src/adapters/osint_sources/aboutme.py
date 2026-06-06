@@ -32,7 +32,9 @@ class AboutMeScanner(OSINTScanner):
                 "final_url": str(response.url),
             }
             exists = response.status_code == 200
-        
+            name = None
+            description = None
+
             if exists:
                 html = response.text if hasattr(response, "text") else await response.aread()
                 if not isinstance(html, str):
@@ -120,7 +122,7 @@ class AboutMeScanner(OSINTScanner):
                 url=str(response.url),
                 username=username,
                 network_name="aboutme",
-                existe=exists,
+                exists=exists,
                 metadata=metadata,
             )
             
@@ -133,7 +135,7 @@ class AboutMeScanner(OSINTScanner):
                         url=link,
                         username=link.split("/")[-1],
                         network_name="aboutme_social_link",
-                        existe=True,
+                        exists=True,
                         metadata={"source": "aboutme", "from_username": username},
                     ))
                     
