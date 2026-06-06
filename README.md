@@ -359,9 +359,9 @@ osint-d2 agent "torvalds"
 osint-d2 agent "doble-2" -l es --max-steps 10 --breach-check --export-pdf --export-json
 
 # With trusted sources to filter false positives
-osint-d2 agent "xkissmely" \
-  --trust instagram:xkissmely \
-  --trust email:kissmelymarcano@gmail.com \
+osint-d2 agent "janedoe" \
+  --trust instagram:janedoe \
+  --trust email:jane.doe@gmail.com \
   -l es
 
 # Using Groq as AI provider
@@ -380,19 +380,19 @@ Trust anchors let you define **verified sources of truth** for an identity. When
 
 ### How it works
 
-If you know that `xkissmely` is the real Instagram handle, you can tell OSINT-D2:
+If you know that `janedoe` is the real Instagram handle, you can tell OSINT-D2:
 
 ```bash
-osint-d2 agent "xkissmely" \
-  --trust instagram:xkissmely \
-  --trust twitter:kissmely13 \
-  --trust email:kissmelymarcano@gmail.com
+osint-d2 agent "janedoe" \
+  --trust instagram:janedoe \
+  --trust twitter:janedoe13 \
+  --trust email:jane.doe@gmail.com
 ```
 
 OSINT-D2 will:
 1. Extract the **real name** from trusted profiles (e.g., from Instagram bio)
 2. Compare discovered profiles against the trusted identity
-3. **Discard profiles** that belong to a different person (e.g., a Pinterest user named "John Smith" when the target is "Kissmely Marcano")
+3. **Discard profiles** that belong to a different person (e.g., a Pinterest user named "John Smith" when the target is "Jane Doe")
 4. Report how many false positives were filtered: `🛡️ Trust anchors discarded 26 false positive(s)`
 
 ### Supported formats
