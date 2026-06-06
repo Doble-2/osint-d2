@@ -406,6 +406,7 @@ async def _hunt_async(
     strict: bool,
     language: Language,
     breach_check: bool = False,
+    trust_anchors: list[str] | None = None,
 ) -> None:
     if not usernames and not emails:
         raise typer.BadParameter("Provide at least one username or email to hunt.")
@@ -495,6 +496,25 @@ async def _hunt_async(
     if human:
         _print_profiles_table(person=person, primary_usernames=primary_usernames)
         _print_breaches_table(person=person)
+
+    # ── Trust anchor filtering ──
+    if trust_anchors:
+        from core.services.trust_anchor import (
+            TrustAnchor, build_reference_from_profiles, filter_profiles_by_trust,
+        )
+        anchors = [TrustAnchor.parse(a) for a in trust_anchors]
+        ref = build_reference_from_profiles(person.profiles, anchors)
+        if not ref.is_empty():
+            filter_profiles_by_trust(person.profiles, ref, remove=True)
+            discarded = sum(
+                1 for p in person.profiles
+                if isinstance(p.metadata, dict) and p.metadata.get("trust_discarded")
+            )
+            if discarded and human:
+                console.print(
+                    f"  [yellow]🛡️ Trust anchors discarded {discarded} "
+                    f"false positive(s)[/yellow]\n"
+                )
 
     if deep_analyze:
         await _analyze_async(
@@ -1057,6 +1077,12 @@ def hunt(
         help="2-letter country code for geo-targeted proxy.",
         show_default=False,
     ),
+    trust: list[str] | None = typer.Option(
+        None,
+        "--trust",
+        help="Trusted source of truth (repeatable). Format: network:username (e.g. --trust instagram:xkissmely).",
+        show_default=False,
+    ),
 ) -> None:
     normalized_emails = [_normalize_email(e) for e in emails] if emails else None
     categories = {c.strip().lower() for c in (category or []) if c.strip()} or None
@@ -1102,6 +1128,7 @@ def hunt(
             strict=strict,
             language=language,
             breach_check=breach_check,
+            trust_anchors=trust or [],
         )
     )
 
@@ -1383,6 +1410,50 @@ def wizard() -> None:
 
         max_steps = IntPrompt.ask("Max reasoning steps", default=10)
         breach_check = Confirm.ask("Allow agent to check breaches (HIBP)?", default=False)
+
+        # ── Proxy ──
+        proxy_mode: str | None = None
+        proxy_country: str | None = None
+        if settings.proxy_api_key:
+            use_proxy = Confirm.ask(
+                "Use proxy? (ScrapingAnt detected in .env)", default=True,
+            )
+            if use_proxy:
+                proxy_mode = Prompt.ask(
+                    "Proxy mode",
+                    choices=["residential", "datacenter"],
+                    default="residential",
+                )
+                pc = Prompt.ask(
+                    "Proxy country (2-letter code, or empty for any)",
+                    default="",
+                ).strip()
+                if pc:
+                    proxy_country = pc
+
+        # ── Trust anchors ──
+        trust_anchors: list[str] = []
+        use_trust = Confirm.ask(
+            "Add trusted identity sources? (e.g. instagram:user, email:user@mail.com)",
+            default=False,
+        )
+        if use_trust:
+            console.print(
+                "  [dim]Format: network:username or email:user@domain.com[/dim]\n"
+                "  [dim]Examples: instagram:xkissmely  email:kissmelymarcano@gmail.com[/dim]\n"
+                "  [dim]Enter one per line, empty line to finish.[/dim]"
+            )
+            while True:
+                anchor = Prompt.ask("  Trust anchor (empty to finish)", default="").strip()
+                if not anchor:
+                    break
+                if ":" not in anchor:
+                    console.print("  [yellow]Invalid format. Use network:username[/yellow]")
+                    continue
+                trust_anchors.append(anchor)
+            if trust_anchors:
+                console.print(f"  [green]✓ {len(trust_anchors)} trust anchor(s) registered[/green]")
+
         export_json = Confirm.ask("Export JSON to reports/?", default=False)
         export_pdf = Confirm.ask("Export PDF/HTML to reports/?", default=False)
 
@@ -1423,15 +1494,23 @@ def wizard() -> None:
                     console.print("[red]AI provider is required for agent mode.[/red]")
                     raise typer.Exit(code=2)
 
+        final_settings = _apply_proxy_overrides(
+            AppSettings(),
+            proxy=proxy_mode,
+            no_proxy=False,
+            proxy_country=proxy_country,
+        )
+
         asyncio.run(
             _agent_async(
-                settings=AppSettings(),
+                settings=final_settings,
                 objective=objective,
                 max_steps=max_steps,
                 language=language,
                 breach_check=breach_check,
                 export_json=export_json,
                 export_pdf=export_pdf,
+                trust_anchors=trust_anchors,
             )
         )
         return
@@ -1549,9 +1628,59 @@ def wizard() -> None:
     export_json = Confirm.ask("Export JSON to reports/?", default=False)
     export_pdf = Confirm.ask("Export PDF/HTML to reports/?", default=False)
 
+    # ── Proxy ──
+    wiz_proxy_mode: str | None = None
+    wiz_proxy_country: str | None = None
+    if settings.proxy_api_key:
+        wiz_use_proxy = Confirm.ask(
+            "Use proxy? (ScrapingAnt detected in .env)", default=True,
+        )
+        if wiz_use_proxy:
+            wiz_proxy_mode = Prompt.ask(
+                "Proxy mode",
+                choices=["residential", "datacenter"],
+                default="residential",
+            )
+            wpc = Prompt.ask(
+                "Proxy country (2-letter code, or empty for any)",
+                default="",
+            ).strip()
+            if wpc:
+                wiz_proxy_country = wpc
+
+    # ── Trust anchors ──
+    wiz_trust_anchors: list[str] = []
+    wiz_use_trust = Confirm.ask(
+        "Add trusted identity sources? (e.g. instagram:user, email:user@mail.com)",
+        default=False,
+    )
+    if wiz_use_trust:
+        console.print(
+            "  [dim]Format: network:username or email:user@domain.com[/dim]\n"
+            "  [dim]Examples: instagram:xkissmely  email:kissmelymarcano@gmail.com[/dim]\n"
+            "  [dim]Enter one per line, empty line to finish.[/dim]"
+        )
+        while True:
+            wiz_anchor = Prompt.ask("  Trust anchor (empty to finish)", default="").strip()
+            if not wiz_anchor:
+                break
+            if ":" not in wiz_anchor:
+                console.print("  [yellow]Invalid format. Use network:username[/yellow]")
+                continue
+            wiz_trust_anchors.append(wiz_anchor)
+        if wiz_trust_anchors:
+            console.print(f"  [green]✓ {len(wiz_trust_anchors)} trust anchor(s) registered[/green]")
+
+    wiz_final_settings = _apply_proxy_overrides(
+        AppSettings(),
+        proxy=wiz_proxy_mode,
+        no_proxy=False,
+        proxy_country=wiz_proxy_country,
+    )
+
     asyncio.run(
         _hunt_async(
-            settings=AppSettings(),
+            settings=wiz_final_settings,
             usernames=usernames,
             emails=emails,
             deep_analyze=deep_analyze,
@@ -1570,6 +1699,7 @@ def wizard() -> None:
             strict=strict,
             language=language,
             breach_check=breach_check,
+            trust_anchors=wiz_trust_anchors,
         )
     )
 
