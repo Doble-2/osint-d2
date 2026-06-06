@@ -1303,12 +1303,82 @@ def wizard() -> None:
     settings = AppSettings()
     mode = Prompt.ask(
         "What do you want to hunt?",
-        choices=["username", "email", "both"],
+        choices=["username", "email", "both", "agent"],
         default="both",
     )
 
+    # ── Agent mode (autonomous AI investigation) ──────────────────────
+    if mode == "agent":
+        objective = Prompt.ask("Investigation objective (username, email, or free text)").strip()
+        if not objective:
+            console.print("[red]Need an objective for the agent.[/red]")
+            raise typer.Exit(code=2)
+
+        default_language = settings.default_language.label().lower()
+        language_choice = Prompt.ask(
+            "Output language (english/spanish/portuguese/arabic/russian)",
+            choices=["english", "spanish", "portuguese", "arabic", "russian"],
+            default=default_language,
+        )
+        language = Language.from_str(language_choice)
+
+        max_steps = IntPrompt.ask("Max reasoning steps", default=10)
+        breach_check = Confirm.ask("Allow agent to check breaches (HIBP)?", default=False)
+        export_json = Confirm.ask("Export JSON to reports/?", default=False)
+        export_pdf = Confirm.ask("Export PDF/HTML to reports/?", default=False)
+
+        # Ensure AI is configured.
+        settings_now = AppSettings()
+        if not (settings_now.ai_api_key or "").strip():
+            console.print(
+                "[yellow]Agent mode requires an AI provider.[/yellow]"
+            )
+            if Confirm.ask("Configure AI provider now?", default=True):
+                provider = Prompt.ask(
+                    "Provider",
+                    choices=["groq", "groq-70b", "groq-fast", "deepseek", "openrouter", "huggingface"],
+                    default="deepseek",
+                ).strip().lower()
+
+                presets: dict[str, dict[str, str]] = {
+                    "deepseek": {"OSINT_D2_AI_BASE_URL": "https://api.deepseek.com", "OSINT_D2_AI_MODEL": "deepseek-chat"},
+                    "groq": {"OSINT_D2_AI_BASE_URL": "https://api.groq.com/openai/v1", "OSINT_D2_AI_MODEL": "llama-3.1-70b-versatile"},
+                    "groq-70b": {"OSINT_D2_AI_BASE_URL": "https://api.groq.com/openai/v1", "OSINT_D2_AI_MODEL": "llama-3.1-70b-versatile"},
+                    "groq-fast": {"OSINT_D2_AI_BASE_URL": "https://api.groq.com/openai/v1", "OSINT_D2_AI_MODEL": "llama-3.1-8b-instant"},
+                    "openrouter": {"OSINT_D2_AI_BASE_URL": "https://openrouter.ai/api/v1", "OSINT_D2_AI_MODEL": "openai/gpt-4o-mini"},
+                    "huggingface": {"OSINT_D2_AI_BASE_URL": "https://api-inference.huggingface.co/v1", "OSINT_D2_AI_MODEL": "meta-llama/Llama-3.1-8B-Instruct"},
+                }
+                preset = presets.get(provider, {})
+                base_url = Prompt.ask("AI base URL", default=preset.get("OSINT_D2_AI_BASE_URL", "")).strip()
+                model = Prompt.ask("AI model", default=preset.get("OSINT_D2_AI_MODEL", "")).strip()
+                api_key = Prompt.ask("AI API key", password=True).strip()
+
+                if base_url and model and api_key:
+                    env_path = write_user_env_vars({
+                        "OSINT_D2_AI_BASE_URL": base_url,
+                        "OSINT_D2_AI_MODEL": model,
+                        "OSINT_D2_AI_API_KEY": api_key,
+                    })
+                    _console.print(f"[green]AI config saved to:[/green] {env_path}")
+                else:
+                    console.print("[red]AI provider is required for agent mode.[/red]")
+                    raise typer.Exit(code=2)
+
+        asyncio.run(
+            _agent_async(
+                settings=AppSettings(),
+                objective=objective,
+                max_steps=max_steps,
+                language=language,
+                breach_check=breach_check,
+                export_json=export_json,
+                export_pdf=export_pdf,
+            )
+        )
+        return
+
+    # ── Classic modes (username/email/both) ───────────────────────────
     usernames: list[str] | None
-    emails: list[str] | None
 
     if mode in ("username", "both"):
         u = Prompt.ask("Comma-separated usernames", default="").strip()
@@ -1393,7 +1463,7 @@ def wizard() -> None:
                     default="groq",
                 ).strip().lower()
 
-                presets: dict[str, dict[str, str]] = {
+                presets_classic: dict[str, dict[str, str]] = {
                     "deepseek": {"OSINT_D2_AI_BASE_URL": "https://api.deepseek.com", "OSINT_D2_AI_MODEL": "deepseek-chat"},
                     "groq": {"OSINT_D2_AI_BASE_URL": "https://api.groq.com/openai/v1", "OSINT_D2_AI_MODEL": "llama-3.1-70b-versatile"},
                     "groq-70b": {"OSINT_D2_AI_BASE_URL": "https://api.groq.com/openai/v1", "OSINT_D2_AI_MODEL": "llama-3.1-70b-versatile"},
@@ -1401,7 +1471,7 @@ def wizard() -> None:
                     "openrouter": {"OSINT_D2_AI_BASE_URL": "https://openrouter.ai/api/v1", "OSINT_D2_AI_MODEL": "openai/gpt-4o-mini"},
                     "huggingface": {"OSINT_D2_AI_BASE_URL": "https://api-inference.huggingface.co/v1", "OSINT_D2_AI_MODEL": "meta-llama/Llama-3.1-8B-Instruct"},
                 }
-                preset = presets.get(provider, {})
+                preset = presets_classic.get(provider, {})
                 base_url = Prompt.ask("AI base URL", default=preset.get("OSINT_D2_AI_BASE_URL", "")).strip()
                 model = Prompt.ask("AI model", default=preset.get("OSINT_D2_AI_MODEL", "")).strip()
                 api_key = Prompt.ask("AI API key", password=True).strip()

@@ -3,6 +3,7 @@
 [![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)](#installation)
 [![Poetry](https://img.shields.io/badge/Poetry-enabled-60A5FA?logo=poetry&logoColor=white)](#installation)
 [![DeepSeek](https://img.shields.io/badge/AI-DeepSeek%20(OpenAI%20compatible)-111827?logo=openai&logoColor=white)](#ai-and-language)
+[![Agentic AI](https://img.shields.io/badge/Agentic_AI-Function_Calling-8B5CF6?logo=openai&logoColor=white)](#agent-mode)
 [![ScrapingAnt](https://img.shields.io/badge/Proxies-ScrapingAnt-FF6B35?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0id2hpdGUiPjxjaXJjbGUgY3g9IjEyIiBjeT0iMTIiIHI9IjEwIi8+PC9zdmc+&logoColor=white)](https://scrapingant.com/?ref=osint-d2)
 [![License](https://img.shields.io/badge/License-MIT-success)](LICENSE)
 
@@ -21,6 +22,7 @@ OSINT-D2 ingests usernames and/or emails, aggregates public evidence from multip
 ## Highlights
 
 - Multi-source correlation that links usernames, emails, and derived aliases in a single run.
+- **🤖 Agentic AI mode** — autonomous investigation that pivots across identities using LLM function calling.
 - Modular async pipeline with reusable services, Sherlock integration, and support for WhatsMyName-style site lists.
 - Cognitive AI analysis (`--deep-analyze`) generating structured summaries, highlights, and confidence levels.
 - Professional dossier exports (JSON + PDF/HTML) suitable for incident response or executive briefings.
@@ -170,10 +172,11 @@ poetry run osint-d2 hunt -e user@example.com --ai --ai-provider groq --breach-ch
 
 | Command | Summary |
 | --- | --- |
-| `wizard` | Guided workflow asking for usernames/emails, language, Sherlock, site-lists, and exports. |
+| `wizard` | Guided workflow asking for usernames/emails, language, Sherlock, site-lists, agent mode, and exports. |
 | `scan` | Lightweight username sweep across built-in sources. |
 | `scan-email` | Email-centric scan with optional local-part username pivot. |
 | `hunt` | Full pipeline orchestrating usernames, emails, Sherlock, and site-lists with optional AI. |
+| `agent` | **🤖 Autonomous AI investigation** — the LLM decides which tools to use and pivots automatically. |
 | `analyze` | Re-run AI analysis against a previously exported JSON dossier. |
 | `doctor` | Environment diagnostics (HTTP connectivity, WeasyPrint smoke test, config checks). |
 
@@ -211,6 +214,68 @@ poetry run osint-d2 scan-email user@example.com --no-deep-analyze
 # Re-run the AI profiler over an exported dossier in Spanish
 poetry run osint-d2 analyze reports/example.json --language es
 ```
+
+## Agent Mode
+
+**🤖 Agentic AI** lets the LLM autonomously decide which OSINT tools to invoke, analyze results, and pivot to new leads — all without human intervention.
+
+```
+osint-d2 agent "torvalds" -l es --max-steps 5
+
+╭─────────────────────────────────────────────╮
+│  OSINT-D2 Agent Mode 🤖                    │
+│  Objective: torvalds                        │
+│  Max steps: 5 | Model: deepseek-chat        │
+╰─────────────────────────────────────────────╯
+
+  🔍 Step 1/5: scan_username(username="torvalds")
+     → 10 confirmed / 18 scanned
+  🔍 Step 2/5: scan_email(email="torvalds@linux-foundation.org")
+     → 13 confirmed / 22 scanned
+  🔍 Step 3/5: scan_email(email="torvalds@transmeta.com")
+     → 11 confirmed / 22 scanned
+  📋 Step 4/5: generate_report
+     Agent concluded investigation.
+
+  ✓ Agent concluded in 4 steps. Confidence: 0.92
+```
+
+The agent has access to these tools:
+
+| Tool | Description |
+| --- | --- |
+| `scan_username` | Scan 18+ social networks for a username |
+| `scan_email` | Scan Gravatar, PGP keyservers + pivot local-part as username |
+| `breach_check` | Query HaveIBeenPwned (requires `--breach-check`) |
+| `generate_report` | Submit final analysis (ends investigation) |
+
+### Agent examples
+
+```bash
+# Quick investigation (default 10 steps)
+osint-d2 agent "torvalds"
+
+# Spanish output, 5 steps max
+osint-d2 agent "torvalds" -l es --max-steps 5
+
+# With breach checking + exports
+osint-d2 agent "user@example.com" --breach-check --export-json --export-pdf
+
+# Using a specific AI provider
+osint-d2 agent "doble-2" --ai-provider groq --max-steps 8
+```
+
+The wizard also supports agent mode — select "agent" when prompted.
+
+### How it works
+
+1. The user provides an objective (username, email, or free text).
+2. The LLM receives the objective + available tools.
+3. The LLM calls tools (e.g., `scan_username`) and receives structured results.
+4. Based on findings, the LLM decides what to investigate next (pivoting).
+5. When enough evidence is gathered, the LLM calls `generate_report` with a structured 6-dimension criminal profile.
+
+The agent respects `--max-steps` to control API credit usage.
 
 ## AI and Language
 
