@@ -530,6 +530,7 @@ async def _scan_async(
     output_format: OutputFormat,
     include_raw_in_json: bool,
     language: Language,
+    trust_anchors: list[str] | None = None,
 ) -> None:
     output_format = _auto_output_format(output_format)
     human = output_format == OutputFormat.table
@@ -548,6 +549,25 @@ async def _scan_async(
             status_ctx.__exit__(None, None, None)
 
     person = result.person
+
+    # ── Trust anchor filtering ──
+    if trust_anchors:
+        from core.services.trust_anchor import (
+            TrustAnchor, build_reference_from_profiles, filter_profiles_by_trust,
+        )
+        anchors = [TrustAnchor.parse(a) for a in trust_anchors]
+        ref = build_reference_from_profiles(person.profiles, anchors)
+        if not ref.is_empty():
+            filter_profiles_by_trust(person.profiles, ref, remove=True)
+            discarded = sum(
+                1 for p in person.profiles
+                if isinstance(p.metadata, dict) and p.metadata.get("trust_discarded")
+            )
+            if discarded and human:
+                console.print(
+                    f"  [yellow]🛡️ Trust anchors discarded {discarded} "
+                    f"false positive(s)[/yellow]\n"
+                )
 
     if human:
         _print_profiles_table(person=person, primary_usernames=[target])
@@ -764,6 +784,12 @@ def scan(
         help="2-letter country code for geo-targeted proxy (e.g. 'us').",
         show_default=False,
     ),
+    trust: list[str] | None = typer.Option(
+        None,
+        "--trust",
+        help="Trusted source of truth (repeatable). Format: network:username (e.g. --trust instagram:xkissmely).",
+        show_default=False,
+    ),
 ) -> None:
     output_format = _auto_output_format(output_format)
     language = _resolve_language(language)
@@ -789,6 +815,7 @@ def scan(
             output_format=output_format,
             include_raw_in_json=json_raw,
             language=language,
+            trust_anchors=trust or [],
         )
     )
 
@@ -1147,6 +1174,12 @@ def agent(
         "--export-pdf/--no-export-pdf",
         help="Export a PDF/HTML dossier.",
     ),
+    trust: list[str] | None = typer.Option(
+        None,
+        "--trust",
+        help="Trusted source of truth (repeatable). Format: network:username (e.g. --trust instagram:xkissmely --trust github:doble-2).",
+        show_default=False,
+    ),
 ) -> None:
     language = _resolve_language(language)
     settings = _apply_proxy_overrides(
@@ -1178,6 +1211,7 @@ def agent(
             breach_check=breach_check,
             export_json=export_json,
             export_pdf=export_pdf,
+            trust_anchors=trust or [],
         )
     )
 
@@ -1191,6 +1225,7 @@ async def _agent_async(
     breach_check: bool,
     export_json: bool,
     export_pdf: bool,
+    trust_anchors: list[str] | None = None,
 ) -> None:
     from core.services.agent_engine import AgentEngine, AgentStep
 
@@ -1264,6 +1299,29 @@ async def _agent_async(
 
     console.print()
     person = result.person
+
+    # ── Trust anchor filtering ──
+    if trust_anchors:
+        from core.services.trust_anchor import (
+            TrustAnchor, build_reference_from_profiles, filter_profiles_by_trust,
+        )
+        anchors = [TrustAnchor.parse(a) for a in trust_anchors]
+        ref = build_reference_from_profiles(person.profiles, anchors)
+        if not ref.is_empty():
+            before_count = sum(1 for p in person.profiles if p.exists)
+            filter_profiles_by_trust(person.profiles, ref, remove=True)
+            after_count = sum(
+                1 for p in person.profiles
+                if p.exists and not (
+                    isinstance(p.metadata, dict) and p.metadata.get("trust_discarded")
+                )
+            )
+            discarded = before_count - after_count
+            if discarded:
+                console.print(
+                    f"  [yellow]🛡️ Trust anchors discarded {discarded} "
+                    f"false positive(s)[/yellow]\n"
+                )
 
     if result.finished_naturally:
         console.print(
