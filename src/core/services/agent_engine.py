@@ -235,6 +235,55 @@ class AgentEngine:
                 # If this is the last step and no report was generated,
                 # the agent ran out of steps.
 
+        # If the agent ran out of steps without generating a report,
+        # force one final LLM call to produce the report.
+        if report_data is None and self._collected_profiles:
+            logger.info("Agent exhausted %d steps; forcing final report.", max_steps)
+            force_msg = (
+                "You have run out of investigation steps. You MUST now call "
+                "generate_report immediately with a comprehensive analysis "
+                "based on ALL the evidence gathered so far."
+            )
+            messages.append({"role": "user", "content": force_msg})
+
+            # Only offer generate_report as a tool.
+            report_tool = [t for t in AGENT_TOOLS if t["function"]["name"] == "generate_report"]
+
+            try:
+                response = await client.chat.completions.create(
+                    model=self._settings.ai_model,
+                    messages=messages,
+                    tools=report_tool,
+                    tool_choice={"type": "function", "function": {"name": "generate_report"}},
+                    timeout=self._settings.ai_timeout_seconds,
+                )
+                choice = response.choices[0]
+                if choice.message.tool_calls:
+                    tc = choice.message.tool_calls[0]
+                    try:
+                        report_data = json.loads(tc.function.arguments)
+                    except json.JSONDecodeError:
+                        pass
+                    force_step = AgentStep(
+                        step_number=len(steps) + 1,
+                        tool_name="generate_report",
+                        tool_args=report_data or {},
+                        tool_result='{"status": "report_generated"}',
+                    )
+                    steps.append(force_step)
+                    if self._on_step:
+                        self._on_step(force_step)
+                elif choice.message.content:
+                    # Some providers don't honor tool_choice; try to
+                    # extract a report from the text response.
+                    report_data = {
+                        "summary": choice.message.content,
+                        "highlights": [],
+                        "confidence": 0.5,
+                    }
+            except Exception as exc:
+                logger.warning("Forced report generation failed: %s", exc)
+
         # Build the result.
         target = objective.split()[-1] if objective else "unknown"
         person = PersonEntity(
@@ -243,9 +292,17 @@ class AgentEngine:
         )
 
         if report_data:
+            # Parse highlights: handle both list and JSON-encoded string.
+            raw_highlights = report_data.get("highlights", [])
+            if isinstance(raw_highlights, str):
+                try:
+                    raw_highlights = json.loads(raw_highlights)
+                except (json.JSONDecodeError, TypeError):
+                    raw_highlights = [raw_highlights] if raw_highlights else []
+
             person.analysis = AnalysisReport(
                 summary=report_data.get("summary", "Agent completed investigation."),
-                highlights=report_data.get("highlights", []),
+                highlights=raw_highlights if isinstance(raw_highlights, list) else [],
                 confidence=min(1.0, max(0.0, float(report_data.get("confidence", 0.5)))),
                 model=self._settings.ai_model,
                 raw={"agent_steps": len(steps), "report_data": report_data},
