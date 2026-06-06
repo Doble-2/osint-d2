@@ -1295,6 +1295,7 @@ async def _agent_async(
             objective,
             language=language,
             max_steps=max_steps,
+            trust_anchors=trust_anchors,
         )
 
     console.print()

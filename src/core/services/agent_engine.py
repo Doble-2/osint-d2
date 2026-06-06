@@ -120,6 +120,7 @@ class AgentEngine:
         *,
         language: Language = Language.ENGLISH,
         max_steps: int = 10,
+        trust_anchors: list[str] | None = None,
     ) -> AgentResult:
         """Run the agent loop until it calls generate_report or exhausts steps."""
 
@@ -133,9 +134,42 @@ class AgentEngine:
         # Filter tools: remove breach_check if not enabled.
         tools = [t for t in AGENT_TOOLS if self._enable_breach_check or t["function"]["name"] != "breach_check"]
 
+        # Build the user message with trust anchor context.
+        user_content = f"Investigate: {objective}"
+        if trust_anchors:
+            anchor_lines = []
+            for anchor_str in trust_anchors:
+                parts = anchor_str.split(":", 1)
+                if len(parts) == 2:
+                    net, user = parts
+                    if net.lower() == "email":
+                        anchor_lines.append(f"- VERIFIED EMAIL: {user}")
+                    else:
+                        anchor_lines.append(f"- VERIFIED {net.upper()} account: @{user}")
+
+            if language == Language.SPANISH:
+                trust_block = (
+                    "\n\nFUENTES DE CONFIANZA (datos verificados por el usuario):\n"
+                    + "\n".join(anchor_lines)
+                    + "\n\nIMPORTANTE: Usa estas fuentes como verdad absoluta. "
+                    "Si un perfil en otra red tiene un nombre/apellido diferente "
+                    "al que se deduce de estas fuentes, ese perfil probablemente "
+                    "pertenece a OTRA PERSONA. No confundas identidades."
+                )
+            else:
+                trust_block = (
+                    "\n\nTRUSTED SOURCES (user-verified data):\n"
+                    + "\n".join(anchor_lines)
+                    + "\n\nIMPORTANT: Use these as ground truth. "
+                    "If a profile on another network has a different name/surname "
+                    "than what these sources suggest, that profile likely belongs "
+                    "to a DIFFERENT PERSON. Do NOT conflate identities."
+                )
+            user_content += trust_block
+
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": f"Investigate: {objective}"},
+            {"role": "user", "content": user_content},
         ]
 
         steps: list[AgentStep] = []

@@ -37,12 +37,13 @@ class TrustAnchor:
 
     @classmethod
     def parse(cls, raw: str) -> "TrustAnchor":
-        """Parse ``network:username`` string.
+        """Parse ``network:username`` or ``email:user@domain`` string.
 
         Examples::
 
             TrustAnchor.parse("instagram:xkissmely")
             TrustAnchor.parse("github:doble-2")
+            TrustAnchor.parse("email:kissmelymarcano@gmail.com")
         """
         if ":" not in raw:
             raise ValueError(
@@ -53,6 +54,10 @@ class TrustAnchor:
             network=network.strip().lower(),
             username=username.strip(),
         )
+
+    @property
+    def is_email(self) -> bool:
+        return self.network == "email" and "@" in self.username
 
 
 @dataclass
@@ -67,7 +72,7 @@ class ReferenceIdentity:
     # Map of network -> username for trusted profiles
 
     def is_empty(self) -> bool:
-        return not self.names and not self.bio_keywords and not self.avatar_hashes
+        return not self.names and not self.bio_keywords and not self.avatar_hashes and not self.emails
 
 
 # ---------------------------------------------------------------------------
@@ -101,18 +106,113 @@ def _hash_image_url(url: str) -> str:
     return hashlib.md5(url.encode()).hexdigest()[:12]
 
 
+def _extract_name_from_email(
+    email: str,
+    *,
+    known_usernames: list[str] | None = None,
+) -> list[str]:
+    """Extract probable name parts from an email address.
+
+    If ``known_usernames`` is provided, the function tries to use them
+    as a hint for splitting concatenated names.  E.g. knowing the
+    username "xkissmely" helps split "kissmelymarcano" into
+    "kissmely" + "marcano".
+
+    Examples::
+
+        kissmelymarcano@gmail.com  → ["kissmely", "marcano"]  (with hint)
+        kissmely.marcano@gmail.com → ["kissmely", "marcano"]
+        john_doe@gmail.com        → ["john", "doe"]
+    """
+    local_part = email.split("@")[0].lower()
+    # Split by dots, underscores, hyphens first
+    parts = re.split(r"[._\\-]+", local_part)
+    if len(parts) >= 2:
+        return [p for p in parts if len(p) >= 2]
+
+    # Single word — try to split using known usernames as hints.
+    word = parts[0]
+
+    if known_usernames and len(word) >= 6:
+        for uname in known_usernames:
+            # Normalize: strip decorative prefixes/suffixes and trailing numbers
+            uname = re.sub(r"^[xX_.\-]+", "", uname.lower())
+            uname = re.sub(r"[\d_.\-]+$", "", uname)
+            if len(uname) < 3:
+                continue
+            # Check if the username (or a variant) appears in the email
+            idx = word.find(uname)
+            if idx >= 0:
+                end = idx + len(uname)
+                # We found the name in the email; the rest is likely the surname
+                name_part = word[idx:end]
+                rest_before = word[:idx] if idx > 0 else ""
+                rest_after = word[end:] if end < len(word) else ""
+                result = []
+                if rest_before and len(rest_before) >= 2:
+                    result.append(rest_before)
+                result.append(name_part)
+                if rest_after and len(rest_after) >= 2:
+                    result.append(rest_after)
+                if len(result) >= 2:
+                    return result
+
+    # Fallback: try all possible split points
+    if len(word) >= 6:
+        best_split: list[str] = [word]
+        best_balance = float("inf")
+        for i in range(3, len(word) - 2):
+            left, right = word[:i], word[i:]
+            if len(left) >= 3 and len(right) >= 3:
+                balance = abs(len(left) - len(right))
+                if balance < best_balance:
+                    best_balance = balance
+                    best_split = [left, right]
+        return best_split
+
+    return parts
+
+
 def build_reference_from_profiles(
     profiles: list[SocialProfile],
     anchors: list[TrustAnchor],
 ) -> ReferenceIdentity:
-    """Build a reference identity from trusted profiles.
+    """Build a reference identity from trusted profiles and anchors.
 
-    Only profiles that match a declared trust anchor contribute to the
-    reference.
+    Supports two anchor types:
+    - **Network anchors** (``instagram:xkissmely``): match against
+      scanned profiles to extract identity signals.
+    - **Email anchors** (``email:kissmelymarcano@gmail.com``): extract
+      name parts directly from the email address.
     """
     ref = ReferenceIdentity()
 
-    anchor_set = {(a.network, a.username.lower()) for a in anchors}
+    # ── Process email anchors first (no profile match needed) ──
+    # Collect usernames from non-email anchors to help split concatenated emails.
+    known_usernames = [a.username for a in anchors if not a.is_email]
+
+    for a in anchors:
+        if a.is_email:
+            ref.emails.add(a.username.lower())
+            ref.trusted_networks["email"] = a.username
+            # Extract name parts from email
+            name_parts = _extract_name_from_email(
+                a.username, known_usernames=known_usernames,
+            )
+            if name_parts:
+                full_name = " ".join(name_parts)
+                ref.names.add(full_name)
+                logger.info(
+                    "Email anchor '%s' → inferred name: '%s'",
+                    a.username, full_name,
+                )
+
+    # ── Process network anchors against scanned profiles ──
+    anchor_set = {
+        (a.network, a.username.lower())
+        for a in anchors
+        if not a.is_email
+    }
 
     for p in profiles:
         key = (p.network_name.lower(), p.username.lower())
@@ -151,9 +251,9 @@ def build_reference_from_profiles(
 
     logger.info(
         "Built reference identity: %d names, %d keywords, %d avatar hashes, "
-        "%d trusted networks",
+        "%d trusted networks, %d emails",
         len(ref.names), len(ref.bio_keywords), len(ref.avatar_hashes),
-        len(ref.trusted_networks),
+        len(ref.trusted_networks), len(ref.emails),
     )
     return ref
 
@@ -211,22 +311,54 @@ def verify_profile(
                 break
 
         if profile_name:
-            # Check for any overlap
+            best_score = 0.0
+            best_reason = "No name overlap"
+
             for ref_name in reference.names:
                 # Exact match
                 if profile_name == ref_name:
-                    score += 40
-                    reasons.append(f"Name match: '{profile_name}'")
+                    best_score = 40
+                    best_reason = f"Name match: '{profile_name}'"
                     break
-                # Partial match (shared words)
+
                 name_words = set(profile_name.split())
                 ref_words = set(ref_name.split())
                 overlap = name_words & ref_words
+                contradiction = name_words - ref_words
+
+                # Check for NAME CONTRADICTION: if the profile has a
+                # last name / word that does NOT appear in ANY reference
+                # name, it's likely a different person.
+                # e.g. reference="kissmely marcano", profile="kissmely almonte"
+                #      → "almonte" contradicts → penalize heavily
+                if overlap and contradiction:
+                    # Has some matching words but also contradicting ones
+                    # Check if contradicting words look like a different surname
+                    all_ref_words: set[str] = set()
+                    for rn in reference.names:
+                        all_ref_words.update(rn.split())
+                    hard_contradictions = {
+                        w for w in contradiction
+                        if len(w) >= 4 and w not in all_ref_words
+                    }
+                    if hard_contradictions:
+                        # Name contradiction = likely different person
+                        best_score = 0
+                        best_reason = (
+                            f"Name CONTRADICTION: profile has "
+                            f"{hard_contradictions} not in reference "
+                            f"{all_ref_words}"
+                        )
+                        break
+
                 if overlap and len(overlap) >= 1:
                     partial = 20 + (20 * len(overlap) / max(len(ref_words), 1))
-                    score += min(40, partial)
-                    reasons.append(f"Partial name match: {overlap}")
-                    break
+                    if partial > best_score:
+                        best_score = partial
+                        best_reason = f"Partial name match: {overlap}"
+
+            score += min(40, best_score)
+            reasons.append(best_reason)
         else:
             # No name data — neutral, don't penalize
             score += 20
