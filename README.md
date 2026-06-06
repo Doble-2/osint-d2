@@ -38,11 +38,17 @@ OSINT-D2 ingests usernames and/or emails, aggregates public evidence from multip
 - Poetry
 - WeasyPrint system dependencies (for PDF generation)
 
-### WeasyPrint dependencies (Linux)
+### WeasyPrint dependencies
 
 PDF export uses WeasyPrint and requires system libraries.
 
-Ubuntu/Debian:
+#### macOS (Homebrew)
+
+```bash
+brew install cairo pango gdk-pixbuf libffi
+```
+
+#### Ubuntu / Debian
 
 ```bash
 sudo apt-get update
@@ -51,13 +57,13 @@ sudo apt-get install -y \
   libgdk-pixbuf2.0-0 libffi-dev shared-mime-info
 ```
 
-Fedora:
+#### Fedora
 
 ```bash
 sudo dnf install -y cairo pango gdk-pixbuf2 libffi shared-mime-info
 ```
 
-Arch:
+#### Arch
 
 ```bash
 sudo pacman -S --needed cairo pango gdk-pixbuf2 libffi shared-mime-info
