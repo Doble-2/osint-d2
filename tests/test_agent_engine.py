@@ -16,10 +16,8 @@ import pytest
 
 from core.config import AppSettings
 from core.domain.language import Language
-from core.domain.models import PersonEntity, SocialProfile
 from core.services.agent_engine import (
     AgentEngine,
-    AgentResult,
     AgentStep,
     _build_agent_system_prompt,
 )
@@ -66,12 +64,7 @@ class TestTrustAnchorMessage:
 
     def test_trust_anchors_format_instagram(self):
         """Trust anchors should be formatted in the user content."""
-        engine = self._build_engine()
-        # We can't easily call run() without a real API, but we can test
-        # the message construction logic by verifying the prompt builder.
         anchors = ["instagram:xkissmely", "email:test@test.com"]
-        # Simulate what run() does:
-        user_content = "Investigate: xkissmely"
         anchor_lines = []
         for anchor_str in anchors:
             parts = anchor_str.split(":", 1)
@@ -220,7 +213,6 @@ class TestAgentResultConstruction:
 
     def test_highlights_as_string_parsed(self):
         """Highlights can come as JSON-encoded string from some LLMs."""
-        from core.domain.models import AnalysisReport
 
         raw_highlights = '["point 1", "point 2"]'
         parsed = json.loads(raw_highlights)

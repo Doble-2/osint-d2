@@ -9,8 +9,6 @@ Covers:
 
 from __future__ import annotations
 
-import pytest
-
 from core.domain.models import SocialProfile
 from core.services.identity_pipeline import (
     HuntRequest,

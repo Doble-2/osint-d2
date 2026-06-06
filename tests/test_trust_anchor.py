@@ -16,7 +16,6 @@ from core.domain.models import SocialProfile
 from core.services.trust_anchor import (
     ReferenceIdentity,
     TrustAnchor,
-    VerificationResult,
     _extract_keywords,
     _extract_name_from_email,
     _hash_image_url,
