@@ -385,6 +385,43 @@ def _handle_exports(
             console.print(f"\n[red]JSON export failed:[/red] {exc}")
 
 
+def _ask_trust_anchors(console: Console) -> list[str]:
+    """Interactive prompt to collect trust anchors.
+
+    Handles multiple anchors per line (comma or space separated).
+    """
+    anchors: list[str] = []
+    use_trust = Confirm.ask(
+        "Add trusted identity sources? (e.g. instagram:user, email:user@mail.com)",
+        default=False,
+    )
+    if not use_trust:
+        return anchors
+
+    console.print(
+        "  [dim]Format: network:username or email:user@domain.com[/dim]\n"
+        "  [dim]Examples: instagram:xkissmely  email:kissmelymarcano@gmail.com[/dim]\n"
+        "  [dim]You can enter multiple per line (comma or space separated).[/dim]\n"
+        "  [dim]Empty line to finish.[/dim]"
+    )
+    while True:
+        raw = Prompt.ask("  Trust anchor(s)", default="").strip()
+        if not raw:
+            break
+        # Split by comma or whitespace
+        parts = [p.strip() for p in raw.replace(",", " ").split() if p.strip()]
+        for part in parts:
+            if ":" not in part:
+                console.print(f"  [yellow]Skipped '{part}' — invalid format. Use network:username[/yellow]")
+                continue
+            anchors.append(part)
+            console.print(f"  [green]  + {part}[/green]")
+
+    if anchors:
+        console.print(f"  [green]✓ {len(anchors)} trust anchor(s) registered[/green]")
+    return anchors
+
+
 async def _hunt_async(
     *,
     settings: AppSettings,
@@ -1432,27 +1469,7 @@ def wizard() -> None:
                     proxy_country = pc
 
         # ── Trust anchors ──
-        trust_anchors: list[str] = []
-        use_trust = Confirm.ask(
-            "Add trusted identity sources? (e.g. instagram:user, email:user@mail.com)",
-            default=False,
-        )
-        if use_trust:
-            console.print(
-                "  [dim]Format: network:username or email:user@domain.com[/dim]\n"
-                "  [dim]Examples: instagram:xkissmely  email:kissmelymarcano@gmail.com[/dim]\n"
-                "  [dim]Enter one per line, empty line to finish.[/dim]"
-            )
-            while True:
-                anchor = Prompt.ask("  Trust anchor (empty to finish)", default="").strip()
-                if not anchor:
-                    break
-                if ":" not in anchor:
-                    console.print("  [yellow]Invalid format. Use network:username[/yellow]")
-                    continue
-                trust_anchors.append(anchor)
-            if trust_anchors:
-                console.print(f"  [green]✓ {len(trust_anchors)} trust anchor(s) registered[/green]")
+        trust_anchors = _ask_trust_anchors(console)
 
         export_json = Confirm.ask("Export JSON to reports/?", default=False)
         export_pdf = Confirm.ask("Export PDF/HTML to reports/?", default=False)
@@ -1649,27 +1666,8 @@ def wizard() -> None:
                 wiz_proxy_country = wpc
 
     # ── Trust anchors ──
-    wiz_trust_anchors: list[str] = []
-    wiz_use_trust = Confirm.ask(
-        "Add trusted identity sources? (e.g. instagram:user, email:user@mail.com)",
-        default=False,
-    )
-    if wiz_use_trust:
-        console.print(
-            "  [dim]Format: network:username or email:user@domain.com[/dim]\n"
-            "  [dim]Examples: instagram:xkissmely  email:kissmelymarcano@gmail.com[/dim]\n"
-            "  [dim]Enter one per line, empty line to finish.[/dim]"
-        )
-        while True:
-            wiz_anchor = Prompt.ask("  Trust anchor (empty to finish)", default="").strip()
-            if not wiz_anchor:
-                break
-            if ":" not in wiz_anchor:
-                console.print("  [yellow]Invalid format. Use network:username[/yellow]")
-                continue
-            wiz_trust_anchors.append(wiz_anchor)
-        if wiz_trust_anchors:
-            console.print(f"  [green]✓ {len(wiz_trust_anchors)} trust anchor(s) registered[/green]")
+    wiz_trust_anchors = _ask_trust_anchors(console)
+
 
     wiz_final_settings = _apply_proxy_overrides(
         AppSettings(),

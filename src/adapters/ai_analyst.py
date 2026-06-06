@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import random
 import re
 from typing import Any
@@ -47,6 +48,8 @@ except Exception:  # pragma: no cover
 from core.config import AppSettings  # noqa: E402
 from core.domain.language import Language  # noqa: E402
 from core.domain.models import AnalysisReport, PersonEntity  # noqa: E402
+
+logger = logging.getLogger(__name__)
 
 
 def build_deepseek_client(*, api_key: str, base_url: str) -> AsyncOpenAI:
@@ -772,6 +775,9 @@ async def analyze_person(
 
     confirmed_networks = sorted({(p.network_name or "").lower() for p in clean_person.profiles if p.network_name})
     confirmed_urls = [str(p.url).split("?")[0] for p in clean_person.profiles if getattr(p, "url", None)]
+    # Cap to avoid giant payloads when Sherlock is enabled.
+    if len(confirmed_urls) > 60:
+        confirmed_urls = confirmed_urls[:60]
 
     handles: list[str] = []
     emails: list[str] = []
@@ -964,7 +970,14 @@ async def analyze_person(
 
         except Exception as exc:
             last_error = exc
+            logger.error(
+                "AI analysis unexpected error: %s: %s",
+                type(exc).__name__, str(exc)[:300],
+            )
             break
+
+    error_detail = f"{type(last_error).__name__}: {str(last_error)[:100]}" if last_error else "unknown"
+    logger.warning("AI analysis fell back to heuristic. Reason: %s", error_detail)
 
     return _heuristic_analysis(
         person=clean_person,
