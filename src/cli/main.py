@@ -1426,6 +1426,15 @@ async def _agent_async(
     if confirmed:
         from rich.table import Table as RichTable
 
+        # Deduplicate by (network, username).
+        seen: set[tuple[str, str]] = set()
+        unique_confirmed: list = []
+        for p in confirmed:
+            key = (p.network_name, p.username)
+            if key not in seen:
+                seen.add(key)
+                unique_confirmed.append(p)
+
         tbl = RichTable(
             title="Confirmed Profiles",
             title_style="bold bright_cyan",
@@ -1435,7 +1444,7 @@ async def _agent_async(
         tbl.add_column("Network", style="bold")
         tbl.add_column("Username")
         tbl.add_column("URL", style="dim")
-        for p in confirmed:
+        for p in unique_confirmed:
             tbl.add_row(
                 p.network_name,
                 p.username,
@@ -1444,7 +1453,7 @@ async def _agent_async(
         console.print()
         console.print(tbl)
         console.print(
-            f"\n  [dim]{len(confirmed)} confirmed / "
+            f"\n  [dim]{len(unique_confirmed)} confirmed / "
             f"{len(person.profiles)} total scanned "
             f"(full table in PDF)[/dim]\n"
         )
