@@ -659,6 +659,31 @@ def _extract_identity_card(person: PersonEntity) -> dict[str, object]:
             if not card["bio"]:
                 card["bio"] = md.get("bio")
 
+        # Instagram: extract bio, name, and avatar from metadata.
+        elif net == "instagram" and md:
+            if not card["name"] and md.get("name"):
+                card["name"] = md["name"]
+            if not card["bio"] and (md.get("bio") or p.bio):
+                card["bio"] = md.get("bio") or p.bio
+
+    # ── Fallback avatar: try image_url from confirmed profiles ──
+    # Priority order: instagram > telegram > twitter/x > any other.
+    if not card["avatar_url"]:
+        priority_order = ["instagram", "telegram", "x", "twitter"]
+        avatar_candidates: list[tuple[int, str]] = []
+        for p in person.profiles:
+            if not p.exists or not p.image_url:
+                continue
+            net = (p.network_name or "").lower()
+            try:
+                rank = priority_order.index(net)
+            except ValueError:
+                rank = len(priority_order)
+            avatar_candidates.append((rank, p.image_url))
+        if avatar_candidates:
+            avatar_candidates.sort(key=lambda x: x[0])
+            card["avatar_url"] = avatar_candidates[0][1]
+
     card["emails"] = sorted(emails_set)
     card["handles"] = sorted(handles_set)
     card["confirmed_networks"] = sorted(networks_set)
