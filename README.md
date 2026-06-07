@@ -13,13 +13,13 @@
   <a href="#installation"><img src="https://img.shields.io/badge/Poetry-enabled-60A5FA?logo=poetry&logoColor=white" alt="Poetry" /></a>
   <a href="#ai-analysis--language"><img src="https://img.shields.io/badge/AI-DeepSeek%20%7C%20Groq%20%7C%20OpenRouter-111827?logo=openai&logoColor=white" alt="AI" /></a>
   <a href="#-agent-mode--agentic-ai"><img src="https://img.shields.io/badge/Agentic_AI-Function_Calling-8B5CF6?logo=openai&logoColor=white" alt="Agentic AI" /></a>
-  <a href="https://scrapingant.com/?ref=osint-d2"><img src="https://img.shields.io/badge/Proxies-ScrapingAnt-FF6B35" alt="ScrapingAnt" /></a>
+  <a href="https://scrapingant.com/?ref=odeymdu"><img src="https://img.shields.io/badge/Proxies-ScrapingAnt-FF6B35" alt="ScrapingAnt" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-success" alt="License" /></a>
 </p>
 
 ---
 
-OSINT-D2 is an **advanced open-source intelligence platform** that transforms usernames and emails into structured identity dossiers. Powered by **agentic AI** and backed by [**ScrapingAnt**](https://scrapingant.com/?ref=osint-d2)'s enterprise-grade proxy infrastructure, it delivers intelligence-grade identity correlation, cognitive profiling, and breach analysis — all from a single CLI command.
+OSINT-D2 is an **advanced open-source intelligence platform** that transforms usernames and emails into structured identity dossiers. Powered by **agentic AI** and backed by [**ScrapingAnt**](https://scrapingant.com/?ref=odeymdu)'s enterprise-grade proxy infrastructure, it delivers intelligence-grade identity correlation, cognitive profiling, and breach analysis — all from a single CLI command.
 
 ## Why OSINT-D2?
 
@@ -163,12 +163,12 @@ poetry run osint-d2 doctor run         # Validate everything
 ## 🌐 Proxy: Powered by ScrapingAnt
 
 <p align="center">
-  <a href="https://scrapingant.com/?ref=osint-d2">
+  <a href="https://scrapingant.com/?ref=odeymdu">
     <img src="https://img.shields.io/badge/Powered_by-ScrapingAnt-FF6B35?style=for-the-badge&logoColor=white" alt="ScrapingAnt" />
   </a>
 </p>
 
-OSINT-D2's web scraping capabilities are powered by [**ScrapingAnt**](https://scrapingant.com/?ref=osint-d2) — an enterprise-grade proxy and web scraping platform trusted by thousands of developers worldwide.
+OSINT-D2's web scraping capabilities are powered by [**ScrapingAnt**](https://scrapingant.com/?ref=odeymdu) — an enterprise-grade proxy and web scraping platform trusted by thousands of developers worldwide.
 
 ### Why ScrapingAnt?
 
@@ -218,7 +218,7 @@ osint-d2 agent "torvalds" --no-proxy
 osint-d2 agent "target" --proxy residential --proxy-country us
 ```
 
-> 💡 **Get your ScrapingAnt API key** → [scrapingant.com](https://scrapingant.com/?ref=osint-d2)
+> 💡 **Get your ScrapingAnt API key** → [scrapingant.com](https://scrapingant.com/?ref=odeymdu)
 
 ---
 
@@ -674,7 +674,7 @@ OSINT-D2 is intended for **lawful defensive and investigative use**: incident re
 <p align="center">
   <strong>Built with ❤️ by <a href="https://github.com/Doble-2">Doble-2</a></strong>
   <br />
-  Proxy infrastructure powered by <a href="https://scrapingant.com/?ref=osint-d2"><strong>ScrapingAnt</strong></a>
+  Proxy infrastructure powered by <a href="https://scrapingant.com/?ref=odeymdu"><strong>ScrapingAnt</strong></a>
 </p>
 
 <p align="center">
