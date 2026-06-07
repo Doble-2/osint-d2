@@ -1416,14 +1416,38 @@ async def _agent_async(
             f"({result.total_steps}/{max_steps}).\n"
         )
 
-    # Show profiles table.
-    if person.profiles:
-        _print_profiles_table(person=person, primary_usernames=[objective])
-
-    # Show analysis.
+    # Show analysis first — it's the main deliverable in agent mode.
     if person.analysis:
         panel = build_analysis_panel(person.analysis)
         console.print(panel)
+
+    # Show only confirmed profiles (the full table goes into the PDF).
+    confirmed = [p for p in person.profiles if p.exists]
+    if confirmed:
+        from rich.table import Table as RichTable
+
+        tbl = RichTable(
+            title="Confirmed Profiles",
+            title_style="bold bright_cyan",
+            border_style="dim",
+            show_lines=False,
+        )
+        tbl.add_column("Network", style="bold")
+        tbl.add_column("Username")
+        tbl.add_column("URL", style="dim")
+        for p in confirmed:
+            tbl.add_row(
+                p.network_name,
+                p.username,
+                str(p.url)[:72] + ("…" if len(str(p.url)) > 72 else ""),
+            )
+        console.print()
+        console.print(tbl)
+        console.print(
+            f"\n  [dim]{len(confirmed)} confirmed / "
+            f"{len(person.profiles)} total scanned "
+            f"(full table in PDF)[/dim]\n"
+        )
 
     # Exports.
     _handle_exports(
