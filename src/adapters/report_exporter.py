@@ -153,6 +153,12 @@ _STRINGS: dict[Language, dict[str, object]] = {
             "records": "Records",
             "classes": "Data classes",
         },
+        "ai_section_identity": "Identity",
+        "ai_section_geotemporal": "Geo-Temporal",
+        "ai_section_psychological": "OCEAN Profile",
+        "ai_section_technical": "Technical / Professional",
+        "ai_section_ideology": "Ideology",
+        "ai_section_opsec": "OpSec / Attack Surface",
     },
     Language.SPANISH: {
         "lang_code": "es",
@@ -248,6 +254,12 @@ _STRINGS: dict[Language, dict[str, object]] = {
             "records": "Registros",
             "classes": "Datos expuestos",
         },
+        "ai_section_identity": "Identidad",
+        "ai_section_geotemporal": "Geo-Temporal",
+        "ai_section_psychological": "Perfil OCEAN",
+        "ai_section_technical": "Técnico / Profesional",
+        "ai_section_ideology": "Ideología",
+        "ai_section_opsec": "OpSec / Superficie de Ataque",
     },
 
     Language.PORTUGUESE: {
@@ -344,6 +356,12 @@ _STRINGS: dict[Language, dict[str, object]] = {
             "records": "Registros",
             "classes": "Dados expostos",
         },
+        "ai_section_identity": "Identidade",
+        "ai_section_geotemporal": "Geo-Temporal",
+        "ai_section_psychological": "Perfil OCEAN",
+        "ai_section_technical": "Técnico / Profissional",
+        "ai_section_ideology": "Ideologia",
+        "ai_section_opsec": "OpSec / Superfície de Ataque",
     },
     Language.ARABIC: {
         "lang_code": "ar",
@@ -439,6 +457,12 @@ _STRINGS: dict[Language, dict[str, object]] = {
             "records": "السجلات",
             "classes": "فئات البيانات",
         },
+        "ai_section_identity": "الهوية",
+        "ai_section_geotemporal": "الجغرافي-الزمني",
+        "ai_section_psychological": "ملف OCEAN",
+        "ai_section_technical": "تقني / مهني",
+        "ai_section_ideology": "الأيديولوجيا",
+        "ai_section_opsec": "أمن العمليات / سطح الهجوم",
     },
     Language.RUSSIAN: {
         "lang_code": "ru",
@@ -534,6 +558,12 @@ _STRINGS: dict[Language, dict[str, object]] = {
             "records": "Записи",
             "classes": "Классы данных",
         },
+        "ai_section_identity": "Идентичность",
+        "ai_section_geotemporal": "Гео-Темпоральный",
+        "ai_section_psychological": "Профиль OCEAN",
+        "ai_section_technical": "Технический / Профессиональный",
+        "ai_section_ideology": "Идеология",
+        "ai_section_opsec": "OpSec / Поверхность атаки",
     },}
 
 

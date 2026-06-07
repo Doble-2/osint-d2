@@ -856,17 +856,18 @@
         <div class="footer-note">{{ strings.analysis_footer_note }}</div>
 
         {# ── AI Sections (parsed) ── #}
-        {% if ai_sections %}
+        {% set has_real_sections = ai_sections.identity or ai_sections.geotemporal or ai_sections.psychological or ai_sections.technical or ai_sections.ideology or ai_sections.opsec %}
+        {% if has_real_sections %}
           {% if ai_sections.identity %}
           <div class="page-break"></div>
-          <h2 class="section-title">🆔 {{ strings.toc_entries[0].label.split(" // ")[1] if strings.toc_entries|length > 0 else "Identity" }}</h2>
+          <h2 class="section-title">🆔 {{ strings.ai_section_identity | default("Identity") }}</h2>
           <div class="card ai-section-content">
             {{ ai_sections.identity | markdown }}
           </div>
           {% endif %}
 
           {% if ai_sections.geotemporal %}
-          <h2 class="section-title">🌍 {{ strings.toc_entries[0].label.split(" // ")[1] if strings.toc_entries|length > 1 else "Geo-Temporal" }}</h2>
+          <h2 class="section-title">🌍 {{ strings.ai_section_geotemporal | default("Geo-Temporal") }}</h2>
           <div class="card ai-section-content">
             {{ ai_sections.geotemporal | markdown }}
           </div>
@@ -874,14 +875,14 @@
 
           {% if ai_sections.psychological %}
           <div class="page-break"></div>
-          <h2 class="section-title">🧠 OCEAN Profile</h2>
+          <h2 class="section-title">🧠 {{ strings.ai_section_psychological | default("OCEAN Profile") }}</h2>
           <div class="card ai-section-content">
             {{ ai_sections.psychological | markdown }}
           </div>
           {% endif %}
 
           {% if ai_sections.technical %}
-          <h2 class="section-title">💻 Technical / Professional</h2>
+          <h2 class="section-title">💻 {{ strings.ai_section_technical | default("Technical / Professional") }}</h2>
           <div class="card ai-section-content">
             {{ ai_sections.technical | markdown }}
           </div>
@@ -889,14 +890,14 @@
 
           {% if ai_sections.ideology %}
           <div class="page-break"></div>
-          <h2 class="section-title">⚖️ Ideology</h2>
+          <h2 class="section-title">⚖️ {{ strings.ai_section_ideology | default("Ideology") }}</h2>
           <div class="card ai-section-content">
             {{ ai_sections.ideology | markdown }}
           </div>
           {% endif %}
 
           {% if ai_sections.opsec %}
-          <h2 class="section-title">⚠️ OpSec / Attack Surface</h2>
+          <h2 class="section-title">⚠️ {{ strings.ai_section_opsec | default("OpSec / Attack Surface") }}</h2>
           <div class="card ai-section-content">
             {{ ai_sections.opsec | markdown }}
           </div>
