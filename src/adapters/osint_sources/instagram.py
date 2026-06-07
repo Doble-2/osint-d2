@@ -27,24 +27,29 @@ from core.domain.models import SocialProfile
 from core.interfaces.scanner import OSINTScanner
 
 
-def _extract_og_content(html: str, property_name: str) -> str | None:
-    """Extract content from an Open Graph meta tag."""
+def _extract_og_content(html_str: str, property_name: str) -> str | None:
+    """Extract content from an Open Graph meta tag.
+
+    Returns the unescaped value (``&amp;`` → ``&``, etc.).
+    """
+    import html as html_mod
+
     # Match both property="..." and content="..." in either order.
     pattern = re.compile(
         rf'<meta[^>]*property="{re.escape(property_name)}"[^>]*content="([^"]*)"',
         re.IGNORECASE,
     )
-    match = pattern.search(html)
+    match = pattern.search(html_str)
     if match:
-        return match.group(1).strip()
+        return html_mod.unescape(match.group(1).strip())
     # Try reversed attribute order.
     pattern2 = re.compile(
         rf'<meta[^>]*content="([^"]*)"[^>]*property="{re.escape(property_name)}"',
         re.IGNORECASE,
     )
-    match2 = pattern2.search(html)
+    match2 = pattern2.search(html_str)
     if match2:
-        return match2.group(1).strip()
+        return html_mod.unescape(match2.group(1).strip())
     return None
 
 

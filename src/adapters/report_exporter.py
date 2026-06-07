@@ -689,7 +689,8 @@ def _extract_identity_card(person: PersonEntity) -> dict[str, object]:
             avatar_candidates.append((rank, p.image_url))
         if avatar_candidates:
             avatar_candidates.sort(key=lambda x: x[0])
-            card["avatar_url"] = avatar_candidates[0][1]
+            import html as html_mod
+            card["avatar_url"] = html_mod.unescape(avatar_candidates[0][1])
 
     card["emails"] = sorted(emails_set)
     card["handles"] = sorted(handles_set)

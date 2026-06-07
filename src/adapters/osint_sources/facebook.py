@@ -29,22 +29,24 @@ from core.domain.models import SocialProfile
 from core.interfaces.scanner import OSINTScanner
 
 
-def _extract_og(html: str, prop: str) -> str | None:
+def _extract_og(html_str: str, prop: str) -> str | None:
     """Extract content from an Open Graph meta tag."""
+    import html as html_mod
+
     # property="..." content="..."
     m = re.search(
         rf'<meta[^>]*property="{re.escape(prop)}"[^>]*content="([^"]*)"',
-        html, re.IGNORECASE,
+        html_str, re.IGNORECASE,
     )
     if m:
-        return m.group(1).strip()
+        return html_mod.unescape(m.group(1).strip())
     # reversed attribute order
     m2 = re.search(
         rf'<meta[^>]*content="([^"]*)"[^>]*property="{re.escape(prop)}"',
-        html, re.IGNORECASE,
+        html_str, re.IGNORECASE,
     )
     if m2:
-        return m2.group(1).strip()
+        return html_mod.unescape(m2.group(1).strip())
     return None
 
 
