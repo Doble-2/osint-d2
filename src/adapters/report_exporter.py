@@ -862,5 +862,7 @@ def export_person_pdf(*, person: PersonEntity, output_path: Path, language: Lang
     logging.getLogger("fontTools").setLevel(logging.ERROR)
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", message=".*fsSelection.*")
+        warnings.filterwarnings("ignore", message=".*instantiateVariableFont.*")
+        warnings.filterwarnings("ignore", category=DeprecationWarning)
         HTML(string=html, base_url=base_url).write_pdf(str(output_path))
     return output_path
