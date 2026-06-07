@@ -666,10 +666,17 @@ def _extract_identity_card(person: PersonEntity) -> dict[str, object]:
             if not card["bio"] and (md.get("bio") or p.bio):
                 card["bio"] = md.get("bio") or p.bio
 
+        # Facebook: extract name, bio from metadata.
+        elif net == "facebook" and md:
+            if not card["name"] and md.get("name"):
+                card["name"] = md["name"]
+            if not card["bio"] and (md.get("description") or p.bio):
+                card["bio"] = md.get("description") or p.bio
+
     # ── Fallback avatar: try image_url from confirmed profiles ──
-    # Priority order: instagram > telegram > twitter/x > any other.
+    # Priority order: instagram > facebook > telegram > twitter/x > any other.
     if not card["avatar_url"]:
-        priority_order = ["instagram", "telegram", "x", "twitter"]
+        priority_order = ["instagram", "facebook", "telegram", "x", "twitter"]
         avatar_candidates: list[tuple[int, str]] = []
         for p in person.profiles:
             if not p.exists or not p.image_url:

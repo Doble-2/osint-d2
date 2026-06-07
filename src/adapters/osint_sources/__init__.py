@@ -9,6 +9,7 @@ from adapters.osint_sources.aboutme import AboutMeScanner
 from adapters.osint_sources.behance import BehanceScanner
 from adapters.osint_sources.devto import DevToScanner
 from adapters.osint_sources.dribbble import DribbbleScanner
+from adapters.osint_sources.facebook import FacebookScanner
 from adapters.osint_sources.gist_github import GitHubGistScanner
 from adapters.osint_sources.github import GitHubScanner
 from adapters.osint_sources.gitlab import GitLabScanner
@@ -30,6 +31,7 @@ __all__ = [
     "BehanceScanner",
     "DevToScanner",
     "DribbbleScanner",
+    "FacebookScanner",
     "GitHubScanner",
     "GitHubGistScanner",
     "GitLabScanner",

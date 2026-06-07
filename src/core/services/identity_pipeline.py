@@ -25,6 +25,7 @@ from adapters.osint_sources import (
     BehanceScanner,
     DevToScanner,
     DribbbleScanner,
+    FacebookScanner,
     GitHubGistScanner,
     GitHubScanner,
     GitLabScanner,
@@ -119,6 +120,7 @@ _USERNAME_SCANNERS = (
     BehanceScanner,
     XScanner,
     InstagramScanner,
+    FacebookScanner,
 )
 
 _EMAIL_SCANNERS = (
