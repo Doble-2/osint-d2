@@ -1324,22 +1324,39 @@ async def _agent_async(
 
     def on_step(step: AgentStep) -> None:
         if step.tool_name:
-            args_str = ", ".join(f'{k}="{v}"' for k, v in step.tool_args.items())
-            icon = "📋" if step.tool_name == "generate_report" else "🔍"
-            console.print(
-                f"  {icon} [bold]Step {step.step_number}/{max_steps}:[/bold] "
-                f"[cyan]{step.tool_name}[/cyan]({args_str})"
-            )
-            if step.tool_result and step.tool_name != "generate_report":
-                try:
-                    data = json.loads(step.tool_result)
-                    confirmed = data.get("confirmed", "?")
-                    total = data.get("total_scanned", "?")
-                    console.print(
-                        f"     → [green]{confirmed}[/green] confirmed / {total} scanned"
-                    )
-                except Exception:
-                    pass
+            if step.tool_name == "generate_report":
+                # Don't dump the full summary; it's shown in the panel after.
+                confidence = step.tool_args.get("confidence", "?")
+                n_highlights = 0
+                raw_hl = step.tool_args.get("highlights", "")
+                if isinstance(raw_hl, list):
+                    n_highlights = len(raw_hl)
+                elif isinstance(raw_hl, str):
+                    try:
+                        n_highlights = len(json.loads(raw_hl))
+                    except Exception:
+                        n_highlights = raw_hl.count("',") + (1 if raw_hl.strip() else 0)
+                console.print(
+                    f"  📋 [bold]Step {step.step_number}/{max_steps}:[/bold] "
+                    f"[cyan]generate_report[/cyan]"
+                    f"(confidence={confidence}, highlights={n_highlights})"
+                )
+            else:
+                args_str = ", ".join(f'{k}="{v}"' for k, v in step.tool_args.items())
+                console.print(
+                    f"  🔍 [bold]Step {step.step_number}/{max_steps}:[/bold] "
+                    f"[cyan]{step.tool_name}[/cyan]({args_str})"
+                )
+                if step.tool_result:
+                    try:
+                        data = json.loads(step.tool_result)
+                        confirmed = data.get("confirmed", "?")
+                        total = data.get("total_scanned", "?")
+                        console.print(
+                            f"     → [green]{confirmed}[/green] confirmed / {total} scanned"
+                        )
+                    except Exception:
+                        pass
         elif step.reasoning:
             console.print(
                 f"\n  🧠 [bold]Step {step.step_number}/{max_steps}:[/bold] [dim]Reasoning...[/dim]"
