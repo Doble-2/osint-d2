@@ -52,11 +52,20 @@ def build_analysis_panel(report: AnalysisReport) -> Panel:
 
     title = Text("AI Analysis", style="bold bright_green")
     body = Text()
-    body.append(report.summary.strip() + "\n\n")
-    if report.highlights:
-        body.append("Highlights:\n", style="bold bright_green")
+    body.append(report.summary.strip() + "\n")
+
+    # Only append highlights if they aren't already embedded in the summary.
+    summary_lower = report.summary.lower()
+    highlights_in_summary = (
+        "highlight" in summary_lower
+        or "puntos clave" in summary_lower
+        or "hallazgos" in summary_lower
+    )
+    if report.highlights and not highlights_in_summary:
+        body.append("\nHighlights:\n", style="bold bright_green")
         for h in report.highlights:
             body.append(f"- {h}\n")
+
     body.append(f"\nConfidence: {report.confidence:.2f}")
     if report.model:
         body.append(f"\nModel: {report.model}", style="dim")

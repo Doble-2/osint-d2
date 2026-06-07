@@ -58,6 +58,9 @@
         margin: 0;
         font-size: 10pt;
         line-height: 1.55;
+        overflow-wrap: break-word;
+        word-wrap: break-word;
+        word-break: break-word;
       }
 
       /* ═══════════════════════════════════════════════
@@ -269,6 +272,8 @@
         padding: 16px 18px;
         box-shadow: 0 2px 8px var(--shadow);
         margin-bottom: 14px;
+        page-break-inside: avoid;
+        overflow: hidden;
       }
 
       .card-accent {
@@ -438,13 +443,18 @@
       .ai-section-content {
         font-size: 10pt;
         line-height: 1.6;
+        overflow: hidden;
+        overflow-wrap: break-word;
+        word-break: break-word;
+        page-break-inside: auto; /* override .card — these can be multi-page */
       }
 
       .ai-section-content table {
         width: 100%;
         border-collapse: collapse;
         margin: 8px 0;
-        font-size: 10px;
+        font-size: 9px;
+        table-layout: fixed;
       }
 
       .ai-section-content th {
@@ -461,6 +471,9 @@
         padding: 6px 10px;
         border-bottom: 1px solid var(--border);
         vertical-align: top;
+        overflow-wrap: break-word;
+        word-break: break-word;
+        hyphens: auto;
       }
 
       .ai-section-content ul, .ai-section-content ol {
@@ -474,6 +487,12 @@
 
       .ai-section-content p {
         margin: 6px 0;
+        overflow-wrap: break-word;
+      }
+
+      .ai-section-content code {
+        font-size: 9px;
+        word-break: break-all;
       }
 
       .ai-section-content strong {
@@ -514,6 +533,9 @@
         border-collapse: collapse;
         margin-top: 10px;
         font-size: 10px;
+        table-layout: fixed;
+        word-break: break-word;
+        overflow-wrap: break-word;
       }
 
       thead th {
@@ -525,16 +547,23 @@
         font-size: 9px;
         font-weight: 700;
         text-align: left;
+        overflow: hidden;
       }
 
       tbody td {
         padding: 7px 10px;
         border-bottom: 1px solid rgba(148, 163, 184, 0.20);
         vertical-align: top;
+        overflow-wrap: break-word;
+        word-break: break-word;
       }
 
       tbody tr:nth-child(even) {
         background: var(--surface-alt);
+      }
+
+      tbody tr {
+        page-break-inside: avoid;
       }
 
       .badge-confirmed {
@@ -827,17 +856,18 @@
         <div class="footer-note">{{ strings.analysis_footer_note }}</div>
 
         {# ── AI Sections (parsed) ── #}
-        {% if ai_sections %}
+        {% set has_real_sections = ai_sections.identity or ai_sections.geotemporal or ai_sections.psychological or ai_sections.technical or ai_sections.ideology or ai_sections.opsec %}
+        {% if has_real_sections %}
           {% if ai_sections.identity %}
           <div class="page-break"></div>
-          <h2 class="section-title">🆔 {{ strings.toc_entries[0].label.split(" // ")[1] if strings.toc_entries|length > 0 else "Identity" }}</h2>
+          <h2 class="section-title">🆔 {{ strings.ai_section_identity | default("Identity") }}</h2>
           <div class="card ai-section-content">
             {{ ai_sections.identity | markdown }}
           </div>
           {% endif %}
 
           {% if ai_sections.geotemporal %}
-          <h2 class="section-title">🌍 {{ strings.toc_entries[0].label.split(" // ")[1] if strings.toc_entries|length > 1 else "Geo-Temporal" }}</h2>
+          <h2 class="section-title">🌍 {{ strings.ai_section_geotemporal | default("Geo-Temporal") }}</h2>
           <div class="card ai-section-content">
             {{ ai_sections.geotemporal | markdown }}
           </div>
@@ -845,14 +875,14 @@
 
           {% if ai_sections.psychological %}
           <div class="page-break"></div>
-          <h2 class="section-title">🧠 OCEAN Profile</h2>
+          <h2 class="section-title">🧠 {{ strings.ai_section_psychological | default("OCEAN Profile") }}</h2>
           <div class="card ai-section-content">
             {{ ai_sections.psychological | markdown }}
           </div>
           {% endif %}
 
           {% if ai_sections.technical %}
-          <h2 class="section-title">💻 Technical / Professional</h2>
+          <h2 class="section-title">💻 {{ strings.ai_section_technical | default("Technical / Professional") }}</h2>
           <div class="card ai-section-content">
             {{ ai_sections.technical | markdown }}
           </div>
@@ -860,14 +890,14 @@
 
           {% if ai_sections.ideology %}
           <div class="page-break"></div>
-          <h2 class="section-title">⚖️ Ideology</h2>
+          <h2 class="section-title">⚖️ {{ strings.ai_section_ideology | default("Ideology") }}</h2>
           <div class="card ai-section-content">
             {{ ai_sections.ideology | markdown }}
           </div>
           {% endif %}
 
           {% if ai_sections.opsec %}
-          <h2 class="section-title">⚠️ OpSec / Attack Surface</h2>
+          <h2 class="section-title">⚠️ {{ strings.ai_section_opsec | default("OpSec / Attack Surface") }}</h2>
           <div class="card ai-section-content">
             {{ ai_sections.opsec | markdown }}
           </div>
@@ -893,6 +923,13 @@
       <div class="card">
         <p class="muted">{{ strings.confirmed_hint }} — {{ profiles_confirmed_count }} profiles</p>
         <table>
+          <colgroup>
+            <col style="width: 18%;" />
+            <col style="width: 18%;" />
+            <col style="width: 14%;" />
+            <col style="width: 12%;" />
+            <col style="width: 38%;" />
+          </colgroup>
           <thead>
             <tr>
               <th>{{ strings.confirmed_headers.network }}</th>
@@ -909,7 +946,7 @@
                 <td><strong>{{ p.username }}</strong></td>
                 <td>{{ p._source }}</td>
                 <td class="badge-confirmed">{{ strings.status_confirmed }}</td>
-                <td><a href="{{ p.url }}">{{ p.url[:55] }}{% if p.url|length > 55 %}…{% endif %}</a></td>
+                <td style="font-size:8px;"><a href="{{ p.url }}">{{ p.url[:45] }}{% if p.url|length > 45 %}…{% endif %}</a></td>
               </tr>
             {% endfor %}
           </tbody>
@@ -929,6 +966,11 @@
           {% for source, items in unconfirmed_by_source %}
             <h3 class="source-title">{{ strings.unconfirmed_source_label }}: {{ source }} ({{ items|length }})</h3>
             <table>
+              <colgroup>
+                <col style="width: 25%;" />
+                <col style="width: 25%;" />
+                <col style="width: 50%;" />
+              </colgroup>
               <thead>
                 <tr>
                   <th>{{ strings.unconfirmed_headers.network }}</th>
@@ -941,7 +983,7 @@
                   <tr>
                     <td>{{ p.network_name }}</td>
                     <td>{{ p.username }}</td>
-                    <td><a href="{{ p.url }}">{{ p.url[:60] }}{% if p.url|length > 60 %}…{% endif %}</a></td>
+                    <td style="font-size:8px;"><a href="{{ p.url }}">{{ p.url[:50] }}{% if p.url|length > 50 %}…{% endif %}</a></td>
                   </tr>
                 {% endfor %}
               </tbody>

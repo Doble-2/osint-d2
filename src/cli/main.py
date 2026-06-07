@@ -1324,22 +1324,39 @@ async def _agent_async(
 
     def on_step(step: AgentStep) -> None:
         if step.tool_name:
-            args_str = ", ".join(f'{k}="{v}"' for k, v in step.tool_args.items())
-            icon = "📋" if step.tool_name == "generate_report" else "🔍"
-            console.print(
-                f"  {icon} [bold]Step {step.step_number}/{max_steps}:[/bold] "
-                f"[cyan]{step.tool_name}[/cyan]({args_str})"
-            )
-            if step.tool_result and step.tool_name != "generate_report":
-                try:
-                    data = json.loads(step.tool_result)
-                    confirmed = data.get("confirmed", "?")
-                    total = data.get("total_scanned", "?")
-                    console.print(
-                        f"     → [green]{confirmed}[/green] confirmed / {total} scanned"
-                    )
-                except Exception:
-                    pass
+            if step.tool_name == "generate_report":
+                # Don't dump the full summary; it's shown in the panel after.
+                confidence = step.tool_args.get("confidence", "?")
+                n_highlights = 0
+                raw_hl = step.tool_args.get("highlights", "")
+                if isinstance(raw_hl, list):
+                    n_highlights = len(raw_hl)
+                elif isinstance(raw_hl, str):
+                    try:
+                        n_highlights = len(json.loads(raw_hl))
+                    except Exception:
+                        n_highlights = raw_hl.count("',") + (1 if raw_hl.strip() else 0)
+                console.print(
+                    f"  📋 [bold]Step {step.step_number}/{max_steps}:[/bold] "
+                    f"[cyan]generate_report[/cyan]"
+                    f"(confidence={confidence}, highlights={n_highlights})"
+                )
+            else:
+                args_str = ", ".join(f'{k}="{v}"' for k, v in step.tool_args.items())
+                console.print(
+                    f"  🔍 [bold]Step {step.step_number}/{max_steps}:[/bold] "
+                    f"[cyan]{step.tool_name}[/cyan]({args_str})"
+                )
+                if step.tool_result:
+                    try:
+                        data = json.loads(step.tool_result)
+                        confirmed = data.get("confirmed", "?")
+                        total = data.get("total_scanned", "?")
+                        console.print(
+                            f"     → [green]{confirmed}[/green] confirmed / {total} scanned"
+                        )
+                    except Exception:
+                        pass
         elif step.reasoning:
             console.print(
                 f"\n  🧠 [bold]Step {step.step_number}/{max_steps}:[/bold] [dim]Reasoning...[/dim]"
@@ -1399,14 +1416,47 @@ async def _agent_async(
             f"({result.total_steps}/{max_steps}).\n"
         )
 
-    # Show profiles table.
-    if person.profiles:
-        _print_profiles_table(person=person, primary_usernames=[objective])
-
-    # Show analysis.
+    # Show analysis first — it's the main deliverable in agent mode.
     if person.analysis:
         panel = build_analysis_panel(person.analysis)
         console.print(panel)
+
+    # Show only confirmed profiles (the full table goes into the PDF).
+    confirmed = [p for p in person.profiles if p.exists]
+    if confirmed:
+        from rich.table import Table as RichTable
+
+        # Deduplicate by (network, username).
+        seen: set[tuple[str, str]] = set()
+        unique_confirmed: list = []
+        for p in confirmed:
+            key = (p.network_name, p.username)
+            if key not in seen:
+                seen.add(key)
+                unique_confirmed.append(p)
+
+        tbl = RichTable(
+            title="Confirmed Profiles",
+            title_style="bold bright_cyan",
+            border_style="dim",
+            show_lines=False,
+        )
+        tbl.add_column("Network", style="bold")
+        tbl.add_column("Username")
+        tbl.add_column("URL", style="dim")
+        for p in unique_confirmed:
+            tbl.add_row(
+                p.network_name,
+                p.username,
+                str(p.url)[:72] + ("…" if len(str(p.url)) > 72 else ""),
+            )
+        console.print()
+        console.print(tbl)
+        console.print(
+            f"\n  [dim]{len(unique_confirmed)} confirmed / "
+            f"{len(person.profiles)} total scanned "
+            f"(full table in PDF)[/dim]\n"
+        )
 
     # Exports.
     _handle_exports(

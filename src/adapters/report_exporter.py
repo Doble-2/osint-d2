@@ -153,6 +153,12 @@ _STRINGS: dict[Language, dict[str, object]] = {
             "records": "Records",
             "classes": "Data classes",
         },
+        "ai_section_identity": "Identity",
+        "ai_section_geotemporal": "Geo-Temporal",
+        "ai_section_psychological": "OCEAN Profile",
+        "ai_section_technical": "Technical / Professional",
+        "ai_section_ideology": "Ideology",
+        "ai_section_opsec": "OpSec / Attack Surface",
     },
     Language.SPANISH: {
         "lang_code": "es",
@@ -248,6 +254,12 @@ _STRINGS: dict[Language, dict[str, object]] = {
             "records": "Registros",
             "classes": "Datos expuestos",
         },
+        "ai_section_identity": "Identidad",
+        "ai_section_geotemporal": "Geo-Temporal",
+        "ai_section_psychological": "Perfil OCEAN",
+        "ai_section_technical": "Técnico / Profesional",
+        "ai_section_ideology": "Ideología",
+        "ai_section_opsec": "OpSec / Superficie de Ataque",
     },
 
     Language.PORTUGUESE: {
@@ -344,6 +356,12 @@ _STRINGS: dict[Language, dict[str, object]] = {
             "records": "Registros",
             "classes": "Dados expostos",
         },
+        "ai_section_identity": "Identidade",
+        "ai_section_geotemporal": "Geo-Temporal",
+        "ai_section_psychological": "Perfil OCEAN",
+        "ai_section_technical": "Técnico / Profissional",
+        "ai_section_ideology": "Ideologia",
+        "ai_section_opsec": "OpSec / Superfície de Ataque",
     },
     Language.ARABIC: {
         "lang_code": "ar",
@@ -439,6 +457,12 @@ _STRINGS: dict[Language, dict[str, object]] = {
             "records": "السجلات",
             "classes": "فئات البيانات",
         },
+        "ai_section_identity": "الهوية",
+        "ai_section_geotemporal": "الجغرافي-الزمني",
+        "ai_section_psychological": "ملف OCEAN",
+        "ai_section_technical": "تقني / مهني",
+        "ai_section_ideology": "الأيديولوجيا",
+        "ai_section_opsec": "أمن العمليات / سطح الهجوم",
     },
     Language.RUSSIAN: {
         "lang_code": "ru",
@@ -534,6 +558,12 @@ _STRINGS: dict[Language, dict[str, object]] = {
             "records": "Записи",
             "classes": "Классы данных",
         },
+        "ai_section_identity": "Идентичность",
+        "ai_section_geotemporal": "Гео-Темпоральный",
+        "ai_section_psychological": "Профиль OCEAN",
+        "ai_section_technical": "Технический / Профессиональный",
+        "ai_section_ideology": "Идеология",
+        "ai_section_opsec": "OpSec / Поверхность атаки",
     },}
 
 
@@ -628,6 +658,39 @@ def _extract_identity_card(person: PersonEntity) -> dict[str, object]:
                 card["avatar_url"] = md.get("avatar")
             if not card["bio"]:
                 card["bio"] = md.get("bio")
+
+        # Instagram: extract bio, name, and avatar from metadata.
+        elif net == "instagram" and md:
+            if not card["name"] and md.get("name"):
+                card["name"] = md["name"]
+            if not card["bio"] and (md.get("bio") or p.bio):
+                card["bio"] = md.get("bio") or p.bio
+
+        # Facebook: extract name, bio from metadata.
+        elif net == "facebook" and md:
+            if not card["name"] and md.get("name"):
+                card["name"] = md["name"]
+            if not card["bio"] and (md.get("description") or p.bio):
+                card["bio"] = md.get("description") or p.bio
+
+    # ── Fallback avatar: try image_url from confirmed profiles ──
+    # Priority order: instagram > facebook > telegram > twitter/x > any other.
+    if not card["avatar_url"]:
+        priority_order = ["instagram", "facebook", "telegram", "x", "twitter"]
+        avatar_candidates: list[tuple[int, str]] = []
+        for p in person.profiles:
+            if not p.exists or not p.image_url:
+                continue
+            net = (p.network_name or "").lower()
+            try:
+                rank = priority_order.index(net)
+            except ValueError:
+                rank = len(priority_order)
+            avatar_candidates.append((rank, p.image_url))
+        if avatar_candidates:
+            avatar_candidates.sort(key=lambda x: x[0])
+            import html as html_mod
+            card["avatar_url"] = html_mod.unescape(avatar_candidates[0][1])
 
     card["emails"] = sorted(emails_set)
     card["handles"] = sorted(handles_set)
@@ -798,5 +861,16 @@ def export_person_pdf(*, person: PersonEntity, output_path: Path, language: Lang
             "PDF export is disabled."
         )
 
-    HTML(string=html, base_url=base_url).write_pdf(str(output_path))
+    import logging
+    import warnings
+
+    # Suppress noisy fontTools warnings ("fsSelection bit 5 (bold)…")
+    # and WeasyPrint's own verbose logging.
+    logging.getLogger("weasyprint").setLevel(logging.ERROR)
+    logging.getLogger("fontTools").setLevel(logging.ERROR)
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", message=".*fsSelection.*")
+        warnings.filterwarnings("ignore", message=".*instantiateVariableFont.*")
+        warnings.filterwarnings("ignore", category=DeprecationWarning)
+        HTML(string=html, base_url=base_url).write_pdf(str(output_path))
     return output_path
