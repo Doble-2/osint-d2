@@ -828,5 +828,14 @@ def export_person_pdf(*, person: PersonEntity, output_path: Path, language: Lang
             "PDF export is disabled."
         )
 
-    HTML(string=html, base_url=base_url).write_pdf(str(output_path))
+    import logging
+    import warnings
+
+    # Suppress noisy fontTools warnings ("fsSelection bit 5 (bold)…")
+    # and WeasyPrint's own verbose logging.
+    logging.getLogger("weasyprint").setLevel(logging.ERROR)
+    logging.getLogger("fontTools").setLevel(logging.ERROR)
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", message=".*fsSelection.*")
+        HTML(string=html, base_url=base_url).write_pdf(str(output_path))
     return output_path
