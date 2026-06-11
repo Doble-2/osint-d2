@@ -1,7 +1,8 @@
 """Runner data-driven para listas de sitios (username/email).
 
 Diseño:
-- Ejecuta checks concurrentes con un semáforo.
+- Ejecuta checks concurrentes con un semáforo global + rate limiting por dominio.
+- Retry con backoff exponencial en 429/503.
 - Devuelve solo hallazgos (FOUND) como `SocialProfile` para evitar inflar el output.
 
 Limitaciones (MVP):
@@ -16,6 +17,10 @@ from typing import Any
 
 from adapters.http_client import build_async_client
 from adapters.http_client import extract_html_metadata
+from adapters.rate_limiter import (
+    DomainRateLimiter,
+    request_with_retry,
+)
 from adapters.site_lists.models import EmailSite, UsernameSite
 from adapters.site_lists.operations import apply_input_operation
 from core.config import AppSettings
@@ -64,6 +69,14 @@ async def run_username_sites(
 ) -> list[SocialProfile]:
     semaphore = asyncio.Semaphore(max(1, max_concurrency))
 
+    # Rate limiter por dominio
+    rate_limiter = DomainRateLimiter(
+        per_domain_concurrency=settings.per_domain_concurrency,
+        delay_ms=settings.request_delay_ms,
+        jitter_ms=settings.request_jitter_ms,
+        retry_max_attempts=settings.retry_max_attempts,
+    )
+
     filtered: list[UsernameSite] = []
     for s in sites:
         if no_nsfw and _is_nsfw(s.cat):
@@ -78,7 +91,9 @@ async def run_username_sites(
             url = site.uri_check.replace("{account}", username)
             async with semaphore:
                 try:
-                    resp = await client.get(url)
+                    resp = await request_with_retry(
+                        client, "GET", url, rate_limiter,
+                    )
                     text = resp.text or ""
 
                     found = _match_found(
@@ -132,6 +147,14 @@ async def run_email_sites(
 ) -> list[SocialProfile]:
     semaphore = asyncio.Semaphore(max(1, max_concurrency))
 
+    # Rate limiter por dominio
+    rate_limiter = DomainRateLimiter(
+        per_domain_concurrency=settings.per_domain_concurrency,
+        delay_ms=settings.request_delay_ms,
+        jitter_ms=settings.request_jitter_ms,
+        retry_max_attempts=settings.retry_max_attempts,
+    )
+
     filtered: list[EmailSite] = []
     for s in sites:
         if no_nsfw and _is_nsfw(s.cat):
@@ -151,10 +174,11 @@ async def run_email_sites(
 
             async with semaphore:
                 try:
-                    if method == "POST":
-                        resp = await client.post(url, content=data, headers=headers)
-                    else:
-                        resp = await client.get(url, headers=headers)
+                    resp = await request_with_retry(
+                        client, method, url, rate_limiter,
+                        headers=headers,
+                        content=data,
+                    )
 
                     text = resp.text or ""
                     found = _match_found(
