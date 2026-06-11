@@ -138,8 +138,37 @@ class AppSettings(BaseSettings):
     sites_max_concurrency: int = Field(
         default=30,
         ge=1,
-        le=500,
-        description="Concurrencia máxima para el motor data-driven de listas de sitios.",
+        le=50,
+        description=(
+            "Concurrencia máxima global para el motor data-driven de listas de sitios. "
+            "⚠️ Valores altos sin rate limiting pueden causar bans de IP y falsos negativos."
+        ),
+    )
+
+    # ── Rate Limiting (responsible scanning) ──────────────────────────
+    request_delay_ms: int = Field(
+        default=200,
+        ge=0,
+        le=5000,
+        description="Delay mínimo (ms) entre requests al mismo dominio.",
+    )
+    request_jitter_ms: int = Field(
+        default=100,
+        ge=0,
+        le=2000,
+        description="Jitter ± (ms) añadido al delay entre requests al mismo dominio.",
+    )
+    per_domain_concurrency: int = Field(
+        default=3,
+        ge=1,
+        le=20,
+        description="Máximo de requests concurrentes permitidos al mismo dominio.",
+    )
+    retry_max_attempts: int = Field(
+        default=3,
+        ge=0,
+        le=10,
+        description="Reintentos máximos ante respuestas 429/503 con backoff exponencial.",
     )
     sites_no_nsfw: bool = Field(
         default=True,

@@ -18,6 +18,10 @@ from typing import Any
 from collections.abc import Callable
 
 from adapters.http_client import build_async_client, extract_html_metadata
+from adapters.rate_limiter import (
+    DomainRateLimiter,
+    request_with_retry,
+)
 from core.config import AppSettings
 from core.domain.models import SocialProfile
 
@@ -70,6 +74,14 @@ async def run_sherlock_username(
 ) -> list[SocialProfile]:
     sem = asyncio.Semaphore(max(1, max_concurrency))
 
+    # Rate limiter por dominio
+    rate_limiter = DomainRateLimiter(
+        per_domain_concurrency=settings.per_domain_concurrency,
+        delay_ms=settings.request_delay_ms,
+        jitter_ms=settings.request_jitter_ms,
+        retry_max_attempts=settings.retry_max_attempts,
+    )
+
     # Manifest es dict: site_name -> info
     items: list[tuple[str, dict[str, Any]]] = []
 
@@ -110,12 +122,14 @@ async def run_sherlock_username(
 
             async with sem:
                 try:
-                    if request_method == "HEAD":
-                        resp = await client.head(url, headers=headers)
-                        text = ""
-                    else:
-                        resp = await client.get(url, headers=headers)
-                        text = resp.text or ""
+                    resp = await request_with_retry(
+                        client,
+                        request_method,
+                        url,
+                        rate_limiter,
+                        headers=headers,
+                    )
+                    text = "" if request_method == "HEAD" else (resp.text or "")
 
                     status = resp.status_code
                     final_url = str(resp.url)
