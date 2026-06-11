@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import time
-from unittest.mock import MagicMock
 
 import httpx
 import pytest
@@ -189,7 +188,7 @@ class TestDomainRateLimiterThrottle:
                 results.append(time.monotonic())
                 await asyncio.sleep(0.05)
 
-        t0 = time.monotonic()
+
         await asyncio.gather(
             task("https://example.com/page"),
             task("https://other.com/page"),
