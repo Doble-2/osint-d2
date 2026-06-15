@@ -78,7 +78,7 @@ class TestSherlockPositiveMatch:
 
         with patch("adapters.sherlock_runner.build_async_client", return_value=_mock_client(resp)), \
              patch("adapters.sherlock_runner.request_with_retry", AsyncMock(return_value=resp)):
-            found = await run_sherlock_username(
+            result = await run_sherlock_username(
                 usernames=["testuser"],
                 manifest=manifest,
                 settings=AppSettings(),
@@ -86,10 +86,17 @@ class TestSherlockPositiveMatch:
                 no_nsfw=False,
             )
 
+        # run_sherlock_username returns (list[SocialProfile], error_count)
+        if isinstance(result, tuple):
+            found, errors = result
+        else:
+            found, errors = result, 0
+
         assert len(found) == 1
         assert found[0].exists is True
         assert found[0].network_name == "github"
         assert found[0].username == "testuser"
+        assert errors == 0
 
 
 # ---------------------------------------------------------------------------
@@ -112,13 +119,18 @@ class TestSherlockNegativeMatch:
 
         with patch("adapters.sherlock_runner.build_async_client", return_value=_mock_client(resp)), \
              patch("adapters.sherlock_runner.request_with_retry", AsyncMock(return_value=resp)):
-            found = await run_sherlock_username(
+            result = await run_sherlock_username(
                 usernames=["nobody"],
                 manifest=manifest,
                 settings=AppSettings(),
                 max_concurrency=5,
                 no_nsfw=False,
             )
+
+        if isinstance(result, tuple):
+            found, _ = result
+        else:
+            found = result
 
         assert len(found) == 0
 
@@ -148,13 +160,18 @@ class TestSherlockMessageErrorType:
 
         with patch("adapters.sherlock_runner.build_async_client", return_value=_mock_client(resp)), \
              patch("adapters.sherlock_runner.request_with_retry", AsyncMock(return_value=resp)):
-            found = await run_sherlock_username(
+            result = await run_sherlock_username(
                 usernames=["nobody"],
                 manifest=manifest,
                 settings=AppSettings(),
                 max_concurrency=5,
                 no_nsfw=False,
             )
+
+        if isinstance(result, tuple):
+            found, _ = result
+        else:
+            found = result
 
         assert len(found) == 0
 
@@ -178,13 +195,18 @@ class TestSherlockMessageErrorType:
 
         with patch("adapters.sherlock_runner.build_async_client", return_value=_mock_client(resp)), \
              patch("adapters.sherlock_runner.request_with_retry", AsyncMock(return_value=resp)):
-            found = await run_sherlock_username(
+            result = await run_sherlock_username(
                 usernames=["john"],
                 manifest=manifest,
                 settings=AppSettings(),
                 max_concurrency=5,
                 no_nsfw=False,
             )
+
+        if isinstance(result, tuple):
+            found, _ = result
+        else:
+            found = result
 
         assert len(found) == 1
         assert found[0].exists is True
@@ -216,13 +238,18 @@ class TestSherlockNSFWFiltering:
 
         with patch("adapters.sherlock_runner.build_async_client", return_value=_mock_client(resp)), \
              patch("adapters.sherlock_runner.request_with_retry", AsyncMock(return_value=resp)):
-            found = await run_sherlock_username(
+            result = await run_sherlock_username(
                 usernames=["user"],
                 manifest=manifest,
                 settings=AppSettings(),
                 max_concurrency=5,
                 no_nsfw=True,
             )
+
+        if isinstance(result, tuple):
+            found, _ = result
+        else:
+            found = result
 
         site_names = {p.metadata.get("site_name") for p in found}
         assert "NSFWSite" not in site_names
@@ -258,7 +285,7 @@ class TestSherlockProgressCallback:
 
         with patch("adapters.sherlock_runner.build_async_client", return_value=_mock_client(resp)), \
              patch("adapters.sherlock_runner.request_with_retry", AsyncMock(return_value=resp)):
-            found = await run_sherlock_username(
+            result = await run_sherlock_username(
                 usernames=["user"],
                 manifest=manifest,
                 settings=AppSettings(),
@@ -266,6 +293,11 @@ class TestSherlockProgressCallback:
                 no_nsfw=False,
                 progress_callback=progress_cb,
             )
+
+        if isinstance(result, tuple):
+            found, _ = result
+        else:
+            found = result
 
         # Should be called once for initial (0, total) + once per site
         assert len(progress_calls) >= 2
