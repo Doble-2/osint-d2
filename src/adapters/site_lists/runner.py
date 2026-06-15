@@ -13,6 +13,7 @@ Limitaciones (MVP):
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import Any
 
 from adapters.http_client import build_async_client
@@ -25,6 +26,8 @@ from adapters.site_lists.models import EmailSite, UsernameSite
 from adapters.site_lists.operations import apply_input_operation
 from core.config import AppSettings
 from core.domain.models import SocialProfile
+
+logger = logging.getLogger(__name__)
 
 
 def _slug(name: str) -> str:
@@ -66,7 +69,8 @@ async def run_username_sites(
     max_concurrency: int,
     categories: set[str] | None,
     no_nsfw: bool,
-) -> list[SocialProfile]:
+) -> tuple[list[SocialProfile], int]:
+    """Run username site checks. Returns (found_profiles, error_count)."""
     semaphore = asyncio.Semaphore(max(1, max_concurrency))
 
     # Rate limiter por dominio
@@ -127,13 +131,17 @@ async def run_username_sites(
                         bio=html_meta.get("meta_description"),
                         image_url=html_meta.get("og_image"),
                     )
-                except Exception:
-                    # Errores: para masivo preferimos no contaminar con cientos de errores.
-                    return None
+                except Exception as exc:
+                    logger.debug("Site-list check failed for %s on %s: %s", username, site.name, exc)
+                    return exc
 
         results = await asyncio.gather(*(check(s, username) for s in filtered for username in usernames), return_exceptions=False)
 
-    return [r for r in results if r is not None]
+    error_count = sum(1 for r in results if isinstance(r, Exception))
+    found = [r for r in results if isinstance(r, SocialProfile)]
+    if error_count:
+        logger.info("Username site-list scan: %d found, %d errors.", len(found), error_count)
+    return found, error_count
 
 
 async def run_email_sites(
@@ -144,7 +152,8 @@ async def run_email_sites(
     max_concurrency: int,
     categories: set[str] | None,
     no_nsfw: bool,
-) -> list[SocialProfile]:
+) -> tuple[list[SocialProfile], int]:
+    """Run email site checks. Returns (found_profiles, error_count)."""
     semaphore = asyncio.Semaphore(max(1, max_concurrency))
 
     # Rate limiter por dominio
@@ -213,9 +222,14 @@ async def run_email_sites(
                         bio=html_meta.get("meta_description"),
                         image_url=html_meta.get("og_image"),
                     )
-                except Exception:
-                    return None
+                except Exception as exc:
+                    logger.debug("Email site-list check failed for %s on %s: %s", email, site.name, exc)
+                    return exc
 
         results = await asyncio.gather(*(check(s, email) for s in filtered for email in emails), return_exceptions=False)
 
-    return [r for r in results if r is not None]
+    error_count = sum(1 for r in results if isinstance(r, Exception))
+    found = [r for r in results if isinstance(r, SocialProfile)]
+    if error_count:
+        logger.info("Email site-list scan: %d found, %d errors.", len(found), error_count)
+    return found, error_count
