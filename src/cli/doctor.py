@@ -60,7 +60,11 @@ def run() -> None:
     if bool(settings.ai_api_key):
         table.add_row("AI key", "OK", "Remote AI enabled")
     else:
-        table.add_row("AI key", "OPTIONAL", "No key set -> heuristic analysis fallback")
+        table.add_row(
+            "AI key",
+            "[yellow]MISSING[/yellow]",
+            "No key → heuristic fallback. Agent mode (--agent) will fail.",
+        )
     table.add_row("AI base_url", "OK", settings.ai_base_url)
     table.add_row("AI model", "OK", settings.ai_model)
 

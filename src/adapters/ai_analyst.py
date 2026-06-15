@@ -53,6 +53,11 @@ logger = logging.getLogger(__name__)
 
 
 def build_deepseek_client(*, api_key: str, base_url: str) -> AsyncOpenAI:
+    if not api_key:
+        raise ValueError(
+            "AI API key is empty. "
+            "Set OSINT_D2_AI_API_KEY via environment variable, .env file, or run: osint-d2 doctor setup-ai"
+        )
     return AsyncOpenAI(api_key=api_key, base_url=base_url)
 
 

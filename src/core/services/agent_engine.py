@@ -124,6 +124,12 @@ class AgentEngine:
     ) -> AgentResult:
         """Run the agent loop until it calls generate_report or exhausts steps."""
 
+        if not self._settings.ai_api_key:
+            raise ValueError(
+                "OSINT_D2_AI_API_KEY is not configured. "
+                "Set it via environment variable, .env file, or run: osint-d2 doctor setup-ai"
+            )
+
         client = AsyncOpenAI(
             api_key=self._settings.ai_api_key,
             base_url=self._settings.ai_base_url,
