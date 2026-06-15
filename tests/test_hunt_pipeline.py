@@ -130,9 +130,10 @@ class TestSherlockIntegration:
     async def test_sherlock_called_when_enabled(self):
         """When use_sherlock=True and a manifest is provided, run_sherlock_username is called."""
 
-        mock_sherlock = AsyncMock(return_value=[
-            _profile(network="reddit", username="testuser"),
-        ])
+        mock_sherlock = AsyncMock(return_value=(
+            [_profile(network="reddit", username="testuser")],
+            0,
+        ))
 
         class EmptyScanner:
             async def scan(self, value: str):
