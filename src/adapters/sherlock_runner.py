@@ -14,6 +14,7 @@ Nota: el manifest real tiene muchos detalles; este es un MVP conservador.
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import Any
 from collections.abc import Callable
 
@@ -24,6 +25,8 @@ from adapters.rate_limiter import (
 )
 from core.config import AppSettings
 from core.domain.models import SocialProfile
+
+logger = logging.getLogger(__name__)
 
 
 def _slug(name: str) -> str:
@@ -71,7 +74,8 @@ async def run_sherlock_username(
     max_concurrency: int,
     no_nsfw: bool,
     progress_callback: Callable[[int, int, str], None] | None = None,
-) -> list[SocialProfile]:
+) -> tuple[list[SocialProfile], int]:
+    """Run Sherlock checks. Returns (found_profiles, error_count)."""
     sem = asyncio.Semaphore(max(1, max_concurrency))
 
     # Rate limiter por dominio
@@ -187,8 +191,9 @@ async def run_sherlock_username(
                         bio=html_meta.get("meta_description"),
                         image_url=html_meta.get("og_image"),
                     )
-                except Exception:
-                    return None
+                except Exception as exc:
+                    logger.debug("Sherlock check failed for %s on %s: %s", username, site_name, exc)
+                    return exc  # Return exception to count it
 
         tasks: list[asyncio.Future[SocialProfile | None]] = []
         task_labels: dict[asyncio.Future[SocialProfile | None], str] = {}
@@ -201,6 +206,7 @@ async def run_sherlock_username(
 
         completed = 0
         found: list[SocialProfile] = []
+        error_count = 0
         for t in asyncio.as_completed(tasks):
             r = await t
             completed += 1
@@ -210,7 +216,12 @@ async def run_sherlock_username(
                 except Exception:
                     # Nunca dejar que la UI rompa el scanning.
                     pass
-            if r is not None:
+            if isinstance(r, Exception):
+                error_count += 1
+            elif r is not None:
                 found.append(r)
 
-    return found
+    if error_count:
+        logger.info("Sherlock scan completed: %d found, %d errors out of %d checks.", len(found), error_count, total)
+
+    return found, error_count
