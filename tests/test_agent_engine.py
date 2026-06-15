@@ -258,3 +258,50 @@ class TestOnStepCallback:
         engine._on_step(step)  # type: ignore[misc]
         assert len(captured) == 1
         assert captured[0].tool_name == "scan_username"
+
+
+# ---------------------------------------------------------------------------
+# API key validation (issue #33)
+# ---------------------------------------------------------------------------
+
+class TestApiKeyValidation:
+    """Verify fail-fast when ai_api_key is None — prevents silent SDK fallback
+    to OPENAI_API_KEY env var which would misdirect credentials."""
+
+    @pytest.mark.asyncio
+    async def test_agent_engine_raises_without_api_key(self):
+        """AgentEngine.run() must raise ValueError before any LLM call."""
+        settings = AppSettings(
+            ai_api_key=None,
+            ai_base_url="https://api.deepseek.com",
+        )
+        engine = AgentEngine(settings=settings)
+
+        with pytest.raises(ValueError, match="OSINT_D2_AI_API_KEY"):
+            await engine.run("investigate testuser")
+
+    @pytest.mark.asyncio
+    async def test_agent_engine_raises_with_empty_string_key(self):
+        """Empty string should also be caught."""
+        settings = AppSettings(
+            ai_api_key="",
+            ai_base_url="https://api.deepseek.com",
+        )
+        engine = AgentEngine(settings=settings)
+
+        with pytest.raises(ValueError, match="OSINT_D2_AI_API_KEY"):
+            await engine.run("investigate testuser")
+
+    def test_build_deepseek_client_raises_on_empty_key(self):
+        """build_deepseek_client must fail-fast on empty key."""
+        from adapters.ai_analyst import build_deepseek_client
+
+        with pytest.raises(ValueError, match="AI API key is empty"):
+            build_deepseek_client(api_key="", base_url="https://api.deepseek.com")
+
+    def test_build_deepseek_client_works_with_valid_key(self):
+        """Valid key should construct the client without error."""
+        from adapters.ai_analyst import build_deepseek_client
+
+        client = build_deepseek_client(api_key="sk-test-key", base_url="https://api.deepseek.com")
+        assert client is not None
