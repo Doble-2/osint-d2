@@ -710,7 +710,7 @@ async def analyze_person(
     clean_person.profiles = [p for p in clean_person.profiles if p.exists]
 
 
-    api_key = (settings.ai_api_key or "").strip()
+    api_key = (settings.ai_api_key.get_secret_value() if settings.ai_api_key else "").strip()
     if not api_key:
         # Sin API key: si es un provider local OpenAI-compatible, usamos dummy.
         # En providers hosted (DeepSeek/Groq/etc.) caemos a heurístico.

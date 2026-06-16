@@ -17,11 +17,11 @@ class TestBuildProxyUrlStandalone:
             proxy_username="angeldOzt2u",
             proxy_mode="residential",
         )
-        url = _build_proxy_url(settings)
-        assert url == (
-            "http://customer-angeldOzt2u:my-password"
-            "@residential.scrapingant.com:8080"
-        )
+        base_url, auth = _build_proxy_url(settings)
+        assert base_url == "http://residential.scrapingant.com:8080"
+        assert auth == ("customer-angeldOzt2u", "my-password")
+        # Key must NOT appear in the URL
+        assert "my-password" not in base_url
 
     def test_datacenter_with_username(self):
         settings = AppSettings(
@@ -29,11 +29,10 @@ class TestBuildProxyUrlStandalone:
             proxy_username="angeldOzt2u",
             proxy_mode="datacenter",
         )
-        url = _build_proxy_url(settings)
-        assert url == (
-            "http://customer-angeldOzt2u:my-password"
-            "@datacenter.scrapingant.com:8080"
-        )
+        base_url, auth = _build_proxy_url(settings)
+        assert base_url == "http://datacenter.scrapingant.com:8080"
+        assert auth == ("customer-angeldOzt2u", "my-password")
+        assert "my-password" not in base_url
 
     def test_residential_with_country(self):
         settings = AppSettings(
@@ -42,11 +41,10 @@ class TestBuildProxyUrlStandalone:
             proxy_mode="residential",
             proxy_country="us",
         )
-        url = _build_proxy_url(settings)
-        assert url == (
-            "http://customer-myuser-country-us:key123"
-            "@residential.scrapingant.com:8080"
-        )
+        base_url, auth = _build_proxy_url(settings)
+        assert base_url == "http://residential.scrapingant.com:8080"
+        assert auth == ("customer-myuser-country-us", "key123")
+        assert "key123" not in base_url
 
 
 # ---------------------------------------------------------------------------
@@ -60,11 +58,15 @@ class TestBuildProxyUrlApiMode:
             proxy_username=None,
             proxy_mode="residential",
         )
-        url = _build_proxy_url(settings)
-        assert url == (
-            "http://scrapingant&browser=false&proxy_type=residential"
-            ":my-api-key@proxy.scrapingant.com:8080"
-        )
+        base_url, auth = _build_proxy_url(settings)
+        assert base_url == "http://proxy.scrapingant.com:8080"
+        assert auth is not None
+        username, password = auth
+        assert "scrapingant" in username
+        assert "proxy_type=residential" in username
+        assert password == "my-api-key"
+        # Key must NOT appear in the URL
+        assert "my-api-key" not in base_url
 
     def test_api_mode_with_country(self):
         settings = AppSettings(
@@ -73,9 +75,11 @@ class TestBuildProxyUrlApiMode:
             proxy_mode="residential",
             proxy_country="de",
         )
-        url = _build_proxy_url(settings)
-        assert "proxy_country=de" in url
-        assert "proxy.scrapingant.com" in url
+        base_url, auth = _build_proxy_url(settings)
+        assert "proxy.scrapingant.com" in base_url
+        username, _ = auth
+        assert "proxy_country=de" in username
+        assert "key" not in base_url
 
 
 # ---------------------------------------------------------------------------
@@ -85,24 +89,32 @@ class TestBuildProxyUrlApiMode:
 class TestBuildProxyUrlEdgeCases:
     def test_no_proxy_when_no_key(self):
         settings = AppSettings(proxy_api_key=None)
-        assert _build_proxy_url(settings) is None
+        base_url, auth = _build_proxy_url(settings)
+        assert base_url is None
+        assert auth is None
 
     def test_auto_detect_mode_from_key(self):
         settings = AppSettings(proxy_api_key="test-key", proxy_mode=None)
-        url = _build_proxy_url(settings)
-        assert url is not None
-        assert "residential" in url
+        base_url, auth = _build_proxy_url(settings)
+        assert base_url is not None
+        assert auth is not None
+        # Auto-detected mode is "residential" — visible in the auth username
+        assert "residential" in auth[0]
 
     def test_unknown_mode_returns_none(self):
         settings = AppSettings(
             proxy_api_key="key",
             proxy_mode="unknown_mode",
         )
-        assert _build_proxy_url(settings) is None
+        base_url, auth = _build_proxy_url(settings)
+        assert base_url is None
+        assert auth is None
 
     def test_empty_key_returns_none(self):
         settings = AppSettings(proxy_api_key="", proxy_mode="residential")
-        assert _build_proxy_url(settings) is None
+        base_url, auth = _build_proxy_url(settings)
+        assert base_url is None
+        assert auth is None
 
 
 # ---------------------------------------------------------------------------
@@ -142,3 +154,42 @@ class TestEffectiveProxyMode:
     def test_no_key_no_mode(self):
         settings = AppSettings(proxy_api_key=None, proxy_mode=None)
         assert settings.effective_proxy_mode is None
+
+
+# ---------------------------------------------------------------------------
+# SecretStr redaction (issue #27)
+# ---------------------------------------------------------------------------
+
+class TestSecretStrRedaction:
+    def test_model_dump_does_not_expose_proxy_key(self):
+        settings = AppSettings(proxy_api_key="super-secret-key-12345")
+        dumped = settings.model_dump()
+        # SecretStr serializes as '**********' in model_dump
+        assert dumped["proxy_api_key"] != "super-secret-key-12345"
+        assert "super-secret" not in str(dumped["proxy_api_key"])
+
+    def test_model_dump_does_not_expose_ai_key(self):
+        settings = AppSettings(ai_api_key="sk-my-secret-ai-key")
+        dumped = settings.model_dump()
+        assert dumped["ai_api_key"] != "sk-my-secret-ai-key"
+        assert "sk-my-secret" not in str(dumped["ai_api_key"])
+
+    def test_proxy_url_does_not_contain_key(self):
+        settings = AppSettings(
+            proxy_api_key="LIVE_SECRET_KEY",
+            proxy_username="user1",
+            proxy_mode="residential",
+        )
+        base_url, auth = _build_proxy_url(settings)
+        assert "LIVE_SECRET_KEY" not in base_url
+        assert auth[1] == "LIVE_SECRET_KEY"
+
+    def test_secret_value_accessible_via_getter(self):
+        settings = AppSettings(proxy_api_key="my-key-value")
+        assert settings.proxy_api_key.get_secret_value() == "my-key-value"
+
+    def test_repr_does_not_expose_key(self):
+        settings = AppSettings(proxy_api_key="secret123", ai_api_key="sk-secret")
+        repr_str = repr(settings)
+        assert "secret123" not in repr_str
+        assert "sk-secret" not in repr_str

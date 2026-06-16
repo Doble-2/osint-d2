@@ -131,7 +131,7 @@ class AgentEngine:
             )
 
         client = AsyncOpenAI(
-            api_key=self._settings.ai_api_key,
+            api_key=self._settings.ai_api_key.get_secret_value(),
             base_url=self._settings.ai_base_url,
         )
 

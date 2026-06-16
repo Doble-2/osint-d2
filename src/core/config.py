@@ -13,7 +13,7 @@ import os
 import sys
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from core.domain.language import Language
@@ -107,7 +107,7 @@ class AppSettings(BaseSettings):
         description="User-Agent para peticiones OSINT.",
     )
 
-    ai_api_key: str | None = Field(
+    ai_api_key: SecretStr | None = Field(
         default=None,
         description="API key para el proveedor IA (DeepSeek compatible OpenAI).",
     )
@@ -196,7 +196,7 @@ class AppSettings(BaseSettings):
             "Auto-detected from proxy_api_key if not set explicitly."
         ),
     )
-    proxy_api_key: str | None = Field(
+    proxy_api_key: SecretStr | None = Field(
         default=None,
         description="ScrapingAnt API/proxy key (password for proxy auth).",
     )

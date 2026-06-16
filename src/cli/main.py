@@ -149,7 +149,7 @@ def _configure_ai_for_run(
     base_url = preset["base_url"]
     model = preset["model"]
 
-    key = (ai_key or "").strip() or (settings.ai_api_key or "").strip()
+    key = (ai_key or "").strip() or (settings.ai_api_key.get_secret_value() if settings.ai_api_key else "").strip()
 
     # Para proveedores locales (Ollama), la key es opcional/dummy.
     if provider == "ollama" and not key:
@@ -1526,7 +1526,7 @@ def wizard() -> None:
 
         # Ensure AI is configured.
         settings_now = AppSettings()
-        if not (settings_now.ai_api_key or "").strip():
+        if not (settings_now.ai_api_key.get_secret_value() if settings_now.ai_api_key else "").strip():
             console.print(
                 "[yellow]Agent mode requires an AI provider.[/yellow]"
             )
@@ -1660,7 +1660,7 @@ def wizard() -> None:
     deep_analyze = Confirm.ask("Run AI analysis?", default=True)
     if deep_analyze:
         settings_now = AppSettings()
-        if not (settings_now.ai_api_key or "").strip() and settings_now.ai_base_url.startswith("https://api.deepseek"):
+        if not (settings_now.ai_api_key.get_secret_value() if settings_now.ai_api_key else "").strip() and settings_now.ai_base_url.startswith("https://api.deepseek"):
             if Confirm.ask("No AI key configured. Configure a free-tier provider now (recommended)?", default=True):
                 provider = Prompt.ask(
                     "Provider",
