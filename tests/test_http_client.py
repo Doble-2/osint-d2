@@ -97,8 +97,9 @@ class TestBuildProxyUrlEdgeCases:
         settings = AppSettings(proxy_api_key="test-key", proxy_mode=None)
         base_url, auth = _build_proxy_url(settings)
         assert base_url is not None
-        assert "residential" in base_url
         assert auth is not None
+        # Auto-detected mode is "residential" — visible in the auth username
+        assert "residential" in auth[0]
 
     def test_unknown_mode_returns_none(self):
         settings = AppSettings(
