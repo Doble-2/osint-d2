@@ -128,12 +128,17 @@ class TestExpansionLoop:
 class TestSherlockIntegration:
     @pytest.mark.asyncio
     async def test_sherlock_called_when_enabled(self):
-        """When use_sherlock=True and a manifest is provided, run_sherlock_username is called."""
+        # Detect calling convention: development does tuple unpacking
+        # (sherlock_profiles, sherlock_errors = ...), main does
+        # profiles.extend(await run_sherlock_username(...)).
+        import inspect
+        _hunt_src = inspect.getsource(hunt)
+        _uses_tuple = "sherlock_profiles, sherlock_errors" in _hunt_src
 
-        mock_sherlock = AsyncMock(return_value=(
-            [_profile(network="reddit", username="testuser")],
-            0,
-        ))
+        sherlock_profiles = [_profile(network="reddit", username="testuser")]
+        mock_sherlock = AsyncMock(
+            return_value=(sherlock_profiles, 0) if _uses_tuple else sherlock_profiles,
+        )
 
         class EmptyScanner:
             async def scan(self, value: str):
