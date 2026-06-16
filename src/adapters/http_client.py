@@ -34,27 +34,29 @@ _PROXY_ENDPOINTS: dict[str, str] = {
 _API_PROXY_ENDPOINT = "proxy.scrapingant.com:8080"
 
 
-def _build_proxy_url(settings: AppSettings) -> str | None:
+def _build_proxy_url(
+    settings: AppSettings,
+) -> tuple[str, tuple[str, str]] | tuple[None, None]:
     """Build a ScrapingAnt proxy URL from settings.
 
     Supports two modes:
 
     1. **Standalone proxies** (when ``proxy_username`` is set):
-       ``http://customer-USER-country-CC:KEY@residential.scrapingant.com:8080``
+       ``http://residential.scrapingant.com:8080`` + auth tuple
     2. **API Proxy Mode** (fallback, when only ``proxy_api_key`` is set):
-       ``http://scrapingant&browser=false&proxy_type=MODE:KEY@proxy.scrapingant.com:8080``
+       ``http://proxy.scrapingant.com:8080`` + auth tuple
 
-    Returns an ``http://user:pass@host:port`` string suitable for
-    ``httpx.AsyncClient(proxy=...)``, or ``None`` when proxy is disabled.
+    Returns ``(base_url, (username, password))`` — credentials are **never**
+    embedded in the URL string — or ``(None, None)`` when proxy is disabled.
     """
     mode = settings.effective_proxy_mode
     if not mode or not settings.proxy_api_key:
-        return None
+        return None, None
 
     if mode not in ("residential", "datacenter"):
-        return None
+        return None, None
 
-    password = settings.proxy_api_key
+    password = settings.proxy_api_key.get_secret_value()
 
     if settings.proxy_username:
         # ── Standalone residential/datacenter proxy product ──
@@ -70,7 +72,7 @@ def _build_proxy_url(settings: AppSettings) -> str | None:
             username += f"&proxy_country={settings.proxy_country}"
         endpoint = _API_PROXY_ENDPOINT
 
-    return f"http://{username}:{password}@{endpoint}"
+    return f"http://{endpoint}", (username, password)
 
 
 # ---------------------------------------------------------------------------
@@ -87,6 +89,10 @@ def build_async_client(
     Por qué un builder:
     - Centraliza timeouts/headers para que todas las fuentes se comporten igual.
     - Inyecta proxy ScrapingAnt de forma transparente si está configurado.
+
+    Security: proxy credentials are passed via ``httpx.Proxy(auth=...)``
+    instead of being embedded in the URL, so they never leak into exception
+    messages, debug logs, or tracebacks.
     """
 
     settings = settings or AppSettings()
@@ -97,14 +103,18 @@ def build_async_client(
     if extra_headers:
         headers.update(extra_headers)
 
-    proxy_url = _build_proxy_url(settings)
+    proxy_base, proxy_auth = _build_proxy_url(settings)
+
+    proxy = None
+    if proxy_base and proxy_auth:
+        proxy = httpx.Proxy(proxy_base, auth=proxy_auth)
 
     return httpx.AsyncClient(
         timeout=httpx.Timeout(settings.http_timeout_seconds),
         follow_redirects=True,
         headers=headers,
-        proxy=proxy_url,
-        verify=proxy_url is None,  # Proxy handles TLS termination.
+        proxy=proxy,
+        verify=proxy is None,  # Proxy handles TLS termination.
     )
 
 
