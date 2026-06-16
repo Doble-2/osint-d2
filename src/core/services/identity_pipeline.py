@@ -10,6 +10,7 @@ progress bars) out of the core logic.
 from __future__ import annotations
 
 import asyncio
+import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Iterable, Sequence
@@ -53,6 +54,8 @@ from adapters.sherlock_runner import run_sherlock_username
 from core.config import AppSettings
 from core.domain.models import PersonEntity, SocialProfile
 from core.resources_loader import get_default_list_path, load_sherlock_data
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -98,6 +101,7 @@ class PipelineResult:
     usernames: list[str]
     emails: list[str]
     warnings: list[str] = field(default_factory=list)
+    scan_errors: int = 0
 
 
 _USERNAME_SCANNERS = (
@@ -226,6 +230,7 @@ async def hunt(
     email_scanners = [scanner() for scanner in _EMAIL_SCANNERS]
 
     profiles: list[SocialProfile] = []
+    total_scan_errors: int = 0
     all_usernames = set(usernames)
     all_emails = set(emails)
     scanned_usernames: set[str] = set()
@@ -250,7 +255,8 @@ async def hunt(
                 if derived_from and isinstance(profile.metadata, dict):
                     profile.metadata = {**profile.metadata, "derived_from": derived_from}
             return collected
-        except Exception as exc:  # pragma: no cover - defensive fallback
+        except Exception as exc:
+            logger.debug("Scanner %s failed for %s: %s", name, value, exc)
             fallback_url = f"https://{network}.com/{value}"
             if network == "x":
                 fallback_url = f"https://x.com/{value}"
@@ -364,16 +370,16 @@ async def hunt(
                     hooks.warning(message)
             else:
                 sites_file = load_username_sites(username_path)
-                profiles.extend(
-                    await run_username_sites(
-                        usernames=usernames,
-                        sites=sites_file.sites,
-                        settings=settings,
-                        max_concurrency=max_concurrency,
-                        categories=request.site_lists.categories,
-                        no_nsfw=no_nsfw_effective,
-                    )
+                site_profiles, site_errors = await run_username_sites(
+                    usernames=usernames,
+                    sites=sites_file.sites,
+                    settings=settings,
+                    max_concurrency=max_concurrency,
+                    categories=request.site_lists.categories,
+                    no_nsfw=no_nsfw_effective,
                 )
+                profiles.extend(site_profiles)
+                total_scan_errors += site_errors
 
         if emails:
             email_path = request.site_lists.email_path
@@ -388,16 +394,16 @@ async def hunt(
                     hooks.warning(message)
             else:
                 sites_file = load_email_sites(email_path)
-                profiles.extend(
-                    await run_email_sites(
-                        emails=emails,
-                        sites=sites_file.sites,
-                        settings=settings,
-                        max_concurrency=max_concurrency,
-                        categories=request.site_lists.categories,
-                        no_nsfw=no_nsfw_effective,
-                    )
+                email_site_profiles, email_site_errors = await run_email_sites(
+                    emails=emails,
+                    sites=sites_file.sites,
+                    settings=settings,
+                    max_concurrency=max_concurrency,
+                    categories=request.site_lists.categories,
+                    no_nsfw=no_nsfw_effective,
                 )
+                profiles.extend(email_site_profiles)
+                total_scan_errors += email_site_errors
 
     if request.use_sherlock and usernames:
         manifest = request.sherlock_manifest or load_sherlock_data(refresh=False)
@@ -415,16 +421,16 @@ async def hunt(
             hooks.sherlock_start(total)
 
         progress_cb = hooks.sherlock_progress if total else None
-        profiles.extend(
-            await run_sherlock_username(
-                usernames=usernames,
-                manifest=manifest,
-                settings=settings,
-                max_concurrency=max_concurrency,
-                no_nsfw=no_nsfw_effective,
-                progress_callback=progress_cb,
-            )
+        sherlock_profiles, sherlock_errors = await run_sherlock_username(
+            usernames=usernames,
+            manifest=manifest,
+            settings=settings,
+            max_concurrency=max_concurrency,
+            no_nsfw=no_nsfw_effective,
+            progress_callback=progress_cb,
         )
+        profiles.extend(sherlock_profiles)
+        total_scan_errors += sherlock_errors
 
     profiles = dedupe_profiles(profiles)
 
@@ -461,11 +467,27 @@ async def hunt(
 
     person = PersonEntity(target=target_label, profiles=profiles)
 
+    # Count errors from safe_scan fallback profiles
+    for p in profiles:
+        if isinstance(p.metadata, dict) and p.metadata.get("error"):
+            total_scan_errors += 1
+
+    if total_scan_errors:
+        msg = (
+            f"{total_scan_errors} scanner(s) returned errors "
+            f"(timeouts, SSL, 5xx, etc.). Results may be incomplete."
+        )
+        warnings.append(msg)
+        if hooks.warning:
+            hooks.warning(msg)
+        logger.info("Scan completed with %d errors.", total_scan_errors)
+
     return PipelineResult(
         person=person,
         usernames=usernames,
         emails=emails,
         warnings=warnings,
+        scan_errors=total_scan_errors,
     )
 
 
