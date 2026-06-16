@@ -79,7 +79,8 @@ def run() -> None:
     # Proxy (ScrapingAnt)
     proxy_mode = settings.effective_proxy_mode
     if proxy_mode:
-        key_masked = "****" + (settings.proxy_api_key or "")[-4:] if settings.proxy_api_key else "(none)"
+        raw_key = settings.proxy_api_key.get_secret_value() if settings.proxy_api_key else ""
+        key_masked = "****" + raw_key[-4:] if raw_key else "(none)"
         country = settings.proxy_country.upper() if settings.proxy_country else "auto"
         table.add_row("Proxy mode", "OK", f"{proxy_mode} (ScrapingAnt)")
         table.add_row("Proxy API key", "OK", key_masked)
