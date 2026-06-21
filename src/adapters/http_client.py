@@ -114,7 +114,6 @@ def build_async_client(
         follow_redirects=True,
         headers=headers,
         proxy=proxy,
-        verify=proxy is None,  # Proxy handles TLS termination.
     )
 
 
