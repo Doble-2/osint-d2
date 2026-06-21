@@ -273,6 +273,14 @@ async def execute_tool(
             return json.dumps({"error": "url is required"})
         if not (url.startswith("http://") or url.startswith("https://")):
             url = f"https://{url}"
+
+        # SSRF guard — block private/internal/IMDS targets (issue #25)
+        from core.services.url_guard import SSRFBlockedError, validate_url
+        try:
+            url = validate_url(url)
+        except (SSRFBlockedError, ValueError) as exc:
+            return json.dumps({"url": url, "error": f"SSRF blocked: {exc}"})
+
         from adapters.http_client import build_async_client, extract_html_metadata
         try:
             async with build_async_client(settings) as client:
