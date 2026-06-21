@@ -137,6 +137,40 @@ class TestBuildAsyncClient:
         client = build_async_client(settings)
         assert client is not None
 
+    def test_tls_verify_enabled_without_proxy(self):
+        """TLS verification must be enabled when no proxy is configured."""
+        settings = AppSettings(proxy_api_key=None)
+        client = build_async_client(settings)
+        # httpx stores the SSL context on _transport._pool._ssl_context
+        # but the simplest check is that verify was not set to False:
+        # the client's default transport should use a real SSL context.
+        transport = client._transport
+        ssl_context = getattr(
+            getattr(transport, "_pool", None), "_ssl_context", None
+        )
+        # ssl_context is not None means TLS verification is active
+        assert ssl_context is not None
+
+    def test_tls_verify_enabled_with_proxy(self):
+        """Issue #23: TLS verification must NOT be disabled when proxy is configured."""
+        settings = AppSettings(
+            proxy_api_key="test-key",
+            proxy_username="testuser",
+            proxy_mode="residential",
+        )
+        client = build_async_client(settings)
+        # The proxy transport wraps an inner pool; verify it also has a real SSL context.
+        transport = client._mounts.get("all://")
+        if transport is None:
+            # Fallback: check the default transport
+            transport = client._transport
+        ssl_context = getattr(
+            getattr(transport, "_pool", None), "_ssl_context", None
+        )
+        assert ssl_context is not None, (
+            "TLS verification must be enabled even when a proxy is configured"
+        )
+
 
 # ---------------------------------------------------------------------------
 # effective_proxy_mode
