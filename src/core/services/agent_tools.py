@@ -14,6 +14,7 @@ from adapters.breach_check import enrich_profiles_with_breach_data
 from core.config import AppSettings
 from core.domain.models import SocialProfile
 from adapters.vector_store import VectorStore
+from adapters.avatar_analyzer import AvatarAnalyzer
 from core.services.identity_pipeline import (
     scan_email,
     scan_username,
@@ -115,6 +116,30 @@ AGENT_TOOLS: list[dict[str, Any]] = [
                     },
                 },
                 "required": ["url"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "compare_avatars",
+            "description": (
+                "Compare two avatar image URLs or file paths using perceptual hashing (dHash). "
+                "Detects if both accounts use the same photo even if resized or recompressed."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "avatar_url_1": {
+                        "type": "string",
+                        "description": "First image URL or local path.",
+                    },
+                    "avatar_url_2": {
+                        "type": "string",
+                        "description": "Second image URL or local path.",
+                    },
+                },
+                "required": ["avatar_url_1", "avatar_url_2"],
             },
         },
     },
@@ -345,6 +370,26 @@ async def execute_tool(
             }, ensure_ascii=False)
         except Exception as exc:
             return json.dumps({"url": url, "error": str(exc)})
+
+    if name == "compare_avatars":
+        url1 = arguments.get("avatar_url_1", "")
+        url2 = arguments.get("avatar_url_2", "")
+        if not url1 or not url2:
+            return json.dumps({"error": "Both avatar_url_1 and avatar_url_2 are required."})
+
+        try:
+            from adapters.http_client import build_async_client
+            async with build_async_client(settings=settings) as client:
+                resp1 = await client.get(url1)
+                resp2 = await client.get(url2)
+                if resp1.status_code != 200 or resp2.status_code != 200:
+                    return json.dumps({
+                        "error": f"Failed fetching avatars: img1={resp1.status_code}, img2={resp2.status_code}"
+                    })
+                comp = AvatarAnalyzer.compare_avatars(resp1.content, resp2.content)
+                return json.dumps(comp, ensure_ascii=False)
+        except Exception as exc:
+            return json.dumps({"error": str(exc)})
 
     if name == "search_vector_memory":
         if not vector_store:
