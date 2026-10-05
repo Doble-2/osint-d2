@@ -107,14 +107,18 @@ class AppSettings(BaseSettings):
         description="User-Agent para peticiones OSINT.",
     )
 
+    ai_provider: str = Field(
+        default="deepseek",
+        description="Proveedor de IA: 'deepseek', 'openai' o 'ollama'.",
+    )
     ai_api_key: SecretStr | None = Field(
         default=None,
-        description="API key para el proveedor IA (DeepSeek compatible OpenAI).",
+        description="API key para el proveedor IA (opcional en Ollama).",
     )
     ai_base_url: str = Field(
         default="https://api.deepseek.com",
         min_length=8,
-        description="Base URL compatible OpenAI (DeepSeek).",
+        description="Base URL compatible OpenAI (DeepSeek, Ollama /v1, etc.).",
     )
     ai_model: str = Field(
         default="deepseek-chat",

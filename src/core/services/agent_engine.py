@@ -126,14 +126,21 @@ class AgentEngine:
     ) -> AgentResult:
         """Run the agent loop until it calls generate_report or exhausts steps."""
 
-        if not self._settings.ai_api_key:
+        # Determine effective API key and base URL (Ollama doesn't require real key)
+        is_ollama = self._settings.ai_provider.lower() == "ollama"
+        api_key_str = ""
+        if self._settings.ai_api_key:
+            api_key_str = self._settings.ai_api_key.get_secret_value()
+        elif is_ollama:
+            api_key_str = "ollama"
+        else:
             raise ValueError(
                 "OSINT_D2_AI_API_KEY is not configured. "
-                "Set it via environment variable, .env file, or run: osint-d2 doctor setup-ai"
+                "Set it via environment variable, .env file, or set OSINT_D2_AI_PROVIDER=ollama"
             )
 
         client = AsyncOpenAI(
-            api_key=self._settings.ai_api_key.get_secret_value(),
+            api_key=api_key_str,
             base_url=self._settings.ai_base_url,
         )
 
