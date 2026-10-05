@@ -113,3 +113,12 @@ class GraphExporter:
         canvas_dict = graph.to_obsidian_canvas()
         path.write_text(json.dumps(canvas_dict, indent=2, ensure_ascii=False), encoding="utf-8")
         return str(path)
+
+    @classmethod
+    def export_html(cls, graph: GraphExportModel, output_path: str | Path, title: str = "OSINT Graph") -> str:
+        """Saves graph in standalone interactive HTML format."""
+        path = Path(output_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        html = graph.to_interactive_html(title=title)
+        path.write_text(html, encoding="utf-8")
+        return str(path)

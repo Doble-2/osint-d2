@@ -87,3 +87,68 @@ class GraphExportModel(BaseModel):
             })
 
         return {"nodes": canvas_nodes, "edges": canvas_edges}
+
+    def to_interactive_html(self, title: str = "OSINT Intelligence Graph") -> str:
+        """Generates a standalone, dark-themed, high-resolution interactive HTML graph (Palantir/Maltego style)."""
+        import json
+
+        nodes_data = []
+        edges_data = []
+
+        type_groups = {
+            "Target": "target",
+            "Identity": "identity",
+            "Phone": "phone",
+            "Email": "email",
+            "Platform": "social",
+            "Domain": "domain",
+            "Colleague": "colleague",
+            "Breach": "breach",
+        }
+
+        for n in self.nodes:
+            group = type_groups.get(n.type, "social")
+            nodes_data.append({
+                "id": n.id,
+                "label": n.label,
+                "group": group,
+                "shape": "dot" if n.type == "Target" else "box",
+                "info": n.properties.get("bio") or n.properties.get("url") or f"Tipo: {n.type}",
+            })
+
+        for e in self.edges:
+            edges_data.append({
+                "from": e.source,
+                "to": e.target,
+                "label": e.label or e.type,
+                "arrows": "to",
+            })
+
+        return f"""<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>{title}</title>
+  <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+  <style>
+    body, html {{ width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden; background: #0a0d14; font-family: -apple-system, sans-serif; color: #fff; }}
+    #header {{ position: absolute; top: 12px; left: 12px; z-index: 10; background: rgba(16, 22, 34, 0.85); backdrop-filter: blur(10px); padding: 10px 16px; border-radius: 12px; border: 1px solid #1e293b; }}
+    #network {{ width: 100%; height: 100%; }}
+  </style>
+</head>
+<body>
+  <div id="header"><h3>{title}</h3></div>
+  <div id="network"></div>
+  <script>
+    var nodes = new vis.DataSet({json.dumps(nodes_data)});
+    var edges = new vis.DataSet({json.dumps(edges_data)});
+    var container = document.getElementById('network');
+    new vis.Network(container, {{ nodes: nodes, edges: edges }}, {{
+      physics: {{ solver: 'forceAtlas2Based', forceAtlas2Based: {{ springLength: 140 }} }},
+      interaction: {{ hover: true }}
+    }});
+  </script>
+</body>
+</html>"""
+
