@@ -13,6 +13,7 @@ from typing import Any
 from adapters.breach_check import enrich_profiles_with_breach_data
 from core.config import AppSettings
 from core.domain.models import SocialProfile
+from adapters.vector_store import VectorStore
 from core.services.identity_pipeline import (
     scan_email,
     scan_username,
@@ -120,6 +121,50 @@ AGENT_TOOLS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "search_vector_memory",
+            "description": (
+                "Search in-memory vector database containing previously scraped web pages, "
+                "bios, and snippets using semantic concept similarity."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Semantic query or topic to search for in collected evidence.",
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of snippets to retrieve (default 3).",
+                    },
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "correlate_stylometry",
+            "description": (
+                "Compare a suspect text sample or anonymous post against known target writing styles "
+                "using character n-gram stylometry. Returns similarity score (0.0 to 1.0)."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "sample_text": {
+                        "type": "string",
+                        "description": "Text sample from an anonymous or suspect account to correlate.",
+                    },
+                },
+                "required": ["sample_text"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "generate_report",
             "description": (
                 "FINAL STEP: Call this when you have gathered enough evidence. "
@@ -201,6 +246,7 @@ async def execute_tool(
     *,
     settings: AppSettings,
     enable_breach_check: bool = False,
+    vector_store: VectorStore | None = None,
 ) -> str:
     """Execute an agent tool and return a JSON string result.
 
@@ -299,6 +345,21 @@ async def execute_tool(
             }, ensure_ascii=False)
         except Exception as exc:
             return json.dumps({"url": url, "error": str(exc)})
+
+    if name == "search_vector_memory":
+        if not vector_store:
+            return json.dumps({"error": "Vector store not initialized or empty."})
+        query = arguments.get("query", "")
+        limit = arguments.get("limit", 3)
+        results = vector_store.search_semantic(query=query, limit=limit)
+        return json.dumps({"query": query, "results": results}, ensure_ascii=False)
+
+    if name == "correlate_stylometry":
+        if not vector_store:
+            return json.dumps({"error": "Vector store not initialized or empty."})
+        sample = arguments.get("sample_text", "")
+        matches = vector_store.correlate_author_style(sample_text=sample)
+        return json.dumps({"sample_length": len(sample), "stylometric_matches": matches}, ensure_ascii=False)
 
     if name == "generate_report":
         # This is handled by the engine — just echo back.

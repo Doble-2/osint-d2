@@ -19,6 +19,7 @@ from openai import AsyncOpenAI
 from core.config import AppSettings
 from core.domain.language import Language
 from core.domain.models import AnalysisReport, PersonEntity, SocialProfile
+from adapters.vector_store import VectorStore
 from core.services.agent_tools import AGENT_TOOLS, execute_tool
 
 logger = logging.getLogger(__name__)
@@ -113,6 +114,7 @@ class AgentEngine:
         self._enable_breach_check = enable_breach_check
         self._on_step = on_step
         self._collected_profiles: list[SocialProfile] = []
+        self._vector_store = VectorStore()
 
     async def run(
         self,
@@ -239,6 +241,7 @@ class AgentEngine:
                             tc_step.tool_args,
                             settings=self._settings,
                             enable_breach_check=self._enable_breach_check,
+                            vector_store=self._vector_store,
                         )
                     except Exception as exc:
                         logger.warning("Tool %s failed: %s", tool_call.function.name, exc)
@@ -367,7 +370,7 @@ class AgentEngine:
             if not isinstance(p, dict):
                 continue
             try:
-                self._collected_profiles.append(SocialProfile(
+                prof = SocialProfile(
                     url=p.get("url", ""),
                     username=p.get("username", "unknown"),
                     network_name=p.get("network", "unknown"),
@@ -375,6 +378,21 @@ class AgentEngine:
                     metadata=p,
                     bio=p.get("bio"),
                     image_url=p.get("avatar"),
-                ))
+                )
+                self._collected_profiles.append(prof)
+
+                # Index into vector store if exists and has text
+                if prof.exists:
+                    bio = p.get("bio") or ""
+                    title = p.get("title") or ""
+                    desc = p.get("description") or ""
+                    combined = f"{title} {desc} {bio}".strip()
+                    if combined:
+                        self._vector_store.add_document(
+                            doc_id=f"{prof.network_name}:{prof.username}",
+                            source=prof.network_name,
+                            text=combined,
+                            metadata={"url": prof.url, "username": prof.username},
+                        )
             except Exception:
                 continue
