@@ -8,6 +8,7 @@ Por qué existe:
 from __future__ import annotations
 
 import sys
+import eval_type_backport  # Monkeypatches typing for Python < 3.10 PEP 604 support
 
 # Workaround for UnicodeEncodeError on Windows terminals/CI (cp1252 vs utf-8).
 # Especially important for PyInstaller builds where PYTHONIOENCODING might be unset.
