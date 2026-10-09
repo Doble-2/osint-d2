@@ -66,32 +66,95 @@
   <!-- MAIN WORKSPACE -->
   <div class="flex-1 flex overflow-hidden">
     
-    <!-- PANEL IZQUIERDO: CONTROLES & CONSOLA EN VIVO -->
-    <aside class="w-[420px] border-r border-cyber-border bg-cyber-card/70 backdrop-blur flex flex-col z-10">
+    <!-- PANEL IZQUIERDO: CONFIGURACIÓN MULTI-VECTOR -->
+    <aside class="w-[450px] border-r border-cyber-border bg-cyber-card/75 backdrop-blur flex flex-col z-10 overflow-y-auto">
       
-      <!-- Formulario de Lanzamiento -->
-      <div class="p-4 border-b border-cyber-border space-y-3">
-        <label class="block text-xs font-semibold tracking-wider text-slate-300 uppercase">Objetivo de Investigación</label>
-        <div class="relative">
-          <input type="text" id="target-input" placeholder="e.g. Doble-2, angelcaldev, +584241922882" 
-                 class="w-full bg-[#070a10] border border-cyber-border focus:border-cyber-accent rounded-lg px-3.5 py-2.5 text-xs text-white placeholder-slate-500 outline-none transition font-mono"
-                 value="Doble-2">
+      <div class="p-4 space-y-3.5 border-b border-cyber-border">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold text-cyber-accent uppercase tracking-wider flex items-center gap-1.5">
+            <i class="fa-solid fa-sliders"></i> Matriz de Vectores OSINT
+          </span>
+          <span class="text-[10px] text-slate-400">Multi-Target Input</span>
         </div>
 
-        <div class="flex gap-2">
-          <select id="mode-select" class="flex-1 bg-[#070a10] border border-cyber-border rounded-lg px-3 py-2 text-xs text-slate-300 outline-none">
-            <option value="agent">Agente Autónomo (DeepSeek)</option>
-            <option value="phone">Escaneo Telefónico E.164</option>
-          </select>
-          <select id="lang-select" class="w-24 bg-[#070a10] border border-cyber-border rounded-lg px-2 py-2 text-xs text-slate-300 outline-none">
-            <option value="es">Español</option>
-            <option value="en">English</option>
-          </select>
+        <!-- Target Principal -->
+        <div>
+          <label class="block text-[11px] font-semibold text-slate-300 mb-1">Nombre o Sujeto Principal *</label>
+          <input type="text" id="target-input" value="Ángel Calderón Rodríguez" 
+                 class="w-full bg-[#070a10] border border-cyber-border focus:border-cyber-accent rounded-lg px-3 py-2 text-xs text-white outline-none font-mono">
         </div>
 
+        <!-- Usernames / Handles -->
+        <div>
+          <label class="block text-[11px] font-semibold text-slate-300 mb-1">Usernames / Handles (separados por coma)</label>
+          <input type="text" id="usernames-input" value="Doble-2, angelcaldev, DobleVneko" 
+                 class="w-full bg-[#070a10] border border-cyber-border focus:border-cyber-accent rounded-lg px-3 py-2 text-xs text-white outline-none font-mono">
+        </div>
+
+        <!-- Correos Electrónicos -->
+        <div>
+          <label class="block text-[11px] font-semibold text-slate-300 mb-1">Correos Electrónicos (personal / trabajo)</label>
+          <input type="text" id="emails-input" value="angel@angelcalderon.dev, acalderon@fospuca.com" 
+                 class="w-full bg-[#070a10] border border-cyber-border focus:border-cyber-accent rounded-lg px-3 py-2 text-xs text-white outline-none font-mono">
+        </div>
+
+        <!-- Números de Teléfono -->
+        <div>
+          <label class="block text-[11px] font-semibold text-slate-300 mb-1">Números Telefónicos (E.164 o local)</label>
+          <input type="text" id="phones-input" value="+584241922882" 
+                 class="w-full bg-[#070a10] border border-cyber-border focus:border-cyber-accent rounded-lg px-3 py-2 text-xs text-white outline-none font-mono">
+        </div>
+
+        <!-- Anclas de Confianza (Trust Anchors) -->
+        <div>
+          <label class="block text-[11px] font-semibold text-cyber-orange mb-1 flex items-center gap-1">
+            <i class="fa-solid fa-anchor"></i> Anclas de Confianza Verificadas (Trust Anchors)
+          </label>
+          <input type="text" id="anchors-input" value="github:Doble-2, web:https://angelcalderon.dev" 
+                 placeholder="e.g. github:Doble-2, twitter:angelcaldev"
+                 class="w-full bg-[#070a10] border border-cyber-orange/40 focus:border-cyber-orange rounded-lg px-3 py-2 text-xs text-white outline-none font-mono">
+          <p class="text-[9px] text-slate-500 mt-0.5">Las fuentes de verdad incuestionables para evitar homónimos y falsos amigos.</p>
+        </div>
+
+        <!-- Opciones del Motor -->
+        <div class="grid grid-cols-2 gap-2 pt-1">
+          <div>
+            <label class="block text-[10px] text-slate-400 mb-1">Modo de Búsqueda</label>
+            <select id="mode-select" class="w-full bg-[#070a10] border border-cyber-border rounded-lg px-2.5 py-1.5 text-xs text-slate-200 outline-none">
+              <option value="agent">Agente Autónomo IA</option>
+              <option value="phone">Sólo Telecom / Teléfono</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[10px] text-slate-400 mb-1">Proveedor IA</label>
+            <select id="ai-provider-select" class="w-full bg-[#070a10] border border-cyber-border rounded-lg px-2.5 py-1.5 text-xs text-slate-200 outline-none">
+              <option value="deepseek">DeepSeek API</option>
+              <option value="ollama">Ollama Local (Offline)</option>
+              <option value="openai">OpenAI</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-[10px] text-slate-400 mb-1">Idioma de Salida</label>
+            <select id="lang-select" class="w-full bg-[#070a10] border border-cyber-border rounded-lg px-2.5 py-1.5 text-xs text-slate-200 outline-none">
+              <option value="es">Español</option>
+              <option value="en">English</option>
+              <option value="pt">Português</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[10px] text-slate-400 mb-1">Pasos Máximos</label>
+            <input type="number" id="max-steps-input" value="6" min="3" max="15" 
+                   class="w-full bg-[#070a10] border border-cyber-border rounded-lg px-2.5 py-1.5 text-xs text-slate-200 outline-none">
+          </div>
+        </div>
+
+        <!-- Botón de Lanzamiento -->
         <button id="btn-start" onclick="launchInvestigation()" 
-                class="w-full py-2.5 rounded-lg bg-cyber-accent text-[#070a10] font-bold text-xs tracking-wider uppercase hover:shadow-[0_0_20px_rgba(0,240,255,0.4)] hover:brightness-110 transition flex items-center justify-center gap-2">
-          <i class="fa-solid fa-crosshairs"></i> Iniciar Investigación
+                class="w-full py-2.5 rounded-lg bg-cyber-accent text-[#070a10] font-black text-xs tracking-wider uppercase hover:shadow-[0_0_24px_rgba(0,240,255,0.4)] hover:brightness-110 transition flex items-center justify-center gap-2">
+          <i class="fa-solid fa-radar"></i> Ejecutar Investigación Multi-Vector
         </button>
       </div>
 
@@ -164,8 +227,15 @@
 
     async function launchInvestigation() {
       const target = document.getElementById('target-input').value.trim();
+      const usernames = document.getElementById('usernames-input').value.split(',').map(s => s.trim()).filter(Boolean);
+      const emails = document.getElementById('emails-input').value.split(',').map(s => s.trim()).filter(Boolean);
+      const phones = document.getElementById('phones-input').value.split(',').map(s => s.trim()).filter(Boolean);
+      const anchors = document.getElementById('anchors-input').value.split(',').map(s => s.trim()).filter(Boolean);
       const mode = document.getElementById('mode-select').value;
+      const aiProvider = document.getElementById('ai-provider-select').value;
       const lang = document.getElementById('lang-select').value;
+      const maxSteps = parseInt(document.getElementById('max-steps-input').value) || 6;
+
       if (!target) return;
 
       // Reset UI
@@ -181,7 +251,17 @@
         const resp = await fetch('/api/investigate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ target: target, mode: mode, language: lang })
+          body: JSON.stringify({
+            target: target,
+            usernames: usernames,
+            emails: emails,
+            phones: phones,
+            trust_anchors: anchors,
+            mode: mode,
+            ai_provider: aiProvider,
+            language: lang,
+            max_steps: maxSteps
+          })
         });
         const data = await resp.json();
         currentInvId = data.investigation_id;

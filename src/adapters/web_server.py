@@ -47,9 +47,16 @@ REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 class InvestigationRequest(BaseModel):
-    target: str = Field(..., description="Target username, email, phone or domain.")
-    mode: str = Field(default="agent", description="'agent' for autonomous AI, 'phone' for telecom OSINT.")
+    target: str = Field(..., description="Target name or primary identifier.")
+    usernames: list[str] = Field(default_factory=list, description="List of usernames/handles to investigate.")
+    emails: list[str] = Field(default_factory=list, description="List of email addresses.")
+    phones: list[str] = Field(default_factory=list, description="List of phone numbers.")
+    trust_anchors: list[str] = Field(default_factory=list, description="Verified trust anchors (e.g. github:Doble-2).")
+    mode: str = Field(default="agent", description="'agent' for autonomous AI, 'hunt' for full OSINT sweep, 'phone' for telecom.")
+    ai_provider: str = Field(default="deepseek", description="AI provider: deepseek, ollama, openai.")
     language: str = Field(default="es", description="Language code: es, en, pt, ar, ru.")
+    max_steps: int = Field(default=6, description="Max agent reasoning steps.")
+    enable_breach_check: bool = Field(default=False, description="Check data breaches.")
 
 
 class InvestigationSession:
@@ -142,16 +149,23 @@ async def download_artefact(inv_id: str, file_type: str):
 
 async def _run_investigation(session: InvestigationSession):
     inv_id = session.inv_id
-    target = session.request.target
-    lang = Language.from_str(session.request.language)
+    req = session.request
+    target = req.target
+    lang = Language.from_str(req.language)
     settings = AppSettings()
 
-    await session.broadcast("log", f"[INIT] Objetivo inicializado: {target} (Modo: {session.request.mode.upper()})")
+    if req.ai_provider:
+        settings.ai_provider = req.ai_provider
+        if req.ai_provider == "ollama":
+            settings.ai_base_url = "http://localhost:11434/v1"
+            settings.ai_model = "qwen2.5-coder:7b"
 
-    # Si es teléfono directo
-    if session.request.mode == "phone" or target.startswith("+") or (target.replace("-", "").isdigit() and len(target) > 7):
-        await session.broadcast("log", f"[TELECOM] Escaneando número telefónico con libphonenumber...")
-        phone_res = await PhoneScanner.scan(phone_number=target, settings=settings)
+    await session.broadcast("log", f"[INIT] Objetivo inicializado: {target} (Modo: {req.mode.upper()})")
+
+    # Si hay teléfonos especificados
+    for phone_num in req.phones:
+        await session.broadcast("log", f"[TELECOM] Escaneando teléfono {phone_num}...")
+        phone_res = await PhoneScanner.scan(phone_number=phone_num, settings=settings)
         await session.broadcast("phone_data", {
             "e164": phone_res.e164,
             "carrier": phone_res.carrier_name,
@@ -160,43 +174,88 @@ async def _run_investigation(session: InvestigationSession):
             "whatsapp": phone_res.whatsapp_active,
             "timezones": phone_res.timezones,
         })
-        # Emitir nodo central del teléfono
         await session.broadcast("node_add", {
             "id": f"phone:{phone_res.e164}",
             "label": f"{phone_res.e164}\\n({phone_res.carrier_name or 'Tel'})",
             "group": "phone",
         })
+        await session.broadcast("edge_add", {
+            "from": f"target:{target}",
+            "to": f"phone:{phone_res.e164}",
+            "label": "PHONE_NUM",
+        })
 
-    # Si es modo agente completo
-    if session.request.mode == "agent":
+    # Si hay emails especificados
+    for email in req.emails:
+        await session.broadcast("node_add", {
+            "id": f"email:{email}",
+            "label": f"{email}",
+            "group": "email",
+        })
+        await session.broadcast("edge_add", {
+            "from": f"target:{target}",
+            "to": f"email:{email}",
+            "label": "USES_EMAIL",
+        })
+
+    # Si hay anclas de confianza
+    for anchor in req.trust_anchors:
+        await session.broadcast("log", f"[TRUST ANCHOR] Ancla verificada fijada: {anchor}")
+        await session.broadcast("node_add", {
+            "id": f"anchor:{anchor}",
+            "label": f"[VERIFIED]\\n{anchor}",
+            "group": "identity",
+        })
+        await session.broadcast("edge_add", {
+            "from": f"target:{target}",
+            "to": f"anchor:{anchor}",
+            "label": "TRUST_ANCHOR",
+        })
+
+    # Modo Agente Autónomo
+    if req.mode == "agent":
         def on_step_callback(step: AgentStep):
             asyncio.create_task(session.broadcast("log", f"[PASO {step.step_number}] {step.tool_name} → {step.tool_args}"))
-            # Si el tool fue scan_username o scan_email, emitir nodos descubiertos
             if step.tool_name == "scan_username":
                 uname = step.tool_args.get("username", "")
-                asyncio.create_task(session.broadcast("node_add", {
-                    "id": f"user:{uname}",
-                    "label": f"@{uname}",
-                    "group": "social"
-                }))
-                asyncio.create_task(session.broadcast("edge_add", {
-                    "from": f"target:{target}",
-                    "to": f"user:{uname}",
-                    "label": "HANDLE"
-                }))
+                asyncio.create_task(session.broadcast("node_add", {"id": f"user:{uname}", "label": f"@{uname}", "group": "social"}))
+                asyncio.create_task(session.broadcast("edge_add", {"from": f"target:{target}", "to": f"user:{uname}", "label": "HANDLE"}))
+            elif step.tool_name == "scan_email":
+                em = step.tool_args.get("email", "")
+                asyncio.create_task(session.broadcast("node_add", {"id": f"email:{em}", "label": em, "group": "email"}))
+                asyncio.create_task(session.broadcast("edge_add", {"from": f"target:{target}", "to": f"email:{em}", "label": "EMAIL"}))
+            elif step.tool_name == "scan_phone":
+                ph = step.tool_args.get("phone_number", "")
+                asyncio.create_task(session.broadcast("node_add", {"id": f"phone:{ph}", "label": ph, "group": "phone"}))
+                asyncio.create_task(session.broadcast("edge_add", {"from": f"target:{target}", "to": f"phone:{ph}", "label": "PHONE"}))
 
-        # Nodo raíz del objetivo
         await session.broadcast("node_add", {
             "id": f"target:{target}",
             "label": f"{target}\\n[TARGET]",
             "group": "target"
         })
 
-        engine = AgentEngine(settings=settings, enable_breach_check=False, on_step=on_step_callback)
-        objective = f"Investigación exhaustiva de inteligencia del objetivo {target}."
+        engine = AgentEngine(settings=settings, enable_breach_check=req.enable_breach_check, on_step=on_step_callback)
+        
+        # Armar objetivo contextualizado con todos los vectores
+        all_handles = ", ".join(req.usernames) if req.usernames else target
+        all_emails = ", ".join(req.emails) if req.emails else "N/A"
+        all_phones = ", ".join(req.phones) if req.phones else "N/A"
+        
+        objective = (
+            f"Investigación exhaustiva de inteligencia del objetivo {target}. "
+            f"Handles a correlacionar: [{all_handles}]. "
+            f"Emails a investigar: [{all_emails}]. "
+            f"Teléfonos a investigar: [{all_phones}]."
+        )
         
         try:
-            result = await engine.run(objective=objective, language=lang, max_steps=5)
+            result = await engine.run(
+                objective=objective,
+                language=lang,
+                max_steps=req.max_steps,
+                trust_anchors=req.trust_anchors or None,
+            )
             session.person = result.person
 
             # Exportar Canvas
@@ -206,13 +265,11 @@ async def _run_investigation(session: InvestigationSession):
             GraphExporter.export_canvas(graph, canvas_path)
             session.canvas_path = str(canvas_path)
 
-            # Transmitir grafo completo al cliente
             for n in graph.nodes:
                 await session.broadcast("node_add", {"id": n.id, "label": n.label, "group": n.type.lower()})
             for e in graph.edges:
                 await session.broadcast("edge_add", {"from": e.source, "to": e.target, "label": e.label or e.type})
 
-            # Resumen final
             if result.person.analysis:
                 await session.broadcast("report_done", {
                     "confidence": result.person.analysis.confidence,
