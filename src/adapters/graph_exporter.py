@@ -1,7 +1,13 @@
-"""Graph Exporter Adapter.
+"""Graph Exporter Adapter — Analyst-grade entity correlation graph.
 
-Transforms PersonEntity, SocialProfile, breaches and findings into
-GraphExportModel (JSON Graph / Obsidian Canvas).
+Design principle: SIGNAL OVER NOISE.
+A useful intelligence graph shows only what advances the investigation:
+  - The target and its verified identity
+  - Platforms that CONFIRM the profile (with follower/repo counts)
+  - High-value assets: phone, email, own domains
+  - Correlated external persons, explicitly marked as excluded
+Everything else (unconfirmed profiles, generic scans) is aggregated into a
+single counter node instead of spawning one unreadable box per scanned site.
 """
 
 from __future__ import annotations
@@ -12,79 +18,116 @@ from pathlib import Path
 from typing import Any
 
 from core.domain.graph_models import GraphEdge, GraphExportModel, GraphNode
-from core.domain.models import PersonEntity
+from core.domain.models import PersonEntity, SocialProfile
+
+# Platforms worth their own node when confirmed. Anything else gets aggregated.
+HIGH_SIGNAL_PLATFORMS = {
+    "github", "gitlab", "bitbucket", "stackoverflow", "kaggle", "hackernews",
+    "x", "twitter", "instagram", "facebook", "linkedin", "tiktok", "twitch",
+    "youtube", "telegram", "reddit", "mastodon", "bluesky", "threads",
+    "medium", "devto", "behance", "dribbble", "soundcloud", "pinterest",
+    "keybase", "producthunt", "aboutme", "npm", "dockerhub", "pypi",
+}
+
+# Metadata keys that carry real intelligence value on a node label.
+LABEL_KEYS = ("followers", "public_repos", "karma", "subscribers", "reputation")
 
 
 class GraphExporter:
-    """Adapts OSINT investigation results into interactive entity graphs."""
+    """Adapts OSINT investigation results into a readable analyst graph."""
 
     @staticmethod
+    def _platform_badge(prof: SocialProfile) -> str:
+        """Builds a compact, information-dense node label for a confirmed profile."""
+        meta = prof.metadata or {}
+        bits: list[str] = []
+        for key in LABEL_KEYS:
+            value = meta.get(key)
+            if value not in (None, "", 0, [], "0"):
+                short = {"public_repos": "repos", "followers": "seguidores"}.get(key, key)
+                bits.append(f"{value} {short}")
+        platform = (prof.network_name or "").lower()
+        handle = prof.username or "?"
+        label = f"{platform.upper()}\n@{handle}"
+        if bits:
+            label += "\n" + " · ".join(bits[:2])
+        return label
+
+    @classmethod
     def build_graph(
+        cls,
         person: PersonEntity,
         extra_entities: list[dict[str, Any]] | None = None,
+        max_platforms: int = 12,
     ) -> GraphExportModel:
-        """Constructs nodes and edges from a PersonEntity."""
+        """Constructs a high-signal graph: grouped platforms, aggregated noise."""
         nodes: list[GraphNode] = []
         edges: list[GraphEdge] = []
-        seen_nodes: set[str] = set()
+        seen: set[str] = set()
 
-        def add_node(n_id: str, label: str, n_type: Any, props: dict[str, Any] | None = None) -> None:
-            if n_id not in seen_nodes:
-                seen_nodes.add(n_id)
+        def add_node(n_id: str, label: str, n_type: str, props: dict[str, Any] | None = None) -> None:
+            if n_id not in seen:
+                seen.add(n_id)
                 nodes.append(GraphNode(id=n_id, label=label, type=n_type, properties=props or {}))
 
-        # 1. Target principal
-        target_id = f"target:{person.target}"
+        def add_edge(src: str, dst: str, etype: str, label: str | None = None) -> None:
+            if src in seen and dst in seen:
+                edges.append(GraphEdge(source=src, target=dst, type=etype, label=label or etype))
+
+        # ── 1. TARGET ROOT ────────────────────────────────────────────────
+        target_id = "target:root"
         add_node(target_id, person.target, "Target", {"original_input": True})
 
-        # 2. Perfiles sociales confirmados
-        for prof in person.profiles:
-            if not prof.exists:
-                continue
+        # ── 2. CONFIRMED PROFILES, RANKED BY INTELLIGENCE VALUE ───────────
+        confirmed = [p for p in person.profiles if p.exists]
+        unconfirmed_count = len([p for p in person.profiles if not p.exists])
 
-            platform_id = f"platform:{prof.network_name.lower()}:{prof.username}"
+        def signal_score(p: SocialProfile) -> int:
+            meta = p.metadata or {}
+            score = 3 if (p.network_name or "").lower() in HIGH_SIGNAL_PLATFORMS else 0
+            score += sum(1 for k in LABEL_KEYS if meta.get(k) not in (None, "", 0, [], "0"))
+            if p.bio:
+                score += 1
+            return score
+
+        ranked = sorted(confirmed, key=signal_score, reverse=True)
+        kept, dropped = ranked[:max_platforms], ranked[max_platforms:]
+
+        for prof in kept:
+            node_id = f"platform:{prof.network_name.lower()}"
             add_node(
-                platform_id,
-                f"{prof.network_name} (@{prof.username})",
+                node_id,
+                cls._platform_badge(prof),
                 "Platform",
-                {"url": prof.url, "bio": prof.bio},
+                {"url": prof.url, "bio": (prof.bio or "")[:160]},
             )
-            edges.append(
-                GraphEdge(
-                    source=target_id,
-                    target=platform_id,
-                    type="HAS_PROFILE",
-                    label="claimed profile",
-                    properties={"url": prof.url},
-                )
-            )
+            add_edge(target_id, node_id, "HAS_PROFILE", "perfil confirmado")
 
-            # Si el perfil incluye metadatos como emails o sitios externos
-            meta = prof.metadata or {}
-            for email in meta.get("other_emails", []):
-                email_id = f"email:{email}"
-                add_node(email_id, email, "Email")
-                edges.append(GraphEdge(source=platform_id, target=email_id, type="EXPOSES_EMAIL"))
+        # ── 3. AGGREGATED NOISE (one counter node, not 50 boxes) ──────────
+        noise_parts: list[str] = []
+        if dropped:
+            noise_parts.append(f"{len(dropped)} plataformas menores\nverificadas")
+        if unconfirmed_count:
+            noise_parts.append(f"{unconfirmed_count} sin perfil")
+        if noise_parts:
+            add_node("noise:summary", "\n".join(noise_parts), "Noise", {"collapsed": True})
+            add_edge(target_id, "noise:summary", "SCANNED", "superficie explorada")
 
-            for website in meta.get("other_websites", []):
-                domain_id = f"domain:{website}"
-                add_node(domain_id, website, "Domain")
-                edges.append(GraphEdge(source=platform_id, target=domain_id, type="LINKS_TO"))
-
-        # 3. Entidades extra deducidas (teléfono, colaborador, etc.)
+        # ── 4. CURATED HIGH-VALUE ASSETS ──────────────────────────────────
         for item in extra_entities or []:
             e_type = item.get("type", "Identity")
-            e_id = item.get("id") or f"{e_type.lower()}:{item.get('label')}"
-            add_node(e_id, item.get("label", e_id), e_type, item.get("properties"))
-            if item.get("source"):
-                edges.append(
-                    GraphEdge(
-                        source=item["source"],
-                        target=e_id,
-                        type=item.get("relation", "ASSOCIATED_WITH"),
-                        label=item.get("relation_label"),
-                    )
-                )
+            raw_id = item.get("id") or f"{e_type.lower()}:{item.get('label')}"
+            node_id = f"{e_type.lower()}:{str(raw_id).split(':', 1)[-1]}"
+            add_node(node_id, item.get("label", node_id), e_type, item.get("properties") or {})
+            source_id = item.get("source", target_id)
+            if source_id not in seen:
+                source_id = target_id
+            add_edge(
+                source_id,
+                node_id,
+                item.get("relation", "ASSOCIATED_WITH"),
+                item.get("relation_label") or item.get("relation"),
+            )
 
         metadata = {
             "generated_by": "OSINT-D2",
@@ -92,6 +135,8 @@ class GraphExporter:
             "target": person.target,
             "total_nodes": len(nodes),
             "total_edges": len(edges),
+            "confirmed_profiles": len(confirmed),
+            "collapsed_platforms": len(dropped) + unconfirmed_count,
         }
 
         return GraphExportModel(nodes=nodes, edges=edges, metadata=metadata)
