@@ -46,6 +46,127 @@ _IGNORED_TOOLS = {"generate_report", "search_vector_memory"}
 class ChainBuilder:
     """Builds a pivot-chain graph from an agent step trace."""
 
+
+    # Campos de perfil con valor de inteligencia y su etiqueta legible.
+    _PROFILE_FIELDS = (
+        ("name", "Nombre"),
+        ("location", "Ubicación"),
+        ("bio", "Bio"),
+        ("blog", "Web"),
+        ("followers", "Seguidores"),
+        ("following", "Siguiendo"),
+        ("public_repos", "Repos"),
+        ("twitter_username", "Twitter"),
+        ("created_at", "Cuenta creada"),
+        ("karma", "Karma"),
+        ("subscribers", "Suscriptores"),
+    )
+
+    @classmethod
+    def _extract_data(cls, tool_result: str | None, tool: str) -> dict[str, str]:
+        """Pulls every intelligence-bearing field out of a raw tool result.
+
+        Profiles carry far more than a bio: location, follower counts, account
+        age, linked accounts. The earlier version surfaced only one snippet,
+        which is why each box felt empty.
+        """
+        data: dict[str, str] = {}
+        if not tool_result:
+            return data
+        try:
+            payload = json.loads(tool_result)
+        except Exception:
+            return data
+
+        if not isinstance(payload, dict):
+            return data
+
+        # ── Teléfono: datos de telecom ───────────────────────────────────
+        if tool == "scan_phone" or "carrier" in payload:
+            for key, label in (
+                ("country", "País"), ("carrier", "Operadora"), ("line_type", "Tipo de línea"),
+                ("timezones", "Zona horaria"), ("whatsapp_active", "WhatsApp"),
+            ):
+                val = payload.get(key)
+                if val not in (None, "", [], False):
+                    data[label] = "Sí" if val is True else str(val)
+            if payload.get("associated_names"):
+                data["Nombres asociados"] = ", ".join(str(x) for x in payload["associated_names"][:3])
+
+        # ── Email: cuentas descubiertas + brechas ────────────────────────
+        if tool == "scan_email" or "total_scanned" in payload:
+            confirmed = payload.get("confirmed")
+            total = payload.get("total_scanned")
+            if total:
+                data["Sitios escaneados"] = str(total)
+            if confirmed:
+                data["Perfiles confirmados"] = str(confirmed)
+
+        # ── Estilometría ─────────────────────────────────────────────────
+        if tool == "correlate_stylometry":
+            for key, label in (
+                ("similarity_percentage", "Similitud"),
+                ("stylometric_score", "Score estilométrico"),
+                ("hamming_distance", "Distancia"),
+            ):
+                if payload.get(key) is not None:
+                    data[label] = str(payload[key])
+
+        # ── Comparación de avatares ──────────────────────────────────────
+        if tool == "compare_avatars":
+            if payload.get("similarity_percentage") is not None:
+                data["Similitud avatar"] = f"{payload['similarity_percentage']}%"
+            if payload.get("matched") is not None:
+                data["Coinciden"] = "Sí" if payload["matched"] else "No"
+            if payload.get("hamming_distance") is not None:
+                data["Distancia dHash"] = str(payload["hamming_distance"])
+
+        # ── Perfiles: el caso más rico ───────────────────────────────────
+        profiles = payload.get("profiles") or payload.get("results") or []
+        if isinstance(profiles, list) and profiles:
+            # Tomar el perfil CONFIRMADO con más campos disponibles
+            best: dict[str, Any] = {}
+            for p in profiles:
+                if not isinstance(p, dict) or not p.get("exists"):
+                    continue
+                if len([k for k in cls._PROFILE_FIELDS if p.get(k) not in (None, "", [], 0)]) > len(best):
+                    best = p
+            if best:
+                data["Plataforma"] = str(best.get("network", "?"))
+                for key, label in cls._PROFILE_FIELDS:
+                    val = best.get(key)
+                    if val in (None, "", [], 0):
+                        continue
+                    if key in ("followers", "following", "public_repos", "karma", "subscribers"):
+                        data[label] = str(val)
+                    elif key == "bio":
+                        data[label] = str(val)[:110]
+                    else:
+                        data[label] = str(val)[:70]
+                confirmed_count = len([p for p in profiles if isinstance(p, dict) and p.get("exists")])
+                if confirmed_count > 1:
+                    others = [
+                        str(p.get("network")) for p in profiles
+                        if isinstance(p, dict) and p.get("exists") and p.get("network") != best.get("network")
+                    ][:6]
+                    if others:
+                        data["También en"] = ", ".join(others)
+
+        # ── fetch_url: contenido de la página ────────────────────────────
+        if tool == "fetch_url" or "status_code" in payload:
+            if payload.get("title"):
+                data["Título"] = str(payload["title"])[:80]
+            if payload.get("description"):
+                data["Descripción"] = str(payload["description"])[:110]
+            if payload.get("url"):
+                data["URL"] = str(payload["url"])[:70]
+            if payload.get("emails"):
+                data["Correos en la página"] = ", ".join(str(x) for x in payload["emails"][:3])
+            if payload.get("phones"):
+                data["Teléfonos en la página"] = ", ".join(str(x) for x in payload["phones"][:3])
+
+        return {k: v for k, v in data.items() if v not in (None, "", "None")}
+
     @staticmethod
     def _extract_evidence(tool_result: str | None, max_len: int = 160) -> str:
         """Pulls a human-readable evidence snippet out of a raw tool result."""
@@ -98,14 +219,64 @@ class ChainBuilder:
                 seen.add(n_id)
                 nodes.append(GraphNode(id=n_id, label=label, type=n_type, **kwargs))
 
+        # Índice de perfiles confirmados por usuario, para enriquecer los nodos
+        # con la metadata completa (ubicación, seguidores, antigüedad...).
+        profiles_by_user: dict[str, Any] = {}
+        if person is not None:
+            for prof in getattr(person, "profiles", []) or []:
+                if not getattr(prof, "exists", False):
+                    continue
+                key = str(getattr(prof, "username", "")).lower().lstrip("@")
+                if key:
+                    profiles_by_user.setdefault(key, prof)
+
+        def enrich_with_profile(data: dict[str, str], username: str) -> dict[str, str]:
+            """Adds every available field from the matched confirmed profile."""
+            prof = profiles_by_user.get(username.lower().lstrip("@"))
+            if not prof:
+                return data
+            md = getattr(prof, "metadata", None) or {}
+            out = dict(data)
+            out.setdefault("Plataforma", str(getattr(prof, "network_name", "?")))
+            for key, label in cls._PROFILE_FIELDS:
+                val = md.get(key)
+                if val in (None, "", [], 0) or label in out:
+                    continue
+                if key in ("followers", "following", "public_repos", "karma", "subscribers"):
+                    out[label] = str(val)
+                elif key == "bio":
+                    out[label] = str(val)[:150]
+                else:
+                    out[label] = str(val)[:70]
+            # Antigüedad de la cuenta en años
+            created = md.get("created_at")
+            if created and "Cuenta creada" not in out:
+                out["Cuenta creada"] = str(created)[:10]
+                try:
+                    from datetime import datetime, timezone
+                    dt = datetime.fromisoformat(str(created).replace("Z", "+00:00"))
+                    years = (datetime.now(timezone.utc) - dt).days / 365.25
+                    out["Antigüedad"] = f"{years:.1f} años"
+                except Exception:
+                    pass
+            return out
+
         # ── Raíz: el punto de partida de la investigación ─────────────────
         root_id = "seed:target"
-        add_node(root_id, f"PUNTO DE PARTIDA\n{target}", "Target", evidence=f"Objetivo declarado: {target}")
+        add_node(root_id, f"{target}", "Target",
+                 evidence=f"Objetivo declarado: {target}",
+                 data={"Semilla": target, "Tipo": "Objetivo declarado"})
 
         last_id = root_id
         order = 0
         # Rastrear el último nodo creado por tipo para enlazar pivotes coherentemente
         last_by_kind: dict[str, str] = {}
+        # Padre por oleada: los nodos descubiertos en el MISMO step_number son
+        # hermanos (vectores paralelos), no una cadena. Se cuelgan del nodo que
+        # estaba activo al iniciar esa oleada.
+        wave_parent: dict[int, str] = {}
+        current_wave = 0
+        wave_root = root_id
 
         for step in steps:
             tool = getattr(step, "tool_name", None)
@@ -115,7 +286,16 @@ class ChainBuilder:
                 continue
 
             order += 1
+            step_num = int(getattr(step, "step_number", order) or order)
+            # Nueva oleada: los nodos de este step cuelgan del que estaba activo
+            # al abrir la oleada (ramificación), no del hermano anterior.
+            if step_num != current_wave:
+                current_wave = step_num
+                wave_root = last_id
+                wave_parent[step_num] = wave_root
+            parent_id = wave_parent.get(step_num, root_id)
             evidence = cls._extract_evidence(result)
+            step_data = cls._extract_data(result, tool)
 
             # ── scan_username → nodo de handle/pivote ────────────────────
             if tool == "scan_username":
@@ -125,14 +305,15 @@ class ChainBuilder:
                 nid = f"pivot:handle:{username.lower()}"
                 add_node(
                     nid,
-                    f"@{username}\n[via scan_username]",
+                    f"@{username}",
                     "Platform",
                     evidence=evidence or f"Escaneo de usernames para '{username}'",
                     correlation=None,
+                    data=enrich_with_profile(step_data, username),
                 )
                 edges.append(GraphEdge(
-                    source=last_id, target=nid, type="PIVOT",
-                    label=f"#{order} scan_username", properties={"action": tool},
+                    source=parent_id, target=nid, type="PIVOT",
+                    label=f"#{step_num} scan_username", properties={"action": tool},
                 ))
                 last_id = nid
                 last_by_kind["handle"] = nid
@@ -143,10 +324,10 @@ class ChainBuilder:
                 if not email:
                     continue
                 nid = f"pivot:email:{email.lower()}"
-                add_node(nid, f"{email}\n[via scan_email]", "Email", evidence=evidence)
+                add_node(nid, f"{email}", "Email", evidence=evidence, data=step_data)
                 edges.append(GraphEdge(
-                    source=last_id, target=nid, type="PIVOT",
-                    label=f"#{order} scan_email", properties={"action": tool},
+                    source=parent_id, target=nid, type="PIVOT",
+                    label=f"#{step_num} scan_email", properties={"action": tool},
                 ))
                 last_id = nid
 
@@ -156,10 +337,10 @@ class ChainBuilder:
                 if not phone:
                     continue
                 nid = f"pivot:phone:{re.sub(r'[^0-9+]', '', phone)}"
-                add_node(nid, f"{phone}\n[via scan_phone]", "Phone", evidence=evidence)
+                add_node(nid, f"{phone}", "Phone", evidence=evidence, data=step_data)
                 edges.append(GraphEdge(
-                    source=last_id, target=nid, type="PIVOT",
-                    label=f"#{order} scan_phone", properties={"action": tool},
+                    source=parent_id, target=nid, type="PIVOT",
+                    label=f"#{step_num} scan_phone", properties={"action": tool},
                 ))
                 last_id = nid
 
@@ -172,14 +353,15 @@ class ChainBuilder:
                 nid = f"pivot:url:{domain}"
                 add_node(
                     nid,
-                    f"{domain}\n[via fetch_url]",
+                    f"{domain}",
                     "Domain",
                     evidence=evidence or f"Contenido extraído de {url}",
                     properties={"url": url},
+                    data=step_data,
                 )
                 edges.append(GraphEdge(
-                    source=last_id, target=nid, type="PIVOT",
-                    label=f"#{order} fetch_url", properties={"action": tool, "url": url},
+                    source=parent_id, target=nid, type="PIVOT",
+                    label=f"#{step_num} fetch_url", properties={"action": tool, "url": url},
                 ))
                 last_id = nid
 
@@ -203,10 +385,11 @@ class ChainBuilder:
                     nid, label, "Finding",
                     evidence=(evidence or sample[:120]),
                     correlation=score,
+                    data=step_data,
                 )
                 edges.append(GraphEdge(
-                    source=last_id, target=nid, type="PIVOT",
-                    label=f"#{order} correlate_stylometry",
+                    source=parent_id, target=nid, type="PIVOT",
+                    label=f"#{step_num} correlate_stylometry",
                     properties={"action": tool},
                 ))
                 last_id = nid
@@ -214,10 +397,11 @@ class ChainBuilder:
             # ── compare_avatars → conclusión de identidad visual ─────────
             elif tool == "compare_avatars":
                 nid = f"pivot:avatar:{order}"
-                add_node(nid, "COMPARACIÓN DE AVATARES\n(dHash)", "Finding", evidence=evidence)
+                add_node(nid, "COMPARACIÓN DE AVATARES (dHash)", "Finding",
+                             evidence=evidence, data=step_data)
                 edges.append(GraphEdge(
-                    source=last_id, target=nid, type="PIVOT",
-                    label=f"#{order} compare_avatars", properties={"action": tool},
+                    source=parent_id, target=nid, type="PIVOT",
+                    label=f"#{step_num} compare_avatars", properties={"action": tool},
                 ))
                 last_id = nid
 

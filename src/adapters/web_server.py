@@ -70,6 +70,8 @@ class InvestigationSession:
         self.canvas_path: str | None = None
         self.steps: list[Any] = []
         self.timeline_path: str | None = None
+        self.graph_svg_path: str | None = None
+        self.graph_png_path: str | None = None
 
     async def broadcast(self, message_type: str, data: Any):
         payload = {"type": message_type, "data": data}
@@ -405,8 +407,23 @@ async def _run_investigation(session: InvestigationSession):
             html_path = REPORTS_DIR / f"{safe_name}.html"
             export_person_html(person=result.person, output_path=html_path, language=lang)
 
-            # 1) Página del HILO de investigación (la que realmente se usa)
-            if session.timeline_path and Path(session.timeline_path).exists():
+            # 1) Página del GRAFO multi-vector (la que realmente se usa)
+            if session.graph_png_path and Path(session.graph_png_path).exists():
+                try:
+                    import base64 as _b64
+                    g_b64 = _b64.b64encode(Path(session.graph_png_path).read_bytes()).decode("utf-8")
+                    _inject_graph_page_into_html(
+                        html_path, g_b64, target,
+                        heading="01.5 // Grafo Multi-Vector de la Investigación",
+                        caption=(
+                            "Cada banda vertical es un vector de investigación abierto por el agente; "
+                            "las tarjetas muestran los datos de perfil recolectados."
+                        ),
+                    )
+                    await session.broadcast("log", "[PDF] Página del grafo inyectada en el dossier.")
+                except Exception as g_err:
+                    logger.warning("Fallo al inyectar el grafo en el PDF: %s", g_err)
+            elif session.timeline_path and Path(session.timeline_path).exists():
                 try:
                     timeline_png = REPORTS_DIR / f"{safe_name}_hilo.png"
                     from playwright.async_api import async_playwright as _apw
@@ -472,40 +489,52 @@ async def _run_investigation(session: InvestigationSession):
             except Exception as pdf_err:
                 logger.warning("Fallo al generar PDF con Playwright: %s", pdf_err)
 
-            # ── HILO DE INVESTIGACIÓN: la secuencia de pivotes ────────────────
+            # ── GRAFO MULTI-VECTOR: bandas de vectores con datos ricos ───────
             try:
                 from adapters.chain_builder import ChainBuilder
-                from adapters.timeline_renderer import TimelineRenderer
+                from adapters.radial_graph_renderer import RadialGraphRenderer
 
                 chain = ChainBuilder.build_chain(session.steps, target, result.person)
                 conf = result.person.analysis.confidence if result.person.analysis else None
-                timeline_html = TimelineRenderer.render_html(chain, target=target, confidence=conf)
 
-                timeline_path = REPORTS_DIR / f"{safe_name}_hilo.html"
-                timeline_path.write_text(timeline_html, encoding="utf-8")
-                session.timeline_path = str(timeline_path)
+                # Renderizar el SVG una sola vez: sirve para el cliente y el PDF
+                graph_svg = RadialGraphRenderer.render_svg(
+                    chain, target=target, confidence=conf
+                )
+                svg_path = REPORTS_DIR / f"{safe_name}_grafo.svg"
+                svg_path.write_text(graph_svg, encoding="utf-8")
+                session.graph_svg_path = str(svg_path)
 
-                # Enviar el hilo al cliente para render inline
-                await session.broadcast("timeline", {
+                # PNG para incrustar en el dossier
+                try:
+                    graph_png = RadialGraphRenderer.export_png(
+                        chain, str(REPORTS_DIR / f"{safe_name}_grafo.png"),
+                        target=target, confidence=conf, scale=2,
+                    )
+                    session.graph_png_path = graph_png
+                except Exception as png_err:
+                    logger.warning("Fallo al rasterizar el grafo: %s", png_err)
+
+                # Enviar el grafo al cliente (SVG inline, se ve en el panel)
+                await session.broadcast("graph_svg", {
                     "target": target,
                     "confidence": conf,
-                    "steps": [
-                        {
-                            "index": i,
-                            "kind": n.type,
-                            "label": n.label,
-                            "evidence": n.evidence,
-                            "correlation": n.correlation,
-                        }
-                        for i, n in enumerate(chain.nodes)
-                    ],
+                    "svg": graph_svg,
+                    "nodes": len(chain.nodes),
+                    "edges": len(chain.edges),
+                    "vectors": max(
+                        (int(m.group(1)) for e in chain.edges
+                         if (m := __import__("re").search(r"#(\d+)", e.label or ""))),
+                        default=1,
+                    ),
                 })
                 await session.broadcast(
                     "log",
-                    f"[HILO] {chain.metadata['pivots']} pivotes reconstruidos -> {len(chain.nodes)} pasos.",
+                    f"[GRAFO] {len(chain.nodes)} entidades en {len(chain.edges)} relaciones "
+                    f"con datos de perfil completos.",
                 )
             except Exception as chain_err:
-                logger.warning("Fallo al construir el hilo: %s", chain_err)
+                logger.warning("Fallo al construir el grafo: %s", chain_err)
                 for n in graph.nodes:
                     await session.broadcast("node_add", {
                         "id": n.id, "label": n.label, "group": n.type.lower(),

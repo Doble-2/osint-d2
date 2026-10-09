@@ -24,6 +24,10 @@ class GraphNode(BaseModel):
         default=None,
         description="Evidencia concreta que sustenta este nodo (bio, URL, métrica, score).",
     )
+    data: dict[str, str] = Field(
+        default_factory=dict,
+        description="Datos estructurados del hallazgo (bio, ubicación, seguidores, repos...).",
+    )
     properties: dict[str, Any] = Field(
         default_factory=dict, description="Metadatos adicionales del nodo."
     )

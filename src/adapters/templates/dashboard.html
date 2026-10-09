@@ -250,7 +250,9 @@
       document.getElementById('btn-download-canvas').classList.add('hidden');
       document.getElementById('report-drawer').classList.add('translate-y-full');
       document.getElementById('timeline-steps').innerHTML = '';
+      document.getElementById('graph-svg-holder').innerHTML = '';
       document.getElementById('timeline-container').classList.add('hidden');
+      document.getElementById('graph-svg-container').classList.add('hidden');
       document.getElementById('graph-container').classList.remove('hidden');
       document.getElementById('badge-status').innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-cyber-accent animate-ping"></span> INVESTIGANDO';
 
@@ -288,6 +290,19 @@
         const msg = JSON.parse(event.data);
         if (msg.type === 'log') {
           logToTerminal(msg.data);
+        } else if (msg.type === 'graph_svg') {
+          const holder = document.getElementById('graph-svg-holder');
+          if (holder && msg.data.svg) {
+            holder.innerHTML = msg.data.svg;
+            const svgEl = holder.querySelector('svg');
+            if (svgEl) {
+              svgEl.style.maxWidth = '100%';
+              svgEl.style.height = 'auto';
+            }
+            showGraphSvg();
+          }
+          logToTerminal('[GRAFO] ' + msg.data.nodes + ' entidades, ' +
+                        msg.data.edges + ' relaciones, ' + msg.data.vectors + ' vectores.');
         } else if (msg.type === 'timeline') {
           renderTimeline(msg.data);
           showTimeline();
@@ -399,19 +414,31 @@
       });
     }
 
+    function showGraphSvg() {
+      document.getElementById('graph-svg-container').classList.remove('hidden');
+      document.getElementById('timeline-container').classList.add('hidden');
+      document.getElementById('graph-container').classList.add('hidden');
+    }
+
     function showTimeline() {
       document.getElementById('timeline-container').classList.remove('hidden');
       document.getElementById('graph-container').classList.add('hidden');
     }
 
     function toggleView() {
+      const sv = document.getElementById('graph-svg-container');
       const tl = document.getElementById('timeline-container');
       const gr = document.getElementById('graph-container');
-      const showingTimeline = !tl.classList.contains('hidden');
-      tl.classList.toggle('hidden', showingTimeline);
-      gr.classList.toggle('hidden', !showingTimeline);
-      if (!showingTimeline && network) {
-        setTimeout(() => network.fit({ animation: { duration: 400 } }), 120);
+      const svVisible = !sv.classList.contains('hidden');
+      if (svVisible) {
+        // grafo SVG -> red interactiva
+        sv.classList.add('hidden');
+        gr.classList.remove('hidden');
+        if (network) setTimeout(() => network.fit({ animation: { duration: 400 } }), 120);
+      } else {
+        sv.classList.remove('hidden');
+        gr.classList.add('hidden');
+        tl.classList.add('hidden');
       }
     }
 
