@@ -132,21 +132,44 @@ class GraphExporter:
         width: int = 1600,
         height: int = 1100,
     ) -> str:
-        """Renders the entity graph as a high-resolution PNG (Playwright/Chromium)."""
-        from playwright.sync_api import sync_playwright
+        """Renders the entity graph as a high-resolution PNG using async Playwright.
+
+        Note: uses the ASYNC API on purpose — this is called from within FastAPI's
+        asyncio event loop, where Playwright's sync API raises a fatal error.
+        """
+        import asyncio
+        from playwright.async_api import async_playwright
 
         path = Path(output_path)
         path.parent.mkdir(parents=True, exist_ok=True)
 
         graph_html = graph.to_interactive_html(title=title)
 
-        with sync_playwright() as p:
-            browser = p.chromium.launch()
-            page = browser.new_page(viewport={"width": width, "height": height}, device_scale_factor=2)
-            page.set_content(graph_html, wait_until="networkidle")
-            # Esperar a que la física del grafo se estabilice
-            page.wait_for_timeout(3500)
-            page.screenshot(path=str(path), full_page=False)
-            browser.close()
+        async def _render() -> None:
+            async with async_playwright() as p:
+                browser = await p.chromium.launch()
+                page = await browser.new_page(
+                    viewport={"width": width, "height": height},
+                    device_scale_factor=2,
+                )
+                await page.set_content(graph_html, wait_until="networkidle")
+                # Esperar a que la física del grafo se estabilice
+                await page.wait_for_timeout(3500)
+                await page.screenshot(path=str(path), full_page=False)
+                await browser.close()
+
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop and loop.is_running():
+            # Ya estamos en un event loop: ejecutar en un hilo con su propio loop.
+            import concurrent.futures
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                pool.submit(asyncio.run, _render()).result()
+        else:
+            asyncio.run(_render())
 
         return str(path)
