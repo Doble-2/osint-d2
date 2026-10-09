@@ -72,6 +72,13 @@ class InvestigationSession:
         self.timeline_path: str | None = None
         self.graph_svg_path: str | None = None
         self.graph_png_path: str | None = None
+        # Cancelación cooperativa: el bucle del agente consulta este flag.
+        self.cancelled: bool = False
+
+    def cancel(self) -> None:
+        """Marca la sesión como cancelada; el bucle del agente la detiene."""
+        self.cancelled = True
+        self.status = "cancelled"
 
     async def broadcast(self, message_type: str, data: Any):
         payload = {"type": message_type, "data": data}
@@ -184,6 +191,23 @@ async def start_investigation(req: InvestigationRequest):
     return {"investigation_id": inv_id, "status": "started", "target": req.target}
 
 
+@app.post("/api/cancel/{inv_id}")
+async def cancel_investigation(inv_id: str):
+    """Cancelación cooperativa de una investigación en curso.
+
+    Nielsen #3 (user control and freedom): el usuario debe poder salir de
+    cualquier proceso largo. El bucle del agente consulta session.cancelled.
+    """
+    session = active_sessions.get(inv_id)
+    if not session:
+        return {"status": "not_found", "investigation_id": inv_id}
+    if session.status not in ("running",):
+        return {"status": session.status, "investigation_id": inv_id}
+    session.cancel()
+    await session.broadcast("status", "cancelled")
+    return {"status": "cancelled", "investigation_id": inv_id}
+
+
 @app.websocket("/ws/{inv_id}")
 async def websocket_stream(websocket: WebSocket, inv_id: str):
     await websocket.accept()
@@ -248,8 +272,18 @@ async def _run_investigation(session: InvestigationSession):
 
     await session.broadcast("log", f"[INIT] Objetivo inicializado: {target} (Modo: {req.mode.upper()})")
 
+    def _cancelled() -> bool:
+        return session.cancelled
+
+    if _cancelled():
+        await session.broadcast("log", "[CANCEL] Investigación cancelada antes de empezar.")
+        return
+
     # Si hay teléfonos especificados
     for phone_num in req.phones:
+        if _cancelled():
+            await session.broadcast("log", "[CANCEL] Detenido durante el escaneo de teléfonos.")
+            return
         await session.broadcast("log", f"[TELECOM] Escaneando teléfono {phone_num}...")
         phone_res = await PhoneScanner.scan(phone_number=phone_num, settings=settings)
         await session.broadcast("phone_data", {
@@ -298,12 +332,21 @@ async def _run_investigation(session: InvestigationSession):
             "label": "TRUST_ANCHOR",
         })
 
+    if _cancelled():
+        await session.broadcast("log", "[CANCEL] Detenido antes de la fase de agente.")
+        return
+
     # Modo Agente Autónomo
     if req.mode == "agent":
         # Registro de correlaciones verificadas durante la corrida.
         correlation_log: list[dict[str, Any]] = []
 
+        class _Cancelled(Exception):
+            """Señal interna para abortar el bucle del agente al cancelar."""
+
         def on_step_callback(step: AgentStep):
+            if session.cancelled:
+                raise _Cancelled()
             asyncio.create_task(session.broadcast("log", f"[PASO {step.step_number}] {step.tool_name} -> {step.tool_args}"))
 
             # Marca homónimos: buscar "angel" cuando el sujeto se llama Angel
@@ -374,13 +417,25 @@ async def _run_investigation(session: InvestigationSession):
         )
         
         try:
-            result = await engine.run(
-                objective=objective,
-                language=lang,
-                max_steps=req.max_steps,
-                trust_anchors=req.trust_anchors or None,
-                target=target,
-            )
+            try:
+                result = await engine.run(
+                    objective=objective,
+                    language=lang,
+                    max_steps=req.max_steps,
+                    trust_anchors=req.trust_anchors or None,
+                    target=target,
+                )
+            except _Cancelled:
+                await session.broadcast("log", "[CANCEL] Investigación detenida por el usuario.")
+                await session.broadcast("status", "cancelled")
+                return
+            except Exception as _cancel_probe:
+                # El callback puede haber lanzado la señal envuelta por el motor.
+                if session.cancelled or "_Cancelled" in type(_cancel_probe).__name__:
+                    await session.broadcast("log", "[CANCEL] Investigación detenida por el usuario.")
+                    await session.broadcast("status", "cancelled")
+                    return
+                raise
             session.person = result.person
             session.steps = list(getattr(result, "steps", []) or [])
 

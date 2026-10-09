@@ -45,7 +45,7 @@
       </div>
       <div>
         <h1 class="text-sm font-bold tracking-wider text-white">OSINT-D2 FORENSIC ENGINE</h1>
-        <p class="text-[10px] text-slate-400">Autonomous Agent • Dynamic Entity Graph • Telecom Scanner</p>
+        <p class="text-[11px] text-slate-400 hidden sm:block">Investigación multi-vector con agente autónomo</p>
       </div>
     </div>
 
@@ -54,10 +54,13 @@
       <span id="badge-status" class="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5">
         <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> LISTO
       </span>
-      <button id="btn-download-pdf" onclick="downloadArtefact('pdf')" class="hidden px-3 py-1.5 rounded-lg bg-cyber-accent/10 hover:bg-cyber-accent/20 border border-cyber-accent/40 text-cyber-accent text-xs font-semibold transition flex items-center gap-2">
+      <button id="btn-cancel" onclick="cancelInvestigation()" class="hidden px-3 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 text-[11px] font-semibold transition min-h-[44px] text-center items-center">
+        <i class="fa-solid fa-stop"></i> <span class="hidden sm:inline">Cancelar</span>
+      </button>
+      <button id="btn-download-pdf" onclick="downloadArtefact('pdf')" class="hidden px-3 min-h-[44px] rounded-lg bg-cyber-accent/10 hover:bg-cyber-accent/20 border border-cyber-accent/40 text-cyber-accent text-xs font-semibold transition flex items-center gap-2">
         <i class="fa-solid fa-file-pdf"></i> Descargar PDF
       </button>
-      <button id="btn-download-canvas" onclick="downloadArtefact('canvas')" class="hidden px-3 py-1.5 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/40 text-purple-300 text-xs font-semibold transition flex items-center gap-2">
+      <button id="btn-download-canvas" onclick="downloadArtefact('canvas')" class="hidden px-3 min-h-[44px] rounded-lg bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/40 text-purple-300 text-xs font-semibold transition flex items-center gap-2">
         <i class="fa-solid fa-diagram-project"></i> <span class="hidden sm:inline">Obsidian Canvas</span><span class="sm:hidden">Canvas</span>
       </button>
     </div>
@@ -70,12 +73,12 @@
     <aside id="control-panel" class="w-full lg:w-[450px] lg:shrink-0 border-b lg:border-b-0 lg:border-r border-cyber-border bg-cyber-card/75 backdrop-blur flex flex-col z-10 overflow-y-auto lg:overflow-hidden">
       
       <div class="p-3 lg:p-4 border-b border-cyber-border">
-        <button onclick="toggleForm()" class="w-full flex items-center justify-between lg:pointer-events-none lg:cursor-default">
+        <button onclick="toggleForm()" class="w-full min-h-[44px] flex items-center justify-between lg:pointer-events-none lg:cursor-default" aria-label="Mostrar u ocultar el formulario de vectores" aria-expanded="true">
           <span class="text-xs font-bold text-cyber-accent uppercase tracking-wider flex items-center gap-1.5">
             <i class="fa-solid fa-sliders"></i> Matriz de Vectores OSINT
           </span>
           <span class="flex items-center gap-2">
-            <span class="text-[10px] text-slate-400 hidden sm:inline">Multi-Target Input</span>
+            <span class="text-[11px] text-slate-400 hidden sm:inline">Multi-Target Input</span>
             <i id="form-chevron" class="fa-solid fa-chevron-down lg:hidden text-slate-400 text-xs transition-transform"></i>
           </span>
         </button>
@@ -86,28 +89,28 @@
         <div>
           <label class="block text-[11px] font-semibold text-slate-300 mb-1">Nombre o Sujeto Principal *</label>
           <input type="text" id="target-input" value="Ángel Calderón Rodríguez" 
-                 class="w-full bg-[#070a10] border border-cyber-border focus:border-cyber-accent rounded-lg px-3 py-2 text-xs text-white outline-none font-mono">
+                 class="w-full bg-[#070a10] border border-cyber-border focus:border-cyber-accent rounded-lg px-3 min-h-[44px] text-xs text-white outline-none font-mono">
         </div>
 
         <!-- Usernames / Handles -->
         <div>
           <label class="block text-[11px] font-semibold text-slate-300 mb-1">Usernames / Handles (separados por coma)</label>
           <input type="text" id="usernames-input" value="Doble-2, angelcaldev, DobleVneko" 
-                 class="w-full bg-[#070a10] border border-cyber-border focus:border-cyber-accent rounded-lg px-3 py-2 text-xs text-white outline-none font-mono">
+                 class="w-full bg-[#070a10] border border-cyber-border focus:border-cyber-accent rounded-lg px-3 min-h-[44px] text-xs text-white outline-none font-mono">
         </div>
 
         <!-- Correos Electrónicos -->
         <div>
           <label class="block text-[11px] font-semibold text-slate-300 mb-1">Correos Electrónicos (personal / trabajo)</label>
           <input type="text" id="emails-input" value="angel@angelcalderon.dev, acalderon@fospuca.com" 
-                 class="w-full bg-[#070a10] border border-cyber-border focus:border-cyber-accent rounded-lg px-3 py-2 text-xs text-white outline-none font-mono">
+                 class="w-full bg-[#070a10] border border-cyber-border focus:border-cyber-accent rounded-lg px-3 min-h-[44px] text-xs text-white outline-none font-mono">
         </div>
 
         <!-- Números de Teléfono -->
         <div>
           <label class="block text-[11px] font-semibold text-slate-300 mb-1">Números Telefónicos (E.164 o local)</label>
           <input type="text" id="phones-input" value="+584241922882" 
-                 class="w-full bg-[#070a10] border border-cyber-border focus:border-cyber-accent rounded-lg px-3 py-2 text-xs text-white outline-none font-mono">
+                 class="w-full bg-[#070a10] border border-cyber-border focus:border-cyber-accent rounded-lg px-3 min-h-[44px] text-xs text-white outline-none font-mono">
         </div>
 
         <!-- Anclas de Confianza (Trust Anchors) -->
@@ -117,22 +120,22 @@
           </label>
           <input type="text" id="anchors-input" value="github:Doble-2, web:https://angelcalderon.dev" 
                  placeholder="e.g. github:Doble-2, twitter:angelcaldev"
-                 class="w-full bg-[#070a10] border border-cyber-orange/40 focus:border-cyber-orange rounded-lg px-3 py-2 text-xs text-white outline-none font-mono">
-          <p class="text-[9px] text-slate-500 mt-0.5">Las fuentes de verdad incuestionables para evitar homónimos y falsos amigos.</p>
+                 class="w-full bg-[#070a10] border border-cyber-orange/40 focus:border-cyber-orange rounded-lg px-3 min-h-[44px] text-xs text-white outline-none font-mono">
+          <p class="text-[11px] text-slate-400 mt-0.5">Las fuentes de verdad incuestionables para evitar homónimos y falsos amigos.</p>
         </div>
 
         <!-- Opciones del Motor -->
         <div class="grid grid-cols-2 gap-2 pt-1">
           <div>
-            <label class="block text-[10px] text-slate-400 mb-1">Modo de Búsqueda</label>
-            <select id="mode-select" class="w-full bg-[#070a10] border border-cyber-border rounded-lg px-2.5 py-1.5 text-xs text-slate-200 outline-none">
+            <label class="block text-[11px] text-slate-400 mb-1">Modo de Búsqueda</label>
+            <select id="mode-select" class="w-full bg-[#070a10] border border-cyber-border rounded-lg px-2.5 min-h-[44px] text-xs text-slate-200 outline-none">
               <option value="agent">Agente Autónomo IA</option>
               <option value="phone">Sólo Telecom / Teléfono</option>
             </select>
           </div>
           <div>
-            <label class="block text-[10px] text-slate-400 mb-1">Proveedor IA</label>
-            <select id="ai-provider-select" class="w-full bg-[#070a10] border border-cyber-border rounded-lg px-2.5 py-1.5 text-xs text-slate-200 outline-none">
+            <label class="block text-[11px] text-slate-400 mb-1">Proveedor IA</label>
+            <select id="ai-provider-select" class="w-full bg-[#070a10] border border-cyber-border rounded-lg px-2.5 min-h-[44px] text-xs text-slate-200 outline-none">
               <option value="deepseek">DeepSeek API</option>
               <option value="ollama">Ollama Local (Offline)</option>
               <option value="openai">OpenAI</option>
@@ -142,23 +145,23 @@
 
         <div class="grid grid-cols-2 gap-2">
           <div>
-            <label class="block text-[10px] text-slate-400 mb-1">Idioma de Salida</label>
-            <select id="lang-select" class="w-full bg-[#070a10] border border-cyber-border rounded-lg px-2.5 py-1.5 text-xs text-slate-200 outline-none">
+            <label class="block text-[11px] text-slate-400 mb-1">Idioma de Salida</label>
+            <select id="lang-select" class="w-full bg-[#070a10] border border-cyber-border rounded-lg px-2.5 min-h-[44px] text-xs text-slate-200 outline-none">
               <option value="es">Español</option>
               <option value="en">English</option>
               <option value="pt">Português</option>
             </select>
           </div>
           <div>
-            <label class="block text-[10px] text-slate-400 mb-1">Pasos Máximos</label>
+            <label class="block text-[11px] text-slate-400 mb-1">Pasos Máximos</label>
             <input type="number" id="max-steps-input" value="6" min="3" max="15" 
-                   class="w-full bg-[#070a10] border border-cyber-border rounded-lg px-2.5 py-1.5 text-xs text-slate-200 outline-none">
+                   class="w-full bg-[#070a10] border border-cyber-border rounded-lg px-2.5 min-h-[44px] text-xs text-slate-200 outline-none">
           </div>
         </div>
 
         <!-- Botón de Lanzamiento -->
         <button id="btn-start" onclick="launchInvestigation()" 
-                class="w-full py-2.5 rounded-lg bg-cyber-accent text-[#070a10] font-black text-xs tracking-wider uppercase hover:shadow-[0_0_24px_rgba(0,240,255,0.4)] hover:brightness-110 transition flex items-center justify-center gap-2">
+                class="w-full min-h-[44px] rounded-lg bg-cyber-accent text-[#070a10] font-black text-xs tracking-wider uppercase hover:shadow-[0_0_24px_rgba(0,240,255,0.4)] hover:brightness-110 transition flex items-center justify-center gap-2">
           <i class="fa-solid fa-radar"></i> Ejecutar Investigación Multi-Vector
         </button>
       </div>
@@ -169,10 +172,10 @@
           <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
             <i class="fa-solid fa-terminal text-cyber-accent"></i> Razonamiento del Agente
           </span>
-          <span id="step-counter" class="text-[10px] text-slate-500 font-mono">Paso 0/5</span>
+          <span id="step-counter" class="text-[11px] text-slate-400 font-mono">Paso 0/5</span>
         </div>
         <div id="terminal-logs" class="flex-1 bg-[#05070c] border border-cyber-border rounded-lg p-3 overflow-y-auto font-mono text-[11px] space-y-1.5 text-slate-300 leading-relaxed">
-          <div class="text-slate-500">&gt; Sistema listo. Ingrese un objetivo para iniciar el enjambre...</div>
+          <div class="text-slate-400">&gt; Sistema listo. Ingrese un objetivo para iniciar el enjambre...</div>
         </div>
       </div>
     </aside>
@@ -202,9 +205,9 @@
         <div class="flex items-center justify-between border-b border-cyber-border pb-3 mb-3">
           <div class="flex items-center gap-2">
             <span class="text-xs font-bold text-cyber-accent uppercase tracking-wider">Dossier Ejecutivo Final</span>
-            <span id="report-confidence" class="px-2 py-0.5 rounded text-[10px] font-bold bg-cyber-accent/10 text-cyber-accent border border-cyber-accent/30">87% Confianza</span>
+            <span id="report-confidence" class="px-2 py-0.5 rounded text-[11px] font-bold bg-cyber-accent/10 text-cyber-accent border border-cyber-accent/30">87% Confianza</span>
           </div>
-          <button onclick="toggleReportDrawer()" class="text-slate-400 hover:text-white text-xs"><i class="fa-solid fa-xmark"></i></button>
+          <button onclick="toggleReportDrawer()" aria-label="Cerrar el informe" class="text-slate-400 hover:text-white text-sm min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg hover:bg-white/5 transition"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <div id="report-highlights" class="space-y-1.5 text-xs text-slate-300 mb-4 font-sans"></div>
         <div id="report-summary" class="text-xs text-slate-400 whitespace-pre-wrap font-mono leading-relaxed bg-[#05070c] p-3 rounded-lg border border-cyber-border"></div>
@@ -291,6 +294,8 @@
         });
         const data = await resp.json();
         currentInvId = data.investigation_id;
+        const cancelBtn = document.getElementById('btn-cancel');
+        if (cancelBtn) cancelBtn.classList.remove('hidden');
 
         // Conectar WebSocket
         connectWebSocket(currentInvId);
@@ -354,7 +359,16 @@
         } else if (msg.type === 'report_done') {
           showReport(msg.data);
         } else if (msg.type === 'status' && msg.data === 'completed') {
-          document.getElementById('badge-status').innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> COMPLETADO';
+          document.getElementById('badge-status').innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span> CANCELADO';
+          const cb2 = document.getElementById('btn-cancel');
+          if (cb2) cb2.classList.add('hidden');
+          currentInvId = null;
+          logToTerminal('[CANCEL] Investigación cancelada por el usuario.', 'warn');
+        } else if (msg.type === 'status' && msg.data === 'cancelled') {
+          document.getElementById('badge-status').innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span> CANCELADO';
+          const cb3 = document.getElementById('btn-cancel');
+          if (cb3) cb3.classList.add('hidden');
+          currentInvId = null;
           document.getElementById('btn-download-pdf').classList.remove('hidden');
           document.getElementById('btn-download-canvas').classList.remove('hidden');
         }
@@ -396,14 +410,14 @@
       wrap.innerHTML = '';
       const steps = data.steps || [];
       if (!steps.length) {
-        wrap.innerHTML = '<div class="text-slate-500 text-xs">Sin pasos registrados.</div>';
+        wrap.innerHTML = '<div class="text-slate-400 text-xs">Sin pasos registrados.</div>';
         return;
       }
 
       if (data.confidence != null) {
         const c = document.createElement('div');
         c.className = 'mb-5 flex items-center gap-3';
-        c.innerHTML = '<span class="text-[9px] tracking-widest text-slate-500">CONFIANZA GLOBAL</span>' +
+        c.innerHTML = '<span class="text-[11px] tracking-widest text-slate-400">CONFIANZA GLOBAL</span>' +
                       '<span class="text-2xl font-bold text-cyber-green">' + Math.round(data.confidence * 100) + '%</span>';
         wrap.appendChild(c);
       }
@@ -425,17 +439,27 @@
           '</div>' +
           '<div class="flex-1 pb-5">' +
             '<div class="flex items-center gap-2 flex-wrap mb-1.5">' +
-              '<span class="text-[9px] font-extrabold tracking-wider px-1.5 py-0.5 rounded border" style="color:' + color + ';border-color:' + color + '55">' + esc(kind) + '</span>' +
-              '<span class="text-[10px] text-slate-600 font-mono">#' + i + '</span>' +
-              (viaMatch ? '<span class="text-[9px] text-slate-500 font-mono bg-slate-900 px-1.5 py-0.5 rounded">via ' + esc(viaMatch[1]) + '</span>' : '') +
-              (corr ? '<span class="text-[10px] font-bold text-cyber-green ml-auto">' + corr + '</span>' : '') +
+              '<span class="text-[11px] font-extrabold tracking-wider px-1.5 py-0.5 rounded border" style="color:' + color + ';border-color:' + color + '55">' + esc(kind) + '</span>' +
+              '<span class="text-[11px] text-slate-600 font-mono">#' + i + '</span>' +
+              (viaMatch ? '<span class="text-[11px] text-slate-400 font-mono bg-slate-900 px-1.5 py-0.5 rounded">via ' + esc(viaMatch[1]) + '</span>' : '') +
+              (corr ? '<span class="text-[11px] font-bold text-cyber-green ml-auto">' + corr + '</span>' : '') +
             '</div>' +
             '<div class="text-[13px] text-slate-100 leading-snug font-medium">' + esc(label) + '</div>' +
-            (facts.length ? '<div class="flex flex-wrap gap-1.5 mt-2">' + facts.map(f => '<span class="text-[10px] bg-slate-900 border border-slate-800 text-blue-300 px-2 py-0.5 rounded-full">' + esc(f) + '</span>').join('') + '</div>' : '') +
-            (s.evidence && !facts.length ? '<div class="text-[10px] text-slate-500 mt-2 font-mono border-l-2 border-slate-800 pl-2.5 leading-relaxed">' + esc(String(s.evidence).slice(0, 280)) + '</div>' : '') +
+            (facts.length ? '<div class="flex flex-wrap gap-1.5 mt-2">' + facts.map(f => '<span class="text-[11px] bg-slate-900 border border-slate-800 text-blue-300 px-2 py-0.5 rounded-full">' + esc(f) + '</span>').join('') + '</div>' : '') +
+            (s.evidence && !facts.length ? '<div class="text-[11px] text-slate-400 mt-2 font-mono border-l-2 border-slate-800 pl-2.5 leading-relaxed">' + esc(String(s.evidence).slice(0, 280)) + '</div>' : '') +
           '</div>';
         wrap.appendChild(el);
       });
+    }
+
+    async function cancelInvestigation() {
+      if (!currentInvId) return;
+      logToTerminal('[CANCEL] Solicitando detencion de la investigacion...', 'warn');
+      try {
+        await fetch(`/api/cancel/${currentInvId}`, { method: 'POST' });
+      } catch (e) {
+        logToTerminal('[ERROR] No se pudo cancelar: ' + e.message, 'err');
+      }
     }
 
     function toggleForm() {
