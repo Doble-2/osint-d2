@@ -15,6 +15,7 @@ from core.config import AppSettings
 from core.domain.models import SocialProfile
 from adapters.vector_store import VectorStore
 from adapters.avatar_analyzer import AvatarAnalyzer
+from adapters.phone_scanner import PhoneScanner
 from core.services.identity_pipeline import (
     scan_email,
     scan_username,
@@ -140,6 +141,27 @@ AGENT_TOOLS: list[dict[str, Any]] = [
                     },
                 },
                 "required": ["avatar_url_1", "avatar_url_2"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "scan_phone",
+            "description": (
+                "Investigate a phone number. Validates E.164 standard, identifies carrier, "
+                "country, line type (mobile/voip/fixed), timezones, active WhatsApp status, "
+                "and generates reverse lookup footprints (Telegram, Truecaller, Sync.me, dorks)."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "phone_number": {
+                        "type": "string",
+                        "description": "Phone number in international or local format (e.g. +584241922882).",
+                    },
+                },
+                "required": ["phone_number"],
             },
         },
     },
@@ -390,6 +412,24 @@ async def execute_tool(
                 return json.dumps(comp, ensure_ascii=False)
         except Exception as exc:
             return json.dumps({"error": str(exc)})
+
+    if name == "scan_phone":
+        phone_num = arguments.get("phone_number", "")
+        if not phone_num:
+            return json.dumps({"error": "phone_number is required"})
+        res = await PhoneScanner.scan(phone_number=phone_num, settings=settings)
+        return json.dumps({
+            "e164": res.e164,
+            "is_valid": res.is_valid,
+            "country": res.country_name,
+            "country_iso": res.country_iso,
+            "carrier": res.carrier_name,
+            "line_type": res.line_type,
+            "timezones": res.timezones,
+            "whatsapp_active": res.whatsapp_active,
+            "footprint_urls": res.footprint_urls,
+            "error": res.error,
+        }, ensure_ascii=False)
 
     if name == "search_vector_memory":
         if not vector_store:
