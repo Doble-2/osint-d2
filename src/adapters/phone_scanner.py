@@ -11,6 +11,7 @@ Features:
 from __future__ import annotations
 
 import re
+import urllib.parse
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -59,6 +60,32 @@ class PhoneScanner:
             PhoneNumberType.VOICEMAIL: "VOICEMAIL",
         }
         return mapping.get(num_type, "UNKNOWN")
+
+    @staticmethod
+    def generate_phone_formats(parsed_num: phonenumbers.PhoneNumber) -> list[str]:
+        """Generates common formatting permutations for global and local search queries."""
+        e164 = phonenumbers.format_number(parsed_num, phonenumbers.PhoneNumberFormat.E164)
+        national = phonenumbers.format_number(parsed_num, phonenumbers.PhoneNumberFormat.NATIONAL)
+        intl = phonenumbers.format_number(parsed_num, phonenumbers.PhoneNumberFormat.INTERNATIONAL)
+        digits_only = re.sub(r"\D", "", e164)
+        local_digits = digits_only[len(str(parsed_num.country_code)) :]
+
+        formats = [
+            e164,                                   # +584241922882
+            national,                               # 0424-1922882
+            intl,                                   # +58 424 192 2882
+            digits_only,                            # 584241922882
+            local_digits,                           # 4241922882
+            f"0{local_digits}",                      # 04241922882
+        ]
+        # Deduplicate preserving order
+        seen = set()
+        out = []
+        for f in formats:
+            if f and f not in seen:
+                seen.add(f)
+                out.append(f)
+        return out
 
     @classmethod
     async def scan(
@@ -136,6 +163,41 @@ class PhoneScanner:
         except Exception:
             whatsapp_active = None
 
+        # 1. Scraping pasivo multiformato de motores de búsqueda para extraer nombres y redes
+        discovered_names: list[str] = []
+        discovered_socials: list[str] = []
+
+        # Buscamos variaciones exactas con comillas
+        variations = cls.generate_phone_formats(parsed)
+        query_parts = "+OR+".join(f'%22{urllib.parse.quote(v)}%22' for v in variations[:3])
+        
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
+        
+        try:
+            search_url = f"https://html.duckduckgo.com/html/?q={query_parts}"
+            async with httpx.AsyncClient(timeout=10.0, follow_redirects=True, headers=headers) as client:
+                ddg_resp = await client.get(search_url)
+                if ddg_resp.status_code == 200:
+                    html_text = ddg_resp.text
+                    # Extraer enlaces y dominios asociados
+                    for url_match in re.finditer(r'<a[^>]+class=\"result__url\"[^>]*>([^<]+)</a>', html_text):
+                        clean_url = url_match.group(1).strip()
+                        if clean_url and not clean_url.startswith("duckduckgo"):
+                            discovered_socials.append(clean_url)
+                    
+                    # Extraer títulos / nombres de contacto que acompañan al número
+                    for title_match in re.finditer(r'<a[^>]+class=\"result__snippet\"[^>]*>(.*?)</a>', html_text, re.DOTALL):
+                        snippet = re.sub(r'<[^>]+>', '', title_match.group(1)).strip()
+                        # Extraer posibles nombres en el snippet si contiene palabras capitalizadas
+                        possible_names = re.findall(r'\b[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+)?\b', snippet)
+                        for name in possible_names:
+                            if name not in ("WhatsApp Web", "Google Play", "App Store", "Privacy Policy", "Terms Service"):
+                                discovered_names.append(name)
+        except Exception:
+            pass
+
         return PhoneScanResult(
             raw_input=phone_number,
             e164=e164,
@@ -149,4 +211,6 @@ class PhoneScanner:
             whatsapp_active=whatsapp_active,
             whatsapp_url=wa_url if whatsapp_active else None,
             footprint_urls=footprints,
+            associated_names=list(set(discovered_names))[:5],
+            associated_usernames=list(set(discovered_socials))[:5],
         )

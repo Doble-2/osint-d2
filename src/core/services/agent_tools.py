@@ -427,6 +427,8 @@ async def execute_tool(
             "line_type": res.line_type,
             "timezones": res.timezones,
             "whatsapp_active": res.whatsapp_active,
+            "associated_names": res.associated_names,
+            "associated_usernames": res.associated_usernames,
             "footprint_urls": res.footprint_urls,
             "error": res.error,
         }, ensure_ascii=False)
