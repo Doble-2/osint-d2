@@ -68,6 +68,7 @@ class InvestigationSession:
         self.person: PersonEntity | None = None
         self.pdf_path: str | None = None
         self.canvas_path: str | None = None
+        self.steps: list[Any] = []
 
     async def broadcast(self, message_type: str, data: Any):
         payload = {"type": message_type, "data": data}
@@ -372,6 +373,7 @@ async def _run_investigation(session: InvestigationSession):
                 trust_anchors=req.trust_anchors or None,
             )
             session.person = result.person
+            session.steps = list(getattr(result, "steps", []) or [])
 
             # Exportar Canvas dinámico
             safe_name = target.replace("@", "").replace("/", "_").replace("+", "").replace(" ", "_")
@@ -420,19 +422,44 @@ async def _run_investigation(session: InvestigationSession):
             except Exception as pdf_err:
                 logger.warning("Fallo al generar PDF con Playwright: %s", pdf_err)
 
-            # Emitir todos los nodos confirmados al grafo visual del cliente
-            for n in graph.nodes:
-                await session.broadcast("node_add", {
-                    "id": n.id,
-                    "label": n.label,
-                    "group": n.type.lower(),
-                })
-            for e in graph.edges:
-                await session.broadcast("edge_add", {
-                    "from": e.source,
-                    "to": e.target,
-                    "label": e.label or e.type,
-                })
+            # ── CADENA DE PIVOTES: el HILO de cómo se llegó a cada hallazgo ──
+            # El grafo NO es un inventario de perfiles: es la secuencia
+            # "de aquí saqué esto, y de esto saqué aquello".
+            try:
+                from adapters.chain_builder import ChainBuilder
+                chain = ChainBuilder.build_chain(session.steps, target, result.person)
+
+                # Limpiar el grafo en vivo y dibujar la cadena ordenada
+                await session.broadcast("graph_reset", None)
+                for n in chain.nodes:
+                    await session.broadcast("node_add", {
+                        "id": n.id,
+                        "label": n.label,
+                        "group": n.type.lower(),
+                        "correlation": n.correlation,
+                    })
+                for e in chain.edges:
+                    await session.broadcast("edge_add", {
+                        "from": e.source,
+                        "to": e.target,
+                        "label": e.label or e.type,
+                    })
+                await session.broadcast(
+                    "log",
+                    f"[HILO] Cadena de {chain.metadata['pivots']} pivotes reconstruida "
+                    f"({len(chain.nodes)} nodos, {len(chain.edges)} eslabones).",
+                )
+            except Exception as chain_err:
+                logger.warning("Fallo al construir la cadena de pivotes: %s", chain_err)
+                # Fallback: grafo de entidades clásico
+                for n in graph.nodes:
+                    await session.broadcast("node_add", {
+                        "id": n.id, "label": n.label, "group": n.type.lower(),
+                    })
+                for e in graph.edges:
+                    await session.broadcast("edge_add", {
+                        "from": e.source, "to": e.target, "label": e.label or e.type,
+                    })
 
             if result.person.analysis:
                 await session.broadcast("report_done", {

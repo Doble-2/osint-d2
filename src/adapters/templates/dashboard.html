@@ -285,6 +285,11 @@
         const msg = JSON.parse(event.data);
         if (msg.type === 'log') {
           logToTerminal(msg.data);
+        } else if (msg.type === 'graph_reset') {
+          nodes.clear();
+          edges.clear();
+          updateCounters();
+          logToTerminal('[GRAFO] Reconstruyendo el hilo de la investigación...');
         } else if (msg.type === 'node_add') {
           if (!nodes.get(msg.data.id)) {
             nodes.add(msg.data);
