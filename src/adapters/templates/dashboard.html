@@ -249,6 +249,9 @@
       document.getElementById('btn-download-pdf').classList.add('hidden');
       document.getElementById('btn-download-canvas').classList.add('hidden');
       document.getElementById('report-drawer').classList.add('translate-y-full');
+      document.getElementById('timeline-steps').innerHTML = '';
+      document.getElementById('timeline-container').classList.add('hidden');
+      document.getElementById('graph-container').classList.remove('hidden');
       document.getElementById('badge-status').innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-cyber-accent animate-ping"></span> INVESTIGANDO';
 
       try {
@@ -285,6 +288,9 @@
         const msg = JSON.parse(event.data);
         if (msg.type === 'log') {
           logToTerminal(msg.data);
+        } else if (msg.type === 'timeline') {
+          renderTimeline(msg.data);
+          showTimeline();
         } else if (msg.type === 'graph_reset') {
           nodes.clear();
           edges.clear();
@@ -314,6 +320,99 @@
           document.getElementById('btn-download-canvas').classList.remove('hidden');
         }
       };
+    }
+
+    const KIND_STYLE = {
+      Target:    ['#ff0055', 'PUNTO DE PARTIDA'],
+      Platform:  ['#00f0ff', 'PERFIL'],
+      Domain:    ['#00f0ff', 'SITIO WEB'],
+      Phone:     ['#00ff88', 'TELÉFONO'],
+      Email:     ['#ffd000', 'CORREO'],
+      Identity:  ['#ffaa00', 'IDENTIDAD'],
+      Finding:   ['#38bdf8', 'CONCLUSIÓN'],
+      Colleague: ['#bd00ff', 'TERCERO'],
+      Breach:    ['#ef4444', 'EXPOSICIÓN'],
+      Noise:     ['#475569', 'DESCARTADO'],
+    };
+
+    function esc(s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    function extractFacts(text) {
+      if (!text) return [];
+      const out = [];
+      const push = v => { if (v && !out.map(x=>x.toLowerCase()).includes(v.toLowerCase())) out.push(v); };
+      (text.match(/\+?\d[\d\s\-()]{7,}\d/g) || []).forEach(m => { if (m.replace(/\D/g,'').length >= 8) push('tel ' + m.trim()); });
+      (text.match(/[\w.+-]+@[\w-]+\.[\w.]+/g) || []).forEach(push);
+      let m;
+      if ((m = /followers[=:\s]+(\d+)/i.exec(text))) push(m[1] + ' seguidores');
+      if ((m = /public_repos[=:\s]+(\d+)/i.exec(text))) push(m[1] + ' repos');
+      (text.match(/([A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:\s[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+)?,\s[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+)/g) || []).forEach(c => { if (c.length < 40) push(c); });
+      return out.slice(0, 5);
+    }
+
+    function renderTimeline(data) {
+      const wrap = document.getElementById('timeline-steps');
+      wrap.innerHTML = '';
+      const steps = data.steps || [];
+      if (!steps.length) {
+        wrap.innerHTML = '<div class="text-slate-500 text-xs">Sin pasos registrados.</div>';
+        return;
+      }
+
+      if (data.confidence != null) {
+        const c = document.createElement('div');
+        c.className = 'mb-5 flex items-center gap-3';
+        c.innerHTML = '<span class="text-[9px] tracking-widest text-slate-500">CONFIANZA GLOBAL</span>' +
+                      '<span class="text-2xl font-bold text-cyber-green">' + Math.round(data.confidence * 100) + '%</span>';
+        wrap.appendChild(c);
+      }
+
+      steps.forEach((s, i) => {
+        const style = KIND_STYLE[s.kind] || ['#94a3b8', s.kind];
+        const color = style[0], kind = style[1];
+        const label = (s.label || '').split('\n')[0];
+        const viaMatch = (s.label || '').match(/\[via ([a-z_]+)\]/);
+        const facts = extractFacts(s.evidence || '');
+        const corr = s.correlation != null ? Math.round(s.correlation * 100) + '%' : '';
+
+        const el = document.createElement('div');
+        el.className = 'flex gap-4';
+        el.innerHTML =
+          '<div class="w-4 flex flex-col items-center flex-shrink-0">' +
+            '<div class="w-3 h-3 rounded-full border-2 mt-3" style="border-color:' + color + ';background:' + color + '22"></div>' +
+            (i < steps.length - 1 ? '<div class="w-0.5 flex-1 bg-slate-800"></div>' : '') +
+          '</div>' +
+          '<div class="flex-1 pb-5">' +
+            '<div class="flex items-center gap-2 flex-wrap mb-1.5">' +
+              '<span class="text-[9px] font-extrabold tracking-wider px-1.5 py-0.5 rounded border" style="color:' + color + ';border-color:' + color + '55">' + esc(kind) + '</span>' +
+              '<span class="text-[10px] text-slate-600 font-mono">#' + i + '</span>' +
+              (viaMatch ? '<span class="text-[9px] text-slate-500 font-mono bg-slate-900 px-1.5 py-0.5 rounded">via ' + esc(viaMatch[1]) + '</span>' : '') +
+              (corr ? '<span class="text-[10px] font-bold text-cyber-green ml-auto">' + corr + '</span>' : '') +
+            '</div>' +
+            '<div class="text-[13px] text-slate-100 leading-snug font-medium">' + esc(label) + '</div>' +
+            (facts.length ? '<div class="flex flex-wrap gap-1.5 mt-2">' + facts.map(f => '<span class="text-[10px] bg-slate-900 border border-slate-800 text-blue-300 px-2 py-0.5 rounded-full">' + esc(f) + '</span>').join('') + '</div>' : '') +
+            (s.evidence && !facts.length ? '<div class="text-[10px] text-slate-500 mt-2 font-mono border-l-2 border-slate-800 pl-2.5 leading-relaxed">' + esc(String(s.evidence).slice(0, 280)) + '</div>' : '') +
+          '</div>';
+        wrap.appendChild(el);
+      });
+    }
+
+    function showTimeline() {
+      document.getElementById('timeline-container').classList.remove('hidden');
+      document.getElementById('graph-container').classList.add('hidden');
+    }
+
+    function toggleView() {
+      const tl = document.getElementById('timeline-container');
+      const gr = document.getElementById('graph-container');
+      const showingTimeline = !tl.classList.contains('hidden');
+      tl.classList.toggle('hidden', showingTimeline);
+      gr.classList.toggle('hidden', !showingTimeline);
+      if (!showingTimeline && network) {
+        setTimeout(() => network.fit({ animation: { duration: 400 } }), 120);
+      }
     }
 
     function logToTerminal(text) {

@@ -69,6 +69,7 @@ class InvestigationSession:
         self.pdf_path: str | None = None
         self.canvas_path: str | None = None
         self.steps: list[Any] = []
+        self.timeline_path: str | None = None
 
     async def broadcast(self, message_type: str, data: Any):
         payload = {"type": message_type, "data": data}
@@ -129,21 +130,26 @@ def _is_generic_handle(handle: str, target: str, declared_usernames: list[str]) 
 active_sessions: dict[str, InvestigationSession] = {}
 
 
-def _inject_graph_page_into_html(html_path: Path, graph_png_base64: str, target: str) -> None:
-    """Injects a dedicated full-page graph section into the dossier HTML before section 02."""
+def _inject_graph_page_into_html(
+    html_path: Path,
+    graph_png_base64: str,
+    target: str,
+    heading: str = "01.5 // Grafo de Inteligencia Forense",
+    caption: str = "Topología multi-vectorial de entidades correlacionadas.",
+) -> None:
+    """Injects a dedicated full-page figure section into the dossier HTML before section 02."""
     html_content = html_path.read_text(encoding="utf-8")
 
     graph_page = f'''
     <div class="page" id="sec-graph">
-      <h2 class="section-title">01.5 // Grafo de Inteligencia Forense</h2>
+      <h2 class="section-title">{heading}</h2>
       <div class="card" style="padding: 12px; background: #070a10; border: 1px solid #1e293b; border-radius: 12px;">
         <div style="color: #00f0ff; font-family: monospace; font-size: 10px; margin-bottom: 10px; font-weight: bold;">
           &gt; TOPOLOG&Iacute;A MULTI-VECTORIAL DE ENTIDADES &mdash; OBJETIVO: {target}
         </div>
         <img src="data:image/png;base64,{graph_png_base64}" style="width: 100%; border-radius: 8px;" alt="Grafo Forense" />
         <p class="muted" style="font-size: 9px; margin-top: 10px;">
-          Rojo = Target Ra&iacute;z &bull; Naranja = Identidad Legal &bull; Verde = Alerta OpSec (Tel&eacute;fono/WhatsApp)
-          &bull; Amarillo = Correo &bull; Cian = Plataformas y Repos &bull; P&uacute;rpura = Colaborador externo.
+          {caption} &mdash; Objetivo: {target}
         </p>
       </div>
     </div>
@@ -399,7 +405,51 @@ async def _run_investigation(session: InvestigationSession):
             html_path = REPORTS_DIR / f"{safe_name}.html"
             export_person_html(person=result.person, output_path=html_path, language=lang)
 
-            if graph_png_base64:
+            # 1) Página del HILO de investigación (la que realmente se usa)
+            if session.timeline_path and Path(session.timeline_path).exists():
+                try:
+                    timeline_png = REPORTS_DIR / f"{safe_name}_hilo.png"
+                    from playwright.async_api import async_playwright as _apw
+                    # Render fuera del loop actual para evitar conflictos
+                    import concurrent.futures
+
+                    def _shot() -> None:
+                        import asyncio as _aio
+                        from playwright.async_api import async_playwright as _sync_apw
+
+                        async def _do():
+                            async with _sync_apw() as _p:
+                                _b = await _p.chromium.launch()
+                                _pg = await _b.new_page(
+                                    viewport={"width": 1100, "height": 900},
+                                    device_scale_factor=2,
+                                )
+                                await _pg.goto(
+                                    f"file://{Path(session.timeline_path).resolve()}",
+                                    wait_until="networkidle",
+                                )
+                                await _pg.wait_for_timeout(600)
+                                await _pg.screenshot(path=str(timeline_png), full_page=True)
+                                await _b.close()
+                        _aio.run(_do())
+
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as _pool:
+                        _pool.submit(_shot).result()
+
+                    import base64 as _b64
+                    t_b64 = _b64.b64encode(timeline_png.read_bytes()).decode("utf-8")
+                    _inject_graph_page_into_html(
+                        html_path, t_b64, target,
+                        heading="01.5 // Hilo de Investigación (Cadena de Pivotes)",
+                        caption=(
+                            "Secuencia forense: qué se descubrió en cada paso, con qué acción "
+                            "y la evidencia que lo sustenta."
+                        ),
+                    )
+                    await session.broadcast("log", "[PDF] Página del hilo de investigación inyectada.")
+                except Exception as tl_err:
+                    logger.warning("Fallo al renderizar el hilo para el PDF: %s", tl_err)
+            elif graph_png_base64:
                 _inject_graph_page_into_html(html_path, graph_png_base64, target)
 
             # Compilar PDF final (diseño HTML + página del grafo) con Playwright
@@ -422,36 +472,40 @@ async def _run_investigation(session: InvestigationSession):
             except Exception as pdf_err:
                 logger.warning("Fallo al generar PDF con Playwright: %s", pdf_err)
 
-            # ── CADENA DE PIVOTES: el HILO de cómo se llegó a cada hallazgo ──
-            # El grafo NO es un inventario de perfiles: es la secuencia
-            # "de aquí saqué esto, y de esto saqué aquello".
+            # ── HILO DE INVESTIGACIÓN: la secuencia de pivotes ────────────────
             try:
                 from adapters.chain_builder import ChainBuilder
-                chain = ChainBuilder.build_chain(session.steps, target, result.person)
+                from adapters.timeline_renderer import TimelineRenderer
 
-                # Limpiar el grafo en vivo y dibujar la cadena ordenada
-                await session.broadcast("graph_reset", None)
-                for n in chain.nodes:
-                    await session.broadcast("node_add", {
-                        "id": n.id,
-                        "label": n.label,
-                        "group": n.type.lower(),
-                        "correlation": n.correlation,
-                    })
-                for e in chain.edges:
-                    await session.broadcast("edge_add", {
-                        "from": e.source,
-                        "to": e.target,
-                        "label": e.label or e.type,
-                    })
+                chain = ChainBuilder.build_chain(session.steps, target, result.person)
+                conf = result.person.analysis.confidence if result.person.analysis else None
+                timeline_html = TimelineRenderer.render_html(chain, target=target, confidence=conf)
+
+                timeline_path = REPORTS_DIR / f"{safe_name}_hilo.html"
+                timeline_path.write_text(timeline_html, encoding="utf-8")
+                session.timeline_path = str(timeline_path)
+
+                # Enviar el hilo al cliente para render inline
+                await session.broadcast("timeline", {
+                    "target": target,
+                    "confidence": conf,
+                    "steps": [
+                        {
+                            "index": i,
+                            "kind": n.type,
+                            "label": n.label,
+                            "evidence": n.evidence,
+                            "correlation": n.correlation,
+                        }
+                        for i, n in enumerate(chain.nodes)
+                    ],
+                })
                 await session.broadcast(
                     "log",
-                    f"[HILO] Cadena de {chain.metadata['pivots']} pivotes reconstruida "
-                    f"({len(chain.nodes)} nodos, {len(chain.edges)} eslabones).",
+                    f"[HILO] {chain.metadata['pivots']} pivotes reconstruidos -> {len(chain.nodes)} pasos.",
                 )
             except Exception as chain_err:
-                logger.warning("Fallo al construir la cadena de pivotes: %s", chain_err)
-                # Fallback: grafo de entidades clásico
+                logger.warning("Fallo al construir el hilo: %s", chain_err)
                 for n in graph.nodes:
                     await session.broadcast("node_add", {
                         "id": n.id, "label": n.label, "group": n.type.lower(),

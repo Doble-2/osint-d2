@@ -694,7 +694,13 @@
             {% if identity_card.name %}
               <div class="name">{{ identity_card.name }}</div>
             {% endif %}
-            <div class="target">@{{ person.target }}</div>
+            {% if primary_handle %}
+              <div class="target">@{{ primary_handle }}</div>
+            {% elif identity_card.name %}
+              {# El objetivo es un nombre propio, no un handle: no anteponemos @ #}
+            {% else %}
+              <div class="target">{{ person.target }}</div>
+            {% endif %}
           </div>
         </div>
         {% endif %}
