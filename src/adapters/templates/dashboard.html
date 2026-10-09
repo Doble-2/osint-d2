@@ -174,7 +174,17 @@
 
     <!-- PANEL DERECHO: GRAFO VISUAL EN VIVO & DOSSIER -->
     <main class="flex-1 flex flex-col relative bg-[#070a10]">
-      
+
+      <!-- PANEL PRINCIPAL: GRAFO MULTI-VECTOR (SVG nativo) -->
+      <div id="graph-svg-container" class="w-full h-full overflow-auto p-6 hidden">
+        <div id="graph-svg-holder" class="inline-block min-w-full"></div>
+      </div>
+
+      <!-- PANEL ALTERNATIVO: HILO DE INVESTIGACIÓN (timeline) -->
+      <div id="timeline-container" class="w-full h-full overflow-y-auto p-6 hidden">
+        <div id="timeline-steps" class="space-y-0"></div>
+      </div>
+
       <!-- Contenedor del Grafo Interactivo -->
       <div id="graph-container" class="w-full h-full relative">
         <div class="absolute top-4 left-4 z-10 bg-cyber-card/80 border border-cyber-border backdrop-blur px-3 py-1.5 rounded-lg text-xs font-mono text-slate-400 pointer-events-none">
@@ -454,13 +464,17 @@
     }
 
     function updateCounters() {
-      document.getElementById('node-count').innerText = nodes.length;
-      document.getElementById('edge-count').innerText = edges.length;
+      const nc = document.getElementById('node-count');
+      const ec = document.getElementById('edge-count');
+      if (nc) nc.innerText = nodes.length;
+      if (ec) ec.innerText = edges.length;
     }
 
     function showReport(rep) {
-      document.getElementById('report-confidence').innerText = `${Math.round(rep.confidence * 100)}% Confianza`;
+      const confEl = document.getElementById('report-confidence');
+      if (confEl) confEl.innerText = `${Math.round(rep.confidence * 100)}% Confianza`;
       const highDiv = document.getElementById('report-highlights');
+      if (!highDiv) return;
       highDiv.innerHTML = '';
       (rep.highlights || []).forEach(h => {
         const p = document.createElement('div');
