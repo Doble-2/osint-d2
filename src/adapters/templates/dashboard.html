@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="es" class="h-full bg-[#070a10]">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OSINT-D2 // Live Intelligence Dashboard</title>
+  
+  <!-- Tailwind CSS & Vis.js (Zero Node.js build steps) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            cyber: { bg: '#070a10', card: '#0f172a', border: '#1e293b', accent: '#00f0ff', red: '#ff0055', green: '#00ff88', yellow: '#ffd000' }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* Grid de fondo estilo Palantir */
+    body {
+      background-image: linear-gradient(rgba(0, 240, 255, 0.02) 1px, transparent 1px),
+                        linear-gradient(90deg, rgba(0, 240, 255, 0.02) 1px, transparent 1px);
+      background-size: 32px 32px;
+    }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #070a10; }
+    ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #00f0ff; }
+  </style>
+</head>
+<body class="h-full text-slate-200 flex flex-col font-sans overflow-hidden">
+
+  <!-- TOPBAR HEADER -->
+  <header class="h-14 border-b border-cyber-border bg-cyber-card/90 backdrop-blur px-6 flex items-center justify-between z-20">
+    <div class="flex items-center space-x-3">
+      <div class="w-8 h-8 rounded-lg bg-cyber-accent/10 border border-cyber-accent/40 flex items-center justify-center text-cyber-accent font-black tracking-wider text-sm shadow-[0_0_12px_rgba(0,240,255,0.3)]">
+        D2
+      </div>
+      <div>
+        <h1 class="text-sm font-bold tracking-wider text-white">OSINT-D2 FORENSIC ENGINE</h1>
+        <p class="text-[10px] text-slate-400">Autonomous Agent • Dynamic Entity Graph • Telecom Scanner</p>
+      </div>
+    </div>
+
+    <!-- Controles de Descarga y Estado -->
+    <div class="flex items-center space-x-3">
+      <span id="badge-status" class="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5">
+        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> LISTO
+      </span>
+      <button id="btn-download-pdf" onclick="downloadArtefact('pdf')" class="hidden px-3 py-1.5 rounded-lg bg-cyber-accent/10 hover:bg-cyber-accent/20 border border-cyber-accent/40 text-cyber-accent text-xs font-semibold transition flex items-center gap-2">
+        <i class="fa-solid fa-file-pdf"></i> Descargar PDF
+      </button>
+      <button id="btn-download-canvas" onclick="downloadArtefact('canvas')" class="hidden px-3 py-1.5 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/40 text-purple-300 text-xs font-semibold transition flex items-center gap-2">
+        <i class="fa-solid fa-diagram-project"></i> Obsidian Canvas
+      </button>
+    </div>
+  </header>
+
+  <!-- MAIN WORKSPACE -->
+  <div class="flex-1 flex overflow-hidden">
+    
+    <!-- PANEL IZQUIERDO: CONTROLES & CONSOLA EN VIVO -->
+    <aside class="w-[420px] border-r border-cyber-border bg-cyber-card/70 backdrop-blur flex flex-col z-10">
+      
+      <!-- Formulario de Lanzamiento -->
+      <div class="p-4 border-b border-cyber-border space-y-3">
+        <label class="block text-xs font-semibold tracking-wider text-slate-300 uppercase">Objetivo de Investigación</label>
+        <div class="relative">
+          <input type="text" id="target-input" placeholder="e.g. Doble-2, angelcaldev, +584241922882" 
+                 class="w-full bg-[#070a10] border border-cyber-border focus:border-cyber-accent rounded-lg px-3.5 py-2.5 text-xs text-white placeholder-slate-500 outline-none transition font-mono"
+                 value="Doble-2">
+        </div>
+
+        <div class="flex gap-2">
+          <select id="mode-select" class="flex-1 bg-[#070a10] border border-cyber-border rounded-lg px-3 py-2 text-xs text-slate-300 outline-none">
+            <option value="agent">Agente Autónomo (DeepSeek)</option>
+            <option value="phone">Escaneo Telefónico E.164</option>
+          </select>
+          <select id="lang-select" class="w-24 bg-[#070a10] border border-cyber-border rounded-lg px-2 py-2 text-xs text-slate-300 outline-none">
+            <option value="es">Español</option>
+            <option value="en">English</option>
+          </select>
+        </div>
+
+        <button id="btn-start" onclick="launchInvestigation()" 
+                class="w-full py-2.5 rounded-lg bg-cyber-accent text-[#070a10] font-bold text-xs tracking-wider uppercase hover:shadow-[0_0_20px_rgba(0,240,255,0.4)] hover:brightness-110 transition flex items-center justify-center gap-2">
+          <i class="fa-solid fa-crosshairs"></i> Iniciar Investigación
+        </button>
+      </div>
+
+      <!-- Live Terminal Console -->
+      <div class="flex-1 flex flex-col p-4 overflow-hidden">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+            <i class="fa-solid fa-terminal text-cyber-accent"></i> Razonamiento del Agente
+          </span>
+          <span id="step-counter" class="text-[10px] text-slate-500 font-mono">Paso 0/5</span>
+        </div>
+        <div id="terminal-logs" class="flex-1 bg-[#05070c] border border-cyber-border rounded-lg p-3 overflow-y-auto font-mono text-[11px] space-y-1.5 text-slate-300 leading-relaxed">
+          <div class="text-slate-500">&gt; Sistema listo. Ingrese un objetivo para iniciar el enjambre...</div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- PANEL DERECHO: GRAFO VISUAL EN VIVO & DOSSIER -->
+    <main class="flex-1 flex flex-col relative bg-[#070a10]">
+      
+      <!-- Contenedor del Grafo Interactivo -->
+      <div id="graph-container" class="w-full h-full relative">
+        <div class="absolute top-4 left-4 z-10 bg-cyber-card/80 border border-cyber-border backdrop-blur px-3 py-1.5 rounded-lg text-xs font-mono text-slate-400 pointer-events-none">
+          NODOS: <span id="node-count" class="text-cyber-accent font-bold">0</span> &bull; CONEXIONES: <span id="edge-count" class="text-cyber-accent font-bold">0</span>
+        </div>
+      </div>
+
+      <!-- Modal / Panel Inferior de Reporte Final -->
+      <div id="report-drawer" class="absolute bottom-0 left-0 right-0 max-h-[45%] bg-cyber-card/95 border-t border-cyber-border backdrop-blur-xl p-5 overflow-y-auto transform translate-y-full transition-transform duration-300 z-20 shadow-2xl">
+        <div class="flex items-center justify-between border-b border-cyber-border pb-3 mb-3">
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-bold text-cyber-accent uppercase tracking-wider">Dossier Ejecutivo Final</span>
+            <span id="report-confidence" class="px-2 py-0.5 rounded text-[10px] font-bold bg-cyber-accent/10 text-cyber-accent border border-cyber-accent/30">87% Confianza</span>
+          </div>
+          <button onclick="toggleReportDrawer()" class="text-slate-400 hover:text-white text-xs"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div id="report-highlights" class="space-y-1.5 text-xs text-slate-300 mb-4 font-sans"></div>
+        <div id="report-summary" class="text-xs text-slate-400 whitespace-pre-wrap font-mono leading-relaxed bg-[#05070c] p-3 rounded-lg border border-cyber-border"></div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- LÓGICA JAVASCRIPT REACTIVA -->
+  <script>
+    let network = null;
+    let nodes = new vis.DataSet([]);
+    let edges = new vis.DataSet([]);
+    let currentInvId = null;
+    let ws = null;
+
+    // Inicializar Vis.js Network
+    function initNetwork() {
+      const container = document.getElementById('graph-container');
+      const data = { nodes: nodes, edges: edges };
+      const options = {
+        groups: {
+          target: { color: { background: '#ff0055', border: '#ff3377' }, font: { color: '#fff', size: 13, bold: true }, shadow: { color: '#ff0055', size: 10 } },
+          identity: { color: { background: '#ffaa00', border: '#ffbb33' }, font: { color: '#000', size: 12, bold: true } },
+          phone: { color: { background: '#00ff88', border: '#33ffaa' }, font: { color: '#000', size: 12, bold: true } },
+          social: { color: { background: '#0f172a', border: '#00f0ff' }, font: { color: '#cbd5e1', size: 11 } },
+          colleague: { color: { background: '#2d1537', border: '#bd00ff' }, font: { color: '#e2e8f0', size: 11 } }
+        },
+        nodes: { shape: 'box', margin: 8, borderWidth: 1.5 },
+        edges: { font: { color: '#64748b', size: 9, align: 'top', background: '#070a10' }, arrows: 'to', smooth: { type: 'continuous' } },
+        physics: { forceAtlas2Based: { gravitationalConstant: -80, springLength: 120 } }
+      };
+      network = new vis.Network(container, data, options);
+    }
+
+    async function launchInvestigation() {
+      const target = document.getElementById('target-input').value.trim();
+      const mode = document.getElementById('mode-select').value;
+      const lang = document.getElementById('lang-select').value;
+      if (!target) return;
+
+      // Reset UI
+      nodes.clear();
+      edges.clear();
+      document.getElementById('terminal-logs').innerHTML = '';
+      document.getElementById('btn-download-pdf').classList.add('hidden');
+      document.getElementById('btn-download-canvas').classList.add('hidden');
+      document.getElementById('report-drawer').classList.add('translate-y-full');
+      document.getElementById('badge-status').innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-cyber-accent animate-ping"></span> INVESTIGANDO';
+
+      try {
+        const resp = await fetch('/api/investigate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ target: target, mode: mode, language: lang })
+        });
+        const data = await resp.json();
+        currentInvId = data.investigation_id;
+
+        // Conectar WebSocket
+        connectWebSocket(currentInvId);
+      } catch (err) {
+        logToTerminal(`[ERROR] Falló conexión con API: ${err}`);
+      }
+    }
+
+    function connectWebSocket(invId) {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      ws = new WebSocket(`${protocol}//${window.location.host}/ws/${invId}`);
+
+      ws.onmessage = (event) => {
+        const msg = JSON.parse(event.data);
+        if (msg.type === 'log') {
+          logToTerminal(msg.data);
+        } else if (msg.type === 'node_add') {
+          if (!nodes.get(msg.data.id)) {
+            nodes.add(msg.data);
+            updateCounters();
+          }
+        } else if (msg.type === 'edge_add') {
+          edges.add(msg.data);
+          updateCounters();
+        } else if (msg.type === 'phone_data') {
+          logToTerminal(`[TELECOM DETECTED] Carrier: ${msg.data.carrier} | País: ${msg.data.country} | WhatsApp: ${msg.data.whatsapp ? 'SÍ' : 'NO'}`);
+        } else if (msg.type === 'report_done') {
+          showReport(msg.data);
+        } else if (msg.type === 'status' && msg.data === 'completed') {
+          document.getElementById('badge-status').innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> COMPLETADO';
+          document.getElementById('btn-download-pdf').classList.remove('hidden');
+          document.getElementById('btn-download-canvas').classList.remove('hidden');
+        }
+      };
+    }
+
+    function logToTerminal(text) {
+      const logs = document.getElementById('terminal-logs');
+      const row = document.createElement('div');
+      if (text.includes('[PASO')) row.className = 'text-cyber-accent font-semibold';
+      else if (text.includes('[ERROR]')) row.className = 'text-red-400';
+      else row.className = 'text-slate-300';
+      row.innerText = text;
+      logs.appendChild(row);
+      logs.scrollTop = logs.scrollHeight;
+    }
+
+    function updateCounters() {
+      document.getElementById('node-count').innerText = nodes.length;
+      document.getElementById('edge-count').innerText = edges.length;
+    }
+
+    function showReport(rep) {
+      document.getElementById('report-confidence').innerText = `${Math.round(rep.confidence * 100)}% Confianza`;
+      const highDiv = document.getElementById('report-highlights');
+      highDiv.innerHTML = '';
+      (rep.highlights || []).forEach(h => {
+        const p = document.createElement('div');
+        p.className = 'flex items-start gap-2';
+        p.innerHTML = `<span class="text-cyber-accent">•</span><span>${h}</span>`;
+        highDiv.appendChild(p);
+      });
+      document.getElementById('report-summary').innerText = rep.summary || '';
+      document.getElementById('report-drawer').classList.remove('translate-y-full');
+    }
+
+    function toggleReportDrawer() {
+      document.getElementById('report-drawer').classList.toggle('translate-y-full');
+    }
+
+    function downloadArtefact(type) {
+      if (!currentInvId) return;
+      window.open(`/api/download/${currentInvId}/${type}`, '_blank');
+    }
+
+    window.onload = initNetwork;
+  </script>
+</body>
+</html>

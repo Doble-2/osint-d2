@@ -1583,6 +1583,7 @@ def wizard() -> None:
         "What do you want to hunt?",
         choices=["username", "email", "both", "agent"],
         default="both",
+        console=console,
     )
 
     # ── Agent mode (autonomous AI investigation) ──────────────────────
@@ -1855,6 +1856,23 @@ def wizard() -> None:
             trust_anchors=wiz_trust_anchors,
         )
     )
+
+
+@app.command(name="serve", help="Launch the real-time Cyberpunk Web Dashboard (FastAPI + WebSockets).")
+def serve(
+    host: str = typer.Option("127.0.0.1", "--host", "-h", help="Host interface to bind to."),
+    port: int = typer.Option(8000, "--port", "-p", help="Port number for the web server."),
+    reload: bool = typer.Option(False, "--reload", help="Enable auto-reload for development."),
+) -> None:
+    """Starts the OSINT-D2 live intelligence web server."""
+    import uvicorn
+    from adapters.web_server import app as web_app
+
+    console = _console
+    print_banner(console)
+    console.print(f"[bold cyan]Starting Live Intelligence Dashboard at:[/bold cyan] [underline green]http://{host}:{port}[/underline green]")
+    console.print("[dim]Press Ctrl+C to terminate the web server.[/dim]\n")
+    uvicorn.run(web_app, host=host, port=port, reload=reload)
 
 
 @app.command(help="Re-run the AI profiler on a previously exported JSON dossier.")
