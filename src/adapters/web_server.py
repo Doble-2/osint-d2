@@ -85,6 +85,35 @@ class InvestigationSession:
 active_sessions: dict[str, InvestigationSession] = {}
 
 
+def _inject_graph_page_into_html(html_path: Path, graph_png_base64: str, target: str) -> None:
+    """Injects a dedicated full-page graph section into the dossier HTML before section 02."""
+    html_content = html_path.read_text(encoding="utf-8")
+
+    graph_page = f'''
+    <div class="page" id="sec-graph">
+      <h2 class="section-title">01.5 // Grafo de Inteligencia Forense</h2>
+      <div class="card" style="padding: 12px; background: #070a10; border: 1px solid #1e293b; border-radius: 12px;">
+        <div style="color: #00f0ff; font-family: monospace; font-size: 10px; margin-bottom: 10px; font-weight: bold;">
+          &gt; TOPOLOG&Iacute;A MULTI-VECTORIAL DE ENTIDADES &mdash; OBJETIVO: {target}
+        </div>
+        <img src="data:image/png;base64,{graph_png_base64}" style="width: 100%; border-radius: 8px;" alt="Grafo Forense" />
+        <p class="muted" style="font-size: 9px; margin-top: 10px;">
+          Rojo = Target Ra&iacute;z &bull; Naranja = Identidad Legal &bull; Verde = Alerta OpSec (Tel&eacute;fono/WhatsApp)
+          &bull; Amarillo = Correo &bull; Cian = Plataformas y Repos &bull; P&uacute;rpura = Colaborador externo.
+        </p>
+      </div>
+    </div>
+'''
+
+    target_tag = '<div class="page" id="sec-02">'
+    if target_tag in html_content:
+        new_html = html_content.replace(target_tag, graph_page + "\n    " + target_tag)
+    else:
+        new_html = html_content + graph_page
+
+    html_path.write_text(new_html, encoding="utf-8")
+
+
 @app.get("/", response_class=HTMLResponse)
 async def get_dashboard():
     dashboard_file = TEMPLATES_DIR / "dashboard.html"
@@ -270,10 +299,27 @@ async def _run_investigation(session: InvestigationSession):
             GraphExporter.export_canvas(graph, canvas_path)
             session.canvas_path = str(canvas_path)
 
-            # Exportar HTML y compilar PDF dinámico con Playwright
+            # Renderizar el grafo a PNG de alta resolución para incrustarlo en el PDF
+            graph_png_base64 = None
+            try:
+                graph_png_path = REPORTS_DIR / f"{safe_name}_graph.png"
+                GraphExporter.export_graph_png(
+                    graph, graph_png_path, title=f"OSINT Intelligence Graph — {target}"
+                )
+                import base64
+                graph_png_base64 = base64.b64encode(graph_png_path.read_bytes()).decode("utf-8")
+                await session.broadcast("log", "[GRAFO] Topología de entidades renderizada en alta resolución.")
+            except Exception as png_err:
+                logger.warning("Fallo al renderizar el grafo a PNG: %s", png_err)
+
+            # Exportar HTML del dossier e inyectar la página dedicada del grafo
             html_path = REPORTS_DIR / f"{safe_name}.html"
             export_person_html(person=result.person, output_path=html_path, language=lang)
-            
+
+            if graph_png_base64:
+                _inject_graph_page_into_html(html_path, graph_png_base64, target)
+
+            # Compilar PDF final (diseño HTML + página del grafo) con Playwright
             pdf_path = REPORTS_DIR / f"{safe_name}_dossier.pdf"
             try:
                 from playwright.async_api import async_playwright
@@ -289,6 +335,7 @@ async def _run_investigation(session: InvestigationSession):
                     )
                     await browser.close()
                 session.pdf_path = str(pdf_path)
+                await session.broadcast("log", "[PDF] Dossier compilado con la página del grafo incluida.")
             except Exception as pdf_err:
                 logger.warning("Fallo al generar PDF con Playwright: %s", pdf_err)
 

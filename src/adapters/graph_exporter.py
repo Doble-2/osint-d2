@@ -122,3 +122,31 @@ class GraphExporter:
         html = graph.to_interactive_html(title=title)
         path.write_text(html, encoding="utf-8")
         return str(path)
+
+    @classmethod
+    def export_graph_png(
+        cls,
+        graph: GraphExportModel,
+        output_path: str | Path,
+        title: str = "OSINT Intelligence Graph",
+        width: int = 1600,
+        height: int = 1100,
+    ) -> str:
+        """Renders the entity graph as a high-resolution PNG (Playwright/Chromium)."""
+        from playwright.sync_api import sync_playwright
+
+        path = Path(output_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+        graph_html = graph.to_interactive_html(title=title)
+
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page(viewport={"width": width, "height": height}, device_scale_factor=2)
+            page.set_content(graph_html, wait_until="networkidle")
+            # Esperar a que la física del grafo se estabilice
+            page.wait_for_timeout(3500)
+            page.screenshot(path=str(path), full_page=False)
+            browser.close()
+
+        return str(path)
