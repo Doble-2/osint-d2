@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es" class="h-full bg-[#070a10]">
+<html lang="es" class="h-full">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -22,18 +22,7 @@
     }
   </script>
 
-  <style>
-    /* Grid de fondo estilo Palantir */
-    body {
-      background-image: linear-gradient(rgba(0, 240, 255, 0.02) 1px, transparent 1px),
-                        linear-gradient(90deg, rgba(0, 240, 255, 0.02) 1px, transparent 1px);
-      background-size: 32px 32px;
-    }
-    ::-webkit-scrollbar { width: 6px; height: 6px; }
-    ::-webkit-scrollbar-track { background: #070a10; }
-    ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 3px; }
-    ::-webkit-scrollbar-thumb:hover { background: #00f0ff; }
-  </style>
+  <!-- El sistema de diseno de marca se inyecta desde adapters/report_theme.py -->
 </head>
 <body class="h-full text-slate-200 flex flex-col font-sans overflow-hidden lg:overflow-hidden">
 
@@ -60,7 +49,7 @@
       <button id="btn-download-pdf" onclick="downloadArtefact('pdf')" class="hidden px-3 min-h-[44px] rounded-lg bg-cyber-accent/10 hover:bg-cyber-accent/20 border border-cyber-accent/40 text-cyber-accent text-xs font-semibold transition flex items-center gap-2">
         <i class="fa-solid fa-file-pdf"></i> Descargar PDF
       </button>
-      <button id="btn-download-canvas" onclick="downloadArtefact('canvas')" class="hidden px-3 min-h-[44px] rounded-lg bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/40 text-purple-300 text-xs font-semibold transition flex items-center gap-2">
+      <button id="btn-download-canvas" onclick="downloadArtefact('canvas')" class="hidden px-3 min-h-[44px] rounded-lg bg-white/5 hover:bg-white/10 border border-white/15 text-slate-300 text-xs font-semibold transition flex items-center gap-2">
         <i class="fa-solid fa-diagram-project"></i> <span class="hidden sm:inline">Obsidian Canvas</span><span class="sm:hidden">Canvas</span>
       </button>
     </div>
@@ -89,28 +78,28 @@
         <div>
           <label class="block text-[11px] font-semibold text-slate-300 mb-1">Nombre o Sujeto Principal *</label>
           <input type="text" id="target-input" value="Ángel Calderón Rodríguez" 
-                 class="w-full bg-[#070a10] border border-cyber-border focus:border-cyber-accent rounded-lg px-3 min-h-[44px] text-xs text-white outline-none font-mono">
+                 class="w-full bg-[var(--surface-inset)] border border-cyber-border focus:border-cyber-accent rounded-lg px-3 min-h-[44px] text-xs text-white outline-none font-mono">
         </div>
 
         <!-- Usernames / Handles -->
         <div>
           <label class="block text-[11px] font-semibold text-slate-300 mb-1">Usernames / Handles (separados por coma)</label>
           <input type="text" id="usernames-input" value="Doble-2, angelcaldev, DobleVneko" 
-                 class="w-full bg-[#070a10] border border-cyber-border focus:border-cyber-accent rounded-lg px-3 min-h-[44px] text-xs text-white outline-none font-mono">
+                 class="w-full bg-[var(--surface-inset)] border border-cyber-border focus:border-cyber-accent rounded-lg px-3 min-h-[44px] text-xs text-white outline-none font-mono">
         </div>
 
         <!-- Correos Electrónicos -->
         <div>
           <label class="block text-[11px] font-semibold text-slate-300 mb-1">Correos Electrónicos (personal / trabajo)</label>
           <input type="text" id="emails-input" value="angel@angelcalderon.dev, acalderon@fospuca.com" 
-                 class="w-full bg-[#070a10] border border-cyber-border focus:border-cyber-accent rounded-lg px-3 min-h-[44px] text-xs text-white outline-none font-mono">
+                 class="w-full bg-[var(--surface-inset)] border border-cyber-border focus:border-cyber-accent rounded-lg px-3 min-h-[44px] text-xs text-white outline-none font-mono">
         </div>
 
         <!-- Números de Teléfono -->
         <div>
           <label class="block text-[11px] font-semibold text-slate-300 mb-1">Números Telefónicos (E.164 o local)</label>
           <input type="text" id="phones-input" value="+584241922882" 
-                 class="w-full bg-[#070a10] border border-cyber-border focus:border-cyber-accent rounded-lg px-3 min-h-[44px] text-xs text-white outline-none font-mono">
+                 class="w-full bg-[var(--surface-inset)] border border-cyber-border focus:border-cyber-accent rounded-lg px-3 min-h-[44px] text-xs text-white outline-none font-mono">
         </div>
 
         <!-- Anclas de Confianza (Trust Anchors) -->
@@ -120,7 +109,7 @@
           </label>
           <input type="text" id="anchors-input" value="github:Doble-2, web:https://angelcalderon.dev" 
                  placeholder="e.g. github:Doble-2, twitter:angelcaldev"
-                 class="w-full bg-[#070a10] border border-cyber-orange/40 focus:border-cyber-orange rounded-lg px-3 min-h-[44px] text-xs text-white outline-none font-mono">
+                 class="w-full bg-[var(--surface-inset)] border border-[rgba(245,158,11,0.35)] rounded-lg px-3 min-h-[44px] text-xs text-white outline-none font-mono">
           <p class="text-[11px] text-slate-400 mt-0.5">Las fuentes de verdad incuestionables para evitar homónimos y falsos amigos.</p>
         </div>
 
@@ -128,14 +117,14 @@
         <div class="grid grid-cols-2 gap-2 pt-1">
           <div>
             <label class="block text-[11px] text-slate-400 mb-1">Modo de Búsqueda</label>
-            <select id="mode-select" class="w-full bg-[#070a10] border border-cyber-border rounded-lg px-2.5 min-h-[44px] text-xs text-slate-200 outline-none">
+            <select id="mode-select" class="w-full bg-[var(--surface-inset)] border border-cyber-border rounded-lg px-2.5 min-h-[44px] text-xs text-slate-200 outline-none">
               <option value="agent">Agente Autónomo IA</option>
               <option value="phone">Sólo Telecom / Teléfono</option>
             </select>
           </div>
           <div>
             <label class="block text-[11px] text-slate-400 mb-1">Proveedor IA</label>
-            <select id="ai-provider-select" class="w-full bg-[#070a10] border border-cyber-border rounded-lg px-2.5 min-h-[44px] text-xs text-slate-200 outline-none">
+            <select id="ai-provider-select" class="w-full bg-[var(--surface-inset)] border border-cyber-border rounded-lg px-2.5 min-h-[44px] text-xs text-slate-200 outline-none">
               <option value="deepseek">DeepSeek API</option>
               <option value="ollama">Ollama Local (Offline)</option>
               <option value="openai">OpenAI</option>
@@ -146,7 +135,7 @@
         <div class="grid grid-cols-2 gap-2">
           <div>
             <label class="block text-[11px] text-slate-400 mb-1">Idioma de Salida</label>
-            <select id="lang-select" class="w-full bg-[#070a10] border border-cyber-border rounded-lg px-2.5 min-h-[44px] text-xs text-slate-200 outline-none">
+            <select id="lang-select" class="w-full bg-[var(--surface-inset)] border border-cyber-border rounded-lg px-2.5 min-h-[44px] text-xs text-slate-200 outline-none">
               <option value="es">Español</option>
               <option value="en">English</option>
               <option value="pt">Português</option>
@@ -155,7 +144,7 @@
           <div>
             <label class="block text-[11px] text-slate-400 mb-1">Pasos Máximos</label>
             <input type="number" id="max-steps-input" value="6" min="3" max="15" 
-                   class="w-full bg-[#070a10] border border-cyber-border rounded-lg px-2.5 min-h-[44px] text-xs text-slate-200 outline-none">
+                   class="w-full bg-[var(--surface-inset)] border border-cyber-border rounded-lg px-2.5 min-h-[44px] text-xs text-slate-200 outline-none">
           </div>
         </div>
 
@@ -174,14 +163,14 @@
           </span>
           <span id="step-counter" class="text-[11px] text-slate-400 font-mono">Paso 0/5</span>
         </div>
-        <div id="terminal-logs" class="flex-1 bg-[#05070c] border border-cyber-border rounded-lg p-3 overflow-y-auto font-mono text-[11px] space-y-1.5 text-slate-300 leading-relaxed">
+        <div id="terminal-logs" class="flex-1 bg-[var(--surface-inset)] border border-cyber-border rounded-lg p-3 overflow-y-auto font-mono text-[11px] space-y-1.5 text-slate-300 leading-relaxed">
           <div class="text-slate-400">&gt; Sistema listo. Ingrese un objetivo para iniciar el enjambre...</div>
         </div>
       </div>
     </aside>
 
     <!-- PANEL DERECHO: GRAFO VISUAL EN VIVO & DOSSIER -->
-    <main class="flex-1 flex flex-col relative bg-[#070a10] min-h-[50vh] lg:min-h-0">
+    <main class="flex-1 flex flex-col relative bg-[var(--surface-inset)] min-h-[50vh] lg:min-h-0">
 
       <!-- PANEL PRINCIPAL: GRAFO MULTI-VECTOR (SVG nativo) -->
       <div id="graph-svg-container" class="w-full flex-1 overflow-auto p-2 lg:p-6 hidden">
@@ -210,7 +199,7 @@
           <button onclick="toggleReportDrawer()" aria-label="Cerrar el informe" class="text-slate-400 hover:text-white text-sm min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg hover:bg-white/5 transition"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <div id="report-highlights" class="space-y-1.5 text-xs text-slate-300 mb-4 font-sans"></div>
-        <div id="report-summary" class="text-xs text-slate-400 whitespace-pre-wrap font-mono leading-relaxed bg-[#05070c] p-3 rounded-lg border border-cyber-border"></div>
+        <div id="report-summary" class="text-xs text-slate-400 whitespace-pre-wrap font-mono leading-relaxed bg-[var(--surface-inset)] p-3 rounded-lg border border-cyber-border"></div>
       </div>
 
     </main>
@@ -230,14 +219,19 @@
       const data = { nodes: nodes, edges: edges };
       const options = {
         groups: {
-          target: { color: { background: '#ff0055', border: '#ff3377' }, font: { color: '#fff', size: 13, bold: true }, shadow: { color: '#ff0055', size: 10 } },
-          identity: { color: { background: '#ffaa00', border: '#ffbb33' }, font: { color: '#000', size: 12, bold: true } },
-          phone: { color: { background: '#00ff88', border: '#33ffaa' }, font: { color: '#000', size: 12, bold: true } },
-          social: { color: { background: '#0f172a', border: '#00f0ff' }, font: { color: '#cbd5e1', size: 11 } },
-          colleague: { color: { background: '#2d1537', border: '#bd00ff' }, font: { color: '#e2e8f0', size: 11 } }
+          /* Paleta de marca: misma familia cromatica del informe PDF */
+          target:    { color: { background: '#0d9488', border: '#34d399' }, font: { color: '#f0fdf4', size: 13, bold: true }, shadow: { color: 'rgba(52,211,153,0.45)', size: 14 } },
+          identity:  { color: { background: '#0f766e', border: '#34d399' },  font: { color: '#f0fdf4', size: 12, bold: true } },
+          phone:     { color: { background: '#10b981', border: '#34d399' },  font: { color: '#04120e', size: 12, bold: true } },
+          email:     { color: { background: '#0a231d', border: '#0d9488' },  font: { color: '#e8f5f0', size: 11 } },
+          platform:  { color: { background: '#0a231d', border: '#5a7d6e' },  font: { color: '#a8c5bb', size: 11 } },
+          social:    { color: { background: '#0a231d', border: '#5a7d6e' },  font: { color: '#a8c5bb', size: 11 } },
+          colleague: { color: { background: '#0e2c24', border: '#7a9d92' },  font: { color: '#a8c5bb', size: 11 } },
+          noise:     { color: { background: 'rgba(90,125,110,0.15)', border: 'rgba(90,125,110,0.35)' }, font: { color: '#7a9d92', size: 10 } },
+          risk:      { color: { background: '#7f1d1d', border: '#ef4444' },  font: { color: '#fecaca', size: 11, bold: true } }
         },
-        nodes: { shape: 'box', margin: 8, borderWidth: 1.5 },
-        edges: { font: { color: '#64748b', size: 9, align: 'top', background: '#070a10' }, arrows: 'to', smooth: { type: 'continuous' } },
+        nodes: { shape: 'box', margin: 10, borderWidth: 1.5, shapeProperties: { borderRadius: 8 } },
+        edges: { font: { color: '#7a9d92', size: 9, align: 'top', background: 'rgba(4,18,14,0.9)' }, arrows: { to: { scaleFactor: 0.7 } }, color: { color: 'rgba(52,211,153,0.28)', highlight: '#34d399' }, smooth: { type: 'continuous' } },
         physics: { forceAtlas2Based: { gravitationalConstant: -90, centralGravity: 0.015, springLength: 140 } },
         interaction: { hover: true, zoomView: true, dragView: true }
       };
