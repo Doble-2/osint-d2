@@ -169,24 +169,80 @@ PDF_THEME_CSS = f"""
     background: linear-gradient(90deg, transparent, rgba(52,211,153,0.55), transparent);
   }}
 
-  /* ── Panel lateral: L1, con separador de acento ── */
+  /* ── Panel lateral: L1, con separador de acento ──
+        Layout interno: el formulario hace scroll dentro de su propio espacio y
+        la consola conserva una altura util. Sin esto, en desktop el formulario
+        empuja la consola fuera y el panel se corta. */
   aside {{
     background: var(--surface-base) !important;
     border-color: var(--border-default) !important;
     box-shadow: var(--shadow-md);
     z-index: 5;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    /* Sin esto el aside se encoge a la altura de su contenido (~472px) y el
+       formulario queda amputado a la mitad en pantallas altas.
+       !important porque las utilidades de Tailwind tienen la misma
+       especificidad y se inyectan despues. */
+    align-self: stretch !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    max-height: 100% !important;
+  }}
+  /* El contenedor de la fila tambien debe permitir el estirado completo */
+  body > div.flex-1 {{
+    min-height: 0;
+    align-items: stretch;
+  }}
+  /* ── Reparto del panel lateral ──
+     El panel alberga el formulario, que es su proposito. La consola del agente
+     vive en el area principal (pestana), no compite por el espacio.
+     El formulario recibe todo el alto disponible y hace scroll si hace falta:
+     es preferible a un panel amputado a 200px. */
+  aside {{
+    justify-content: flex-start;
+  }}
+  #vector-form {{
+    flex: 1 1 auto;
+    overflow-y: auto;
+    min-height: 0;
+    scrollbar-gutter: stable;
+    /* El padding inferior evita que el ultimo control quede pegado al borde */
+    padding-bottom: 18px !important;
+  }}
+  /* La cabecera plegable no debe consumir mas de lo necesario */
+  aside > div:first-child {{
+    flex: 0 0 auto;
   }}
 
   main {{ background: var(--surface-deep) !important; }}
 
-  /* ── Formularios: foco e hover reales (esto es lo que se siente "barato"
-        cuando falta: los inputs no reaccionan) ── */
+  /* ── Escala tipográfica: 5 pasos, nada fuera de esto ──
+        El "text-xs" de Tailwind (12px) se usa por todas partes mezclado con
+        11px y 10px; eso destruye la jerarquía. Definimos una escala. */
+  :root {{
+    --fs-micro:  10px;   /* metadatos, contadores */
+    --fs-xs:     11.5px; /* etiquetas de formulario */
+    --fs-sm:     13px;   /* cuerpo de UI, inputs */
+    --fs-base:   15px;   /* texto de lectura */
+    --fs-lg:     18px;   /* títulos de sección */
+    --fs-xl:     24px;   /* cifras destacadas */
+  }}
+
+  /* ── Controles de formulario: PADDING REAL, no solo min-height ──
+        (min-height sin padding vertical es un parche: el texto queda pegado
+        al borde superior en algunos motores y el objetivo se ve tosco) */
   input, select, textarea {{
     background: var(--surface-inset) !important;
     border: 1px solid var(--border-default) !important;
     border-radius: var(--radius-md) !important;
     color: var(--text-primary) !important;
-    font-size: 12.5px !important;
+    font-size: var(--fs-sm) !important;
+    line-height: 1.4 !important;
+    padding: 10px 12px !important;
+    height: auto !important;
+    min-height: 40px !important;
     transition: border-color var(--dur) var(--ease),
                 box-shadow var(--dur) var(--ease),
                 background var(--dur) var(--ease) !important;
@@ -195,6 +251,11 @@ PDF_THEME_CSS = f"""
     border-color: var(--border-strong) !important;
     background: var(--surface-base) !important;
   }}
+  /* En pantallas tactiles el minimo sube a 44px (Apple HIG) */
+  @media (max-width: 1024px) {{
+    input, select, textarea {{ min-height: 44px !important; }}
+  }}
+
   input:focus, select:focus, textarea:focus {{
     border-color: var(--border-focus) !important;
     box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.14), var(--shadow-glow) !important;
@@ -209,13 +270,90 @@ PDF_THEME_CSS = f"""
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2334d399' d='M6 9L1 4h10z'/%3E%3C/svg%3E") !important;
     background-repeat: no-repeat !important;
     background-position: right 10px center !important;
-    padding-right: 30px !important;
+    padding: 11px 34px 11px 13px !important;
   }}
 
-  /* Etiquetas de formulario: color y peso consistentes */
+  /* ── Grupos de formulario: agrupan por PROPOSITO, no por tipo de campo
+        (Ley de Proximidad + Region Comun: lo agrupado se lee como un todo) ── */
+  .form-group {{
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    background: rgba(7, 27, 22, 0.42);
+    padding: 11px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    transition: border-color var(--dur) var(--ease);
+  }}
+  .form-group:hover {{ border-color: var(--border-default); }}
+
+  .form-group--collapsed {{
+    padding: 0;
+    gap: 0;
+    background: transparent;
+    border-color: transparent;
+  }}
+
+  .form-group-label {{
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: var(--fs-xs);
+    font-weight: 700;
+    letter-spacing: 0.10em;
+    text-transform: uppercase;
+    color: var(--text-accent);
+    padding-bottom: 2px;
+  }}
+  .form-group-label--warn {{ color: var(--brand-orange); }}
+  .form-group-label i:first-child {{ opacity: 0.85; font-size: 11px; }}
+
+  .form-group-label--btn {{
+    width: 100%;
+    justify-content: space-between;
+    min-height: 44px;
+    padding: 0 14px;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    background: rgba(7, 27, 22, 0.42);
+    cursor: pointer;
+    transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease);
+  }}
+  .form-group-label--btn:hover {{
+    background: var(--surface-raised);
+    border-color: var(--border-strong);
+  }}
+  .form-group-label--btn > span {{ display: flex; align-items: center; gap: 8px; }}
+
+  .badge-optional {{
+    margin-left: auto;
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    padding: 2px 8px;
+    border-radius: var(--radius-pill);
+    background: rgba(245, 158, 11, 0.14);
+    color: var(--brand-orange);
+    border: 1px solid rgba(245, 158, 11, 0.28);
+    text-transform: uppercase;
+  }}
+
+  .field {{ display: flex; flex-direction: column; gap: 4px; }}
+  .field-hint {{
+    font-size: 11px;
+    color: var(--text-muted);
+    line-height: 1.45;
+    margin: 0;
+  }}
+  .field-icon {{ margin-right: 4px; opacity: 0.7; font-size: 10px; }}
+  .req {{ color: var(--brand-orange); font-weight: 700; }}
+
+  /* Etiquetas de formulario: escala y peso del sistema */
   label {{
     color: var(--text-secondary) !important;
-    letter-spacing: 0.02em;
+    font-size: var(--fs-xs) !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.03em;
   }}
 
   /* ── Botón primario: degradado de marca + glow al hover ── */
@@ -347,6 +485,175 @@ PDF_THEME_CSS = f"""
     outline: 2px solid var(--border-focus);
     outline-offset: 2px;
   }}
+
+  /* ── CONSOLA: jerarquia visual en el flujo de log ──
+        Un muro de texto mono de un solo color no se lee. Los niveles de log
+        deben distinguirse por color Y por forma (no solo color: WCAG 1.4.1). */
+  #terminal-logs > div {{ padding-left: 2px; }}
+
+  /* ── DOSSIER: la pieza que el usuario se lleva. Debe verse como el PDF ──
+        Cifras destacadas con la tipografia y el color del informe. */
+  #report-confidence {{
+    font-size: var(--fs-xs) !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.06em !important;
+    padding: 3px 10px !important;
+    border-radius: var(--radius-pill) !important;
+    background: rgba(52, 211, 153, 0.13) !important;
+    color: var(--text-accent) !important;
+    border: 1px solid var(--border-strong) !important;
+  }}
+
+  /* Tarjetas de hallazgo: el patron .highlights-list del PDF */
+  #report-highlights > * {{
+    padding: 9px 13px;
+    margin-bottom: 6px;
+    background: rgba(7, 27, 22, 0.60);
+    border: 1px solid var(--border-subtle);
+    border-left: 4px solid var(--brand-accent);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    font-size: 12.5px;
+    line-height: 1.55;
+    color: var(--text-secondary);
+    transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease);
+  }}
+  #report-highlights > *:hover {{
+    background: rgba(14, 44, 36, 0.75);
+    border-left-color: var(--brand-accent-soft);
+  }}
+
+  /* Resumen del informe: legible, no un bloque de mono crudo */
+  #report-summary {{
+    background: rgba(3, 13, 10, 0.65) !important;
+    border: 1px solid var(--border-subtle) !important;
+    border-radius: var(--radius-md) !important;
+    padding: 14px !important;
+    font-size: 12.5px !important;
+    line-height: 1.65 !important;
+    color: var(--text-secondary) !important;
+  }}
+
+  /* ├ Encabezado del dossier: separador de acento como en el PDF */
+  #report-drawer > div:first-child {{
+    border-bottom: 1px solid var(--border-default) !important;
+    padding-bottom: 12px !important;
+    margin-bottom: 14px !important;
+  }}
+
+  /* ── Contador de nodos: chip flotante con el tratamiento de marca ── */
+  #graph-container > div:first-child {{
+    background: rgba(4, 18, 14, 0.82) !important;
+    border: 1px solid var(--border-default) !important;
+    border-radius: var(--radius-pill) !important;
+    padding: 6px 14px !important;
+    box-shadow: var(--shadow-md);
+    color: var(--text-muted) !important;
+    letter-spacing: 0.06em;
+  }}
+
+  /* ── Estados vacios: el detalle que separa un producto de un prototipo ── */
+  .empty-state {{
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 32px 20px;
+    text-align: center;
+    color: var(--text-muted);
+  }}
+  .empty-state i {{ font-size: 26px; opacity: 0.35; }}
+  .empty-state p {{ margin: 0; font-size: 12.5px; line-height: 1.5; max-width: 340px; }}
+
+  /* ── Pestanas de vista: control segmentado, no enlaces sueltos ──
+        Un solo control agrupado (Ley de Region Comun) con indicador de
+        seleccion claro (Nielsen #1: visibilidad del estado). */
+  .view-tabs {{
+    display: flex;
+    gap: 4px;
+    padding: 8px 10px 0;
+    border-bottom: 1px solid var(--border-default);
+    background: var(--surface-base);
+    flex-shrink: 0;
+  }}
+
+  .view-tab {{
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 9px 16px;
+    min-height: 40px;
+    border: none;
+    border-bottom: 2px solid transparent;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: var(--fs-xs);
+    font-weight: 600;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    cursor: pointer;
+    border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+    transition: color var(--dur) var(--ease),
+                background var(--dur) var(--ease),
+                border-color var(--dur) var(--ease);
+  }}
+  .view-tab:hover {{
+    color: var(--text-secondary);
+    background: rgba(52, 211, 153, 0.06);
+  }}
+  .view-tab.is-active {{
+    color: var(--text-accent);
+    border-bottom-color: var(--brand-accent);
+    background: rgba(52, 211, 153, 0.08);
+  }}
+  .view-tab i {{ font-size: 11px; opacity: 0.9; }}
+
+  /* Panel de vista activo */
+  .view-panel {{ min-height: 0; }}
+
+  /* ── En desktop los grupos no necesitan marco: la etiqueta actua de
+        separador y se gana ~60px de alto sin perder la agrupacion visual. ── */
+  @media (min-width: 1024px) {{
+    .form-group {{
+      border: none;
+      background: transparent;
+      padding: 0;
+      gap: 8px;
+    }}
+    .form-group + .form-group {{
+      border-top: 1px solid var(--border-subtle);
+      padding-top: 10px;
+    }}
+    .form-group-label {{
+      font-size: 10.5px;
+      opacity: 0.95;
+    }}
+    .form-group-label--btn {{
+      border: 1px solid var(--border-default);
+      background: rgba(7, 27, 22, 0.42);
+      padding: 0 12px;
+      min-height: 40px;
+    }}
+  }}
+
+  /* ── Cadena de altura del layout ──
+     Sin esto el div.flex-1 se queda en 472px (altura de su contenido) y el
+     panel lateral aparece amputado a la mitad en pantallas altas.
+     html y body deben tener altura resuelta para que flex:1 funcione. */
+  html, body {{ height: 100%; overflow: hidden; }}
+
+  /* ── Cadena de altura: el bug que dejaba el panel a 472px ──
+     `flex: 1 1 0%` (la utilidad .flex-1 de Tailwind) colapsa a la altura del
+     contenido cuando el contenedor flex no tiene una altura resuelta por
+     height. Con `1 1 auto` + height:0 el hijo se estira de verdad.
+     Ademas el <main> que queda como hijo suelto del body debe ocultarse:
+     rompe el reparto al ser un segundo hijo directo. */
+  body > div.flex-1 {{
+    flex: 1 1 auto !important;
+    height: 0 !important;
+    min-height: 0 !important;
+  }}
+  body > main {{ display: none !important; }}
 </style>
 """
 

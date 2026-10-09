@@ -56,10 +56,10 @@
   </header>
 
   <!-- MAIN WORKSPACE -->
-  <div class="flex-1 flex flex-col lg:flex-row overflow-hidden">
+  <div class="flex-1 flex flex-col lg:flex-row overflow-hidden min-h-0 lg:h-full">
     
     <!-- PANEL IZQUIERDO: CONFIGURACIÓN MULTI-VECTOR -->
-    <aside id="control-panel" class="w-full lg:w-[450px] lg:shrink-0 border-b lg:border-b-0 lg:border-r border-cyber-border bg-cyber-card/75 backdrop-blur flex flex-col z-10 overflow-y-auto lg:overflow-hidden">
+    <aside id="control-panel" class="w-full lg:w-[480px] lg:shrink-0 lg:h-full lg:max-h-full lg:min-h-0 border-b lg:border-b-0 lg:border-r border-cyber-border bg-cyber-card/75 backdrop-blur flex flex-col z-10 overflow-y-auto lg:overflow-hidden">
       
       <div class="p-3 lg:p-4 border-b border-cyber-border">
         <button onclick="toggleForm()" class="w-full min-h-[44px] flex items-center justify-between lg:pointer-events-none lg:cursor-default" aria-label="Mostrar u ocultar el formulario de vectores" aria-expanded="true">
@@ -72,91 +72,138 @@
           </span>
         </button>
       </div>
-      <div id="vector-form" class="p-3 lg:p-4 space-y-3 border-b border-cyber-border hidden lg:block">
+      <div id="vector-form" class="p-3 lg:p-4 space-y-3 border-b border-cyber-border hidden lg:block lg:grid lg:grid-cols-2 lg:gap-3 lg:space-y-0">
 
-        <!-- Target Principal -->
-        <div>
-          <label class="block text-[11px] font-semibold text-slate-300 mb-1">Nombre o Sujeto Principal *</label>
-          <input type="text" id="target-input" value="Ángel Calderón Rodríguez" 
-                 class="w-full bg-[var(--surface-inset)] border border-cyber-border focus:border-cyber-accent rounded-lg px-3 min-h-[44px] text-xs text-white outline-none font-mono">
-        </div>
-
-        <!-- Usernames / Handles -->
-        <div>
-          <label class="block text-[11px] font-semibold text-slate-300 mb-1">Usernames / Handles (separados por coma)</label>
-          <input type="text" id="usernames-input" value="Doble-2, angelcaldev, DobleVneko" 
-                 class="w-full bg-[var(--surface-inset)] border border-cyber-border focus:border-cyber-accent rounded-lg px-3 min-h-[44px] text-xs text-white outline-none font-mono">
-        </div>
-
-        <!-- Correos Electrónicos -->
-        <div>
-          <label class="block text-[11px] font-semibold text-slate-300 mb-1">Correos Electrónicos (personal / trabajo)</label>
-          <input type="text" id="emails-input" value="angel@angelcalderon.dev, acalderon@fospuca.com" 
-                 class="w-full bg-[var(--surface-inset)] border border-cyber-border focus:border-cyber-accent rounded-lg px-3 min-h-[44px] text-xs text-white outline-none font-mono">
-        </div>
-
-        <!-- Números de Teléfono -->
-        <div>
-          <label class="block text-[11px] font-semibold text-slate-300 mb-1">Números Telefónicos (E.164 o local)</label>
-          <input type="text" id="phones-input" value="+584241922882" 
-                 class="w-full bg-[var(--surface-inset)] border border-cyber-border focus:border-cyber-accent rounded-lg px-3 min-h-[44px] text-xs text-white outline-none font-mono">
-        </div>
-
-        <!-- Anclas de Confianza (Trust Anchors) -->
-        <div>
-          <label class="block text-[11px] font-semibold text-cyber-orange mb-1 flex items-center gap-1">
-            <i class="fa-solid fa-anchor"></i> Anclas de Confianza Verificadas (Trust Anchors)
-          </label>
-          <input type="text" id="anchors-input" value="github:Doble-2, web:https://angelcalderon.dev" 
-                 placeholder="e.g. github:Doble-2, twitter:angelcaldev"
-                 class="w-full bg-[var(--surface-inset)] border border-[rgba(245,158,11,0.35)] rounded-lg px-3 min-h-[44px] text-xs text-white outline-none font-mono">
-          <p class="text-[11px] text-slate-400 mt-0.5">Las fuentes de verdad incuestionables para evitar homónimos y falsos amigos.</p>
-        </div>
-
-        <!-- Opciones del Motor -->
-        <div class="grid grid-cols-2 gap-2 pt-1">
-          <div>
-            <label class="block text-[11px] text-slate-400 mb-1">Modo de Búsqueda</label>
-            <select id="mode-select" class="w-full bg-[var(--surface-inset)] border border-cyber-border rounded-lg px-2.5 min-h-[44px] text-xs text-slate-200 outline-none">
-              <option value="agent">Agente Autónomo IA</option>
-              <option value="phone">Sólo Telecom / Teléfono</option>
-            </select>
+        <!-- ══ GRUPO 1: SUJETO — el identificador principal ══ -->
+        <div class="form-group lg:col-span-2">
+          <div class="form-group-label">
+            <i class="fa-solid fa-crosshairs"></i> Sujeto de la investigación
           </div>
-          <div>
-            <label class="block text-[11px] text-slate-400 mb-1">Proveedor IA</label>
-            <select id="ai-provider-select" class="w-full bg-[var(--surface-inset)] border border-cyber-border rounded-lg px-2.5 min-h-[44px] text-xs text-slate-200 outline-none">
-              <option value="deepseek">DeepSeek API</option>
-              <option value="ollama">Ollama Local (Offline)</option>
-              <option value="openai">OpenAI</option>
-            </select>
+
+          <div class="field">
+            <label for="target-input">Nombre o Sujeto Principal <span class="req" title="Obligatorio">*</span></label>
+            <input type="text" id="target-input" value="Ángel Calderón Rodríguez"
+                   placeholder="Nombre completo de la persona">
+          </div>
+
+          <div class="field">
+            <label for="usernames-input">Usernames / Handles</label>
+            <input type="text" id="usernames-input" value="Doble-2, angelcaldev, DobleVneko"
+                   placeholder="Separados por coma">
+            <p class="field-hint">Separa varios con comas. Se investigará cada uno.</p>
           </div>
         </div>
 
-        <div class="grid grid-cols-2 gap-2">
-          <div>
-            <label class="block text-[11px] text-slate-400 mb-1">Idioma de Salida</label>
-            <select id="lang-select" class="w-full bg-[var(--surface-inset)] border border-cyber-border rounded-lg px-2.5 min-h-[44px] text-xs text-slate-200 outline-none">
-              <option value="es">Español</option>
-              <option value="en">English</option>
-              <option value="pt">Português</option>
-            </select>
+        <!-- ══ GRUPO 2: VECTORES DE CONTACTO — chips con icono ══ -->
+        <div class="form-group">
+          <div class="form-group-label">
+            <i class="fa-solid fa-diagram-project"></i> Vectores de contacto
           </div>
-          <div>
-            <label class="block text-[11px] text-slate-400 mb-1">Pasos Máximos</label>
-            <input type="number" id="max-steps-input" value="6" min="3" max="15" 
-                   class="w-full bg-[var(--surface-inset)] border border-cyber-border rounded-lg px-2.5 min-h-[44px] text-xs text-slate-200 outline-none">
+
+          <div class="field">
+            <label for="emails-input"><i class="fa-regular fa-envelope field-icon"></i> Correos electrónicos</label>
+            <input type="text" id="emails-input" value="angel@angelcalderon.dev, acalderon@fospuca.com"
+                   placeholder="personal@dominio.com, trabajo@empresa.com">
+          </div>
+
+          <div class="field">
+            <label for="phones-input"><i class="fa-solid fa-mobile-screen field-icon"></i> Teléfonos</label>
+            <input type="text" id="phones-input" value="+584****2882"
+                   placeholder="+58 424 000 0000 (E.164 o local)">
           </div>
         </div>
 
-        <!-- Botón de Lanzamiento -->
-        <button id="btn-start" onclick="launchInvestigation()" 
-                class="w-full min-h-[44px] rounded-lg bg-cyber-accent text-[#070a10] font-black text-xs tracking-wider uppercase hover:shadow-[0_0_24px_rgba(0,240,255,0.4)] hover:brightness-110 transition flex items-center justify-center gap-2">
-          <i class="fa-solid fa-radar"></i> Ejecutar Investigación Multi-Vector
-        </button>
+        <!-- ══ GRUPO 3: PRECISIÓN — solo si el analista la necesita ══ -->
+        <div class="form-group">
+          <div class="form-group-label form-group-label--warn">
+            <i class="fa-solid fa-anchor"></i> Anclas de confianza
+            <span class="badge-optional">opcional</span>
+          </div>
+
+          <div class="field">
+            <label for="anchors-input">Hechos verificados que descartan homónimos</label>
+            <input type="text" id="anchors-input" value="github:Doble-2, web:https://angelcalderon.dev"
+                   placeholder="github:usuario, web:https://sitio.com">
+            <p class="field-hint">Las fuentes de verdad incuestionables. Evitan falsos positivos.</p>
+          </div>
+        </div>
+
+        <!-- ══ GRUPO 4: MOTOR — configuración avanzada, plegada por defecto ══ -->
+        <div class="form-group form-group--collapsed">
+          <button type="button" onclick="toggleAdvanced()" class="form-group-label form-group-label--btn"
+                  aria-expanded="false" aria-controls="advanced-options">
+            <span><i class="fa-solid fa-gear"></i> Configuración del motor</span>
+            <i id="adv-chevron" class="fa-solid fa-chevron-down text-xs transition-transform"></i>
+          </button>
+
+          <div id="advanced-options" class="hidden space-y-3 pt-3">
+            <div class="grid grid-cols-2 gap-2.5">
+              <div class="field">
+                <label for="mode-select">Modo de búsqueda</label>
+                <select id="mode-select">
+                  <option value="agent">Agente Autónomo IA</option>
+                  <option value="phone">Sólo Telecom / Teléfono</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="ai-provider-select">Proveedor IA</label>
+                <select id="ai-provider-select">
+                  <option value="deepseek">DeepSeek API</option>
+                  <option value="ollama">Ollama Local (Offline)</option>
+                  <option value="openai">OpenAI</option>
+                </select>
+              </div>
+            </div>
+            <div class="grid grid-cols-2 gap-2.5">
+              <div class="field">
+                <label for="lang-select">Idioma de salida</label>
+                <select id="lang-select">
+                  <option value="es">Español</option>
+                  <option value="en">English</option>
+                  <option value="pt">Português</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="max-steps-input">Pasos máximos</label>
+                <input type="number" id="max-steps-input" value="6" min="3" max="15">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ══ ACCIÓN PRINCIPAL ══ -->
+        <div class="pt-1 lg:col-span-2">
+          <button id="btn-start" onclick="launchInvestigation()"
+                  class="w-full min-h-[48px] rounded-lg font-black text-xs tracking-wider uppercase flex items-center justify-center gap-2">
+            <i class="fa-solid fa-radar"></i> Ejecutar investigación multi-vector
+          </button>
+          <p class="text-center text-[11px] text-slate-400 mt-2" id="form-summary">
+            4 vectores · agente autónomo · informe PDF + grafo
+          </p>
+        </div>
+      </div>
       </div>
 
-      <!-- Live Terminal Console -->
-      <div class="flex-1 flex flex-col p-4 overflow-hidden">
+    </aside>
+
+    <!-- PANEL DERECHO: GRAFO VISUAL EN VIVO & DOSSIER -->
+    <main class="flex-1 flex flex-col relative bg-[var(--surface-inset)] min-h-[50vh] lg:min-h-0 lg:h-full">
+
+      <!-- Selector de vista: grafo / hilo / consola -->
+      <nav class="view-tabs" role="tablist">
+        <button class="view-tab is-active" data-view="graph" role="tab" aria-selected="true">
+          <i class="fa-solid fa-diagram-project"></i> Grafo
+        </button>
+        <button class="view-tab" data-view="timeline" role="tab" aria-selected="false">
+          <i class="fa-solid fa-timeline"></i> Hilo
+        </button>
+        <button class="view-tab" data-view="console" role="tab" aria-selected="false">
+          <i class="fa-solid fa-terminal"></i> Consola
+        </button>
+      </nav>
+
+      <!-- CONSOLA DEL AGENTE -->
+      <div id="view-console" class="view-panel hidden w-full flex-1 flex-col p-3 lg:p-5 overflow-hidden">
         <div class="flex items-center justify-between mb-2">
           <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
             <i class="fa-solid fa-terminal text-cyber-accent"></i> Razonamiento del Agente
@@ -164,26 +211,22 @@
           <span id="step-counter" class="text-[11px] text-slate-400 font-mono">Paso 0/5</span>
         </div>
         <div id="terminal-logs" class="flex-1 bg-[var(--surface-inset)] border border-cyber-border rounded-lg p-3 overflow-y-auto font-mono text-[11px] space-y-1.5 text-slate-300 leading-relaxed">
-          <div class="text-slate-400">&gt; Sistema listo. Ingrese un objetivo para iniciar el enjambre...</div>
+          <div class="text-slate-400">&gt; Sistema listo. Configure los vectores y ejecute la investigación.</div>
         </div>
       </div>
-    </aside>
-
-    <!-- PANEL DERECHO: GRAFO VISUAL EN VIVO & DOSSIER -->
-    <main class="flex-1 flex flex-col relative bg-[var(--surface-inset)] min-h-[50vh] lg:min-h-0">
 
       <!-- PANEL PRINCIPAL: GRAFO MULTI-VECTOR (SVG nativo) -->
-      <div id="graph-svg-container" class="w-full flex-1 overflow-auto p-2 lg:p-6 hidden">
+      <div id="graph-svg-container" class="view-panel w-full flex-1 overflow-auto p-2 lg:p-6 hidden">
         <div id="graph-svg-holder" class="inline-block min-w-full"></div>
       </div>
 
       <!-- PANEL ALTERNATIVO: HILO DE INVESTIGACIÓN (timeline) -->
-      <div id="timeline-container" class="w-full h-full overflow-y-auto p-6 hidden">
+      <div id="timeline-container" class="view-panel w-full h-full overflow-y-auto p-6 hidden">
         <div id="timeline-steps" class="space-y-0"></div>
       </div>
 
       <!-- Contenedor del Grafo Interactivo -->
-      <div id="graph-container" class="w-full h-full relative">
+      <div id="graph-container" class="view-panel w-full h-full relative">
         <div class="absolute top-4 left-4 z-10 bg-cyber-card/80 border border-cyber-border backdrop-blur px-3 py-1.5 rounded-lg text-xs font-mono text-slate-400 pointer-events-none">
           NODOS: <span id="node-count" class="text-cyber-accent font-bold">0</span> &bull; CONEXIONES: <span id="edge-count" class="text-cyber-accent font-bold">0</span>
         </div>
@@ -212,6 +255,20 @@
     let edges = new vis.DataSet([]);
     let currentInvId = null;
     let ws = null;
+
+    let currentView = 'graph';
+
+    // Mantener el resumen del formulario sincronizado con los vectores
+    document.addEventListener('DOMContentLoaded', () => {
+      document.querySelectorAll('.view-tab').forEach(t => {
+        t.addEventListener('click', () => switchView(t.dataset.view));
+      });
+      ['usernames-input', 'emails-input', 'phones-input', 'max-steps-input'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('input', updateFormSummary);
+      });
+      updateFormSummary();
+    });
 
     // Inicializar Vis.js Network
     function initNetwork() {
@@ -269,6 +326,7 @@
       document.getElementById('badge-status').innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-cyber-accent animate-ping"></span> INVESTIGANDO';
 
       collapseFormOnMobile();
+      switchView('console');
 
       try {
         const resp = await fetch('/api/investigate', {
@@ -353,11 +411,13 @@
         } else if (msg.type === 'report_done') {
           showReport(msg.data);
         } else if (msg.type === 'status' && msg.data === 'completed') {
-          document.getElementById('badge-status').innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span> CANCELADO';
+          document.getElementById('badge-status').innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> COMPLETADO';
           const cb2 = document.getElementById('btn-cancel');
           if (cb2) cb2.classList.add('hidden');
           currentInvId = null;
-          logToTerminal('[CANCEL] Investigación cancelada por el usuario.', 'warn');
+          document.getElementById('btn-download-pdf').classList.remove('hidden');
+          document.getElementById('btn-download-canvas').classList.remove('hidden');
+          switchView('graph');
         } else if (msg.type === 'status' && msg.data === 'cancelled') {
           document.getElementById('badge-status').innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span> CANCELADO';
           const cb3 = document.getElementById('btn-cancel');
@@ -444,6 +504,63 @@
           '</div>';
         wrap.appendChild(el);
       });
+    }
+
+    // ── Cambio de vista del area principal (grafo / hilo / consola) ──
+    function switchView(view) {
+      document.querySelectorAll('.view-tab').forEach(t => {
+        const on = t.dataset.view === view;
+        t.classList.toggle('is-active', on);
+        t.setAttribute('aria-selected', String(on));
+      });
+      const map = {
+        graph: ['graph-svg-container', 'graph-container'],
+        timeline: ['timeline-container'],
+        console: ['view-console'],
+      };
+      // Ocultar todos los paneles
+      document.querySelectorAll('.view-panel').forEach(p => p.classList.add('hidden'));
+      // Mostrar los del view elegido
+      (map[view] || []).forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.classList.remove('hidden');
+        if (id === 'view-console') el.classList.add('flex');
+      });
+      currentView = view;
+    }
+
+    function toggleAdvanced() {
+      const panel = document.getElementById('advanced-options');
+      const chev = document.getElementById('adv-chevron');
+      const btn = document.querySelector('.form-group-label--btn');
+      if (!panel) return;
+      const hidden = panel.classList.toggle('hidden');
+      if (chev) chev.style.transform = hidden ? 'rotate(0deg)' : 'rotate(180deg)';
+      if (btn) btn.setAttribute('aria-expanded', String(!hidden));
+    }
+
+    function updateFormSummary() {
+      const el = document.getElementById('form-summary');
+      if (!el) return;
+      const count = (id) => {
+        const i = document.getElementById(id);
+        if (!i || !i.value.trim()) return 0;
+        return i.value.split(',').filter(s => s.trim()).length;
+      };
+      const vec = count('usernames-input') + count('emails-input') + count('phones-input');
+      const steps = document.getElementById('max-steps-input');
+      const n = steps ? steps.value : '6';
+      el.textContent = `${vec} vector${vec === 1 ? '' : 'es'} cargado${vec === 1 ? '' : 's'} · agente autónomo · hasta ${n} pasos · informe PDF + grafo`;
+    }
+
+    function collapseFormOnMobileOnly() {
+      if (window.innerWidth < 1024) {
+        const form = document.getElementById('vector-form');
+        const chev = document.getElementById('form-chevron');
+        if (form) form.classList.add('hidden');
+        if (chev) chev.style.transform = 'rotate(0deg)';
+      }
     }
 
     async function cancelInvestigation() {
