@@ -67,15 +67,20 @@
   <div class="flex-1 flex flex-col lg:flex-row overflow-hidden">
     
     <!-- PANEL IZQUIERDO: CONFIGURACIÓN MULTI-VECTOR -->
-    <aside class="w-full lg:w-[450px] lg:shrink-0 border-b lg:border-b-0 lg:border-r border-cyber-border bg-cyber-card/75 backdrop-blur flex flex-col z-10 lg:overflow-y-auto max-h-[55vh] lg:max-h-none overflow-y-auto">
+    <aside id="control-panel" class="w-full lg:w-[450px] lg:shrink-0 border-b lg:border-b-0 lg:border-r border-cyber-border bg-cyber-card/75 backdrop-blur flex flex-col z-10 overflow-y-auto lg:overflow-hidden">
       
-      <div class="p-4 space-y-3.5 border-b border-cyber-border">
-        <div class="flex items-center justify-between">
+      <div class="p-3 lg:p-4 border-b border-cyber-border">
+        <button onclick="toggleForm()" class="w-full flex items-center justify-between lg:pointer-events-none lg:cursor-default">
           <span class="text-xs font-bold text-cyber-accent uppercase tracking-wider flex items-center gap-1.5">
             <i class="fa-solid fa-sliders"></i> Matriz de Vectores OSINT
           </span>
-          <span class="text-[10px] text-slate-400">Multi-Target Input</span>
-        </div>
+          <span class="flex items-center gap-2">
+            <span class="text-[10px] text-slate-400 hidden sm:inline">Multi-Target Input</span>
+            <i id="form-chevron" class="fa-solid fa-chevron-down lg:hidden text-slate-400 text-xs transition-transform"></i>
+          </span>
+        </button>
+      </div>
+      <div id="vector-form" class="p-3 lg:p-4 space-y-3 border-b border-cyber-border hidden lg:block">
 
         <!-- Target Principal -->
         <div>
@@ -266,6 +271,8 @@
       document.getElementById('graph-container').classList.remove('hidden');
       document.getElementById('badge-status').innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-cyber-accent animate-ping"></span> INVESTIGANDO';
 
+      collapseFormOnMobile();
+
       try {
         const resp = await fetch('/api/investigate', {
           method: 'POST',
@@ -429,6 +436,25 @@
           '</div>';
         wrap.appendChild(el);
       });
+    }
+
+    function toggleForm() {
+      const form = document.getElementById('vector-form');
+      const chev = document.getElementById('form-chevron');
+      if (!form) return;
+      const isHidden = form.classList.contains('hidden');
+      form.classList.toggle('hidden', !isHidden);
+      if (chev) chev.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
+    }
+
+    function collapseFormOnMobile() {
+      // En móvil, cerrar el formulario al lanzar para dar espacio al grafo
+      if (window.innerWidth < 1024) {
+        const form = document.getElementById('vector-form');
+        const chev = document.getElementById('form-chevron');
+        if (form) form.classList.add('hidden');
+        if (chev) chev.style.transform = 'rotate(0deg)';
+      }
     }
 
     function showGraphSvg() {
