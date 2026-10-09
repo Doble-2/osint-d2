@@ -13,8 +13,17 @@ class GraphNode(BaseModel):
     id: str = Field(..., description="Identificador único del nodo.")
     label: str = Field(..., description="Etiqueta visible del nodo.")
     type: Literal[
-        "Target", "Platform", "Identity", "Phone", "Email", "Colleague", "Breach", "Domain", "Noise"
+        "Target", "Platform", "Identity", "Phone", "Email", "Colleague", "Breach",
+        "Domain", "Noise", "Finding"
     ] = Field(..., description="Categoría visual y analítica del nodo.")
+    correlation: float | None = Field(
+        default=None,
+        description="Índice de correlación 0.0-1.0 con el objetivo (None si no aplica).",
+    )
+    evidence: str | None = Field(
+        default=None,
+        description="Evidencia concreta que sustenta este nodo (bio, URL, métrica, score).",
+    )
     properties: dict[str, Any] = Field(
         default_factory=dict, description="Metadatos adicionales del nodo."
     )
@@ -107,6 +116,7 @@ class GraphExportModel(BaseModel):
             "Phone": 1,
             "Email": 1,
             "Domain": 1,
+            "Finding": 1,
             "Platform": 2,
             "Colleague": 2,
             "Breach": 2,
@@ -123,17 +133,28 @@ class GraphExportModel(BaseModel):
             "Colleague": "colleague",
             "Breach": "breach",
             "Noise": "noise",
+            "Finding": "finding",
         }
 
         for n in self.nodes:
             group = type_groups.get(n.type, "platform")
+            # Tooltip rico: evidencia + índice de correlación
+            tip_parts = []
+            if n.correlation is not None:
+                tip_parts.append(f"Correlacion: {int(float(n.correlation) * 100)}%")
+            if n.evidence:
+                tip_parts.append(n.evidence)
+            if n.properties.get("url"):
+                tip_parts.append(f"URL: {n.properties['url']}")
+            tip_parts.append(f"Tipo: {n.type}")
             nodes_data.append({
                 "id": n.id,
                 "label": n.label,
                 "group": group,
                 "level": level_map.get(n.type, 2),
                 "shape": "hexagon" if n.type == "Target" else "box",
-                "title": n.properties.get("url") or n.properties.get("bio") or n.type,
+                "title": "\n".join(tip_parts),
+                "correlation": n.correlation,
             })
 
         for e in self.edges:
@@ -142,6 +163,7 @@ class GraphExportModel(BaseModel):
                 "to": e.target,
                 "label": "" if e.type in ("SCANNED",) else (e.label or e.type),
                 "arrows": "to",
+                "dashes": e.type in ("CONCLUSION", "COLLABORATES_WITH", "COLABORA"),
             })
 
         return f"""<!DOCTYPE html>
@@ -179,7 +201,8 @@ class GraphExportModel(BaseModel):
     <span class="lg"><span class="dot" style="background:#ffd000"></span>Correo</span>
     <span class="lg"><span class="dot" style="background:#00f0ff"></span>Plataforma</span>
     <span class="lg"><span class="dot" style="background:#bd00ff"></span>Colaborador</span>
-    <span class="lg"><span class="dot" style="background:#475569"></span>Descartado</span>
+    <span class="lg"><span class="dot" style="background:#38bdf8"></span>Conclusi&oacute;n</span>
+    <span class="lg"><span class="dot" style="background:#475569"></span>Hom&oacute;nimo/Descartado</span>
   </div>
   <div id="network"></div>
   <script>
@@ -219,7 +242,8 @@ class GraphExportModel(BaseModel):
         domain: {{ color: {{ background: '#0c1a2b', border: '#00f0ff' }}, font: {{ color: '#7dd3fc' }} }},
         colleague: {{ color: {{ background: '#1c0a2b', border: '#bd00ff' }}, font: {{ color: '#d8b4fe' }} }},
         breach: {{ color: {{ background: '#2b0505', border: '#ef4444' }}, font: {{ color: '#fca5a5' }} }},
-        noise: {{ color: {{ background: '#0f172a', border: '#334155' }}, font: {{ color: '#64748b', size: 11 }} }}
+        noise: {{ color: {{ background: '#0f172a', border: '#334155' }}, font: {{ color: '#64748b', size: 11 }} }},
+        finding: {{ color: {{ background: '#101c2b', border: '#38bdf8' }}, font: {{ color: '#bae6fd', size: 12 }} }}
       }},
       edges: {{
         arrows: {{ to: {{ enabled: true, scaleFactor: 0.6 }} }},

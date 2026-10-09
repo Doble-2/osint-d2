@@ -82,6 +82,49 @@ class InvestigationSession:
                 self.websockets.remove(ws)
 
 
+# Nombres de pila muy comunes: buscar "@angel", "@jose", "@maria" produce
+# homónimos masivos. Estos NO son identificadores, son nombres propios.
+_COMMON_GIVEN_NAMES = {
+    "angel", "jose", "maria", "juan", "carlos", "luis", "miguel", "pedro",
+    "ana", "laura", "david", "daniel", "javier", "fernando", "ricardo",
+    "andres", "alejandro", "pablo", "sergio", "antonio", "francisco",
+    "john", "james", "michael", "david", "robert", "mary", "anna", "paul",
+    "peter", "mark", "chris", "alex", "sam", "max", "leo", "luca", "hugo",
+}
+
+# Prefijos de correo genéricos que no identifican a nadie por sí solos.
+_GENERIC_EMAIL_LOCALPARTS = {
+    "contacto", "contact", "info", "hello", "hola", "admin", "support",
+    "soporte", "ventas", "sales", "mail", "email", "correo", "privacidad",
+}
+
+
+def _is_generic_handle(handle: str, target: str, declared_usernames: list[str]) -> bool:
+    """Detects identifiers that are names, not handles (homonym generators).
+
+    Scanning a common given name like "angel" hits hundreds of unrelated people,
+    which is exactly the false-positive flood observed with real targets.
+    """
+    h = (handle or "").strip().lower().lstrip("@")
+    if not h:
+        return True
+    # Si el usuario lo declaró explícitamente como handle, se respeta.
+    declared = {(u or "").strip().lower().lstrip("@") for u in declared_usernames}
+    if h in declared:
+        return False
+    # Si es una sola palabra y coincide con un nombre de pila común -> genérico.
+    if h in _COMMON_GIVEN_NAMES:
+        return True
+    # Si coincide con el primer nombre del sujeto -> genérico.
+    target_words = [w.lower() for w in (target or "").replace(",", " ").split() if len(w) > 2]
+    if target_words and h == target_words[0] and h not in declared:
+        return True
+    # Muy corto (< 4 chars) y sin dígitos -> poca entropía, probable homónimo.
+    if len(h) < 4 and not any(c.isdigit() for c in h):
+        return True
+    return False
+
+
 active_sessions: dict[str, InvestigationSession] = {}
 
 
@@ -248,39 +291,77 @@ async def _run_investigation(session: InvestigationSession):
 
     # Modo Agente Autónomo
     if req.mode == "agent":
+        # Registro de correlaciones verificadas durante la corrida.
+        correlation_log: list[dict[str, Any]] = []
+
         def on_step_callback(step: AgentStep):
-            asyncio.create_task(session.broadcast("log", f"[PASO {step.step_number}] {step.tool_name} → {step.tool_args}"))
+            asyncio.create_task(session.broadcast("log", f"[PASO {step.step_number}] {step.tool_name} -> {step.tool_args}"))
+
+            # Marca homónimos: buscar "angel" cuando el sujeto se llama Angel
+            # produce decenas de falsos positivos. Se anotan, no se dan por ciertos.
             if step.tool_name == "scan_username":
-                uname = step.tool_args.get("username", "")
-                asyncio.create_task(session.broadcast("node_add", {"id": f"user:{uname}", "label": f"@{uname}", "group": "social"}))
-                asyncio.create_task(session.broadcast("edge_add", {"from": f"target:{target}", "to": f"user:{uname}", "label": "HANDLE"}))
+                uname = str(step.tool_args.get("username", "")).strip()
+                if not uname:
+                    return
+                is_generic = _is_generic_handle(uname, target, req.usernames)
+                correlation_log.append({
+                    "kind": "handle",
+                    "value": uname,
+                    "generic": is_generic,
+                    "step": step.step_number,
+                })
+                label = f"@{uname}" + (" | falso positivo probable" if is_generic else "")
+                asyncio.create_task(session.broadcast("node_add", {
+                    "id": f"user:{uname}",
+                    "label": label,
+                    "group": "noise" if is_generic else "platform",
+                }))
             elif step.tool_name == "scan_email":
-                em = step.tool_args.get("email", "")
-                asyncio.create_task(session.broadcast("node_add", {"id": f"email:{em}", "label": em, "group": "email"}))
-                asyncio.create_task(session.broadcast("edge_add", {"from": f"target:{target}", "to": f"email:{em}", "label": "EMAIL"}))
+                em = str(step.tool_args.get("email", "")).strip()
+                if em:
+                    correlation_log.append({"kind": "email", "value": em, "step": step.step_number})
             elif step.tool_name == "scan_phone":
-                ph = step.tool_args.get("phone_number", "")
-                asyncio.create_task(session.broadcast("node_add", {"id": f"phone:{ph}", "label": ph, "group": "phone"}))
-                asyncio.create_task(session.broadcast("edge_add", {"from": f"target:{target}", "to": f"phone:{ph}", "label": "PHONE"}))
+                ph = str(step.tool_args.get("phone_number", "")).strip()
+                if ph:
+                    correlation_log.append({"kind": "phone", "value": ph, "step": step.step_number})
+            elif step.tool_name == "correlate_stylometry":
+                correlation_log.append({
+                    "kind": "stylometry",
+                    "value": str(step.tool_args.get("sample_text", ""))[:80],
+                    "result": str(step.tool_result)[:200],
+                    "step": step.step_number,
+                })
 
         await session.broadcast("node_add", {
-            "id": f"target:{target}",
-            "label": f"{target}\\n[TARGET]",
+            "id": "target:root",
+            "label": f"{target}",
             "group": "target"
         })
 
         engine = AgentEngine(settings=settings, enable_breach_check=req.enable_breach_check, on_step=on_step_callback)
-        
-        # Armar objetivo contextualizado con todos los vectores
-        all_handles = ", ".join(req.usernames) if req.usernames else target
+
+        # IMPORTANTE: el nombre del sujeto NUNCA se escanea como handle, porque
+        # produce decenas de homónimos (ver _is_generic_handle).
+        all_handles = ", ".join(req.usernames) if req.usernames else "N/A (no aportados)"
         all_emails = ", ".join(req.emails) if req.emails else "N/A"
         all_phones = ", ".join(req.phones) if req.phones else "N/A"
-        
+        # Las anclas de confianza son la fuente de verdad: si existen, el agente
+        # debe partir de ellas y descartar todo lo que no correlacione.
+        anchors_line = (
+            f"ANCLAS DE CONFIANZA VERIFICADAS (fuente de verdad, priorízalas): [{', '.join(req.trust_anchors)}]. "
+            if req.trust_anchors else
+            "Sin anclas verificadas: marca toda atribución como NO CONFIRMADA. "
+        )
         objective = (
-            f"Investigación exhaustiva de inteligencia del objetivo {target}. "
+            f"Investigación de inteligencia del sujeto '{target}'. "
+            f"{anchors_line}"
             f"Handles a correlacionar: [{all_handles}]. "
             f"Emails a investigar: [{all_emails}]. "
-            f"Teléfonos a investigar: [{all_phones}]."
+            f"Teléfonos a investigar: [{all_phones}]. "
+            "REGLAS ESTRICTAS: (1) '{target}' es un NOMBRE PROPIO, nunca lo uses como handle. "
+            "(2) Para cada hallazgo indica el nivel de correlación (confirmado/ probable/ descartado) "
+            "y la evidencia concreta que lo sustenta. "
+            "(3) Descarta explícitamente los homónimos y explica por qué."
         )
         
         try:

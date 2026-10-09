@@ -37,20 +37,39 @@ class GraphExporter:
     """Adapts OSINT investigation results into a readable analyst graph."""
 
     @staticmethod
-    def _platform_badge(prof: SocialProfile) -> str:
-        """Builds a compact, information-dense node label for a confirmed profile."""
+    def _correlation_for(prof: SocialProfile) -> float:
+        """Heuristic correlation index for a confirmed profile (0.0-1.0).
+
+        Weighs verifiable cross-links (bio mentioning the target, shared handle
+        across platforms, declared metrics) — it is an analytic aid, not proof.
+        """
         meta = prof.metadata or {}
-        bits: list[str] = []
+        score = 0.35  # base: el perfil existe
+        if prof.bio:
+            score += 0.15
         for key in LABEL_KEYS:
-            value = meta.get(key)
-            if value not in (None, "", 0, [], "0"):
-                short = {"public_repos": "repos", "followers": "seguidores"}.get(key, key)
-                bits.append(f"{value} {short}")
-        platform = (prof.network_name or "").lower()
+            if meta.get(key) not in (None, "", 0, [], "0"):
+                score += 0.10
+        if meta.get("twitter_username") or meta.get("blog") or meta.get("other_websites"):
+            score += 0.20  # enlaces cruzados verificables
+        if (prof.network_name or "").lower() in ("github", "gitlab", "linkedin"):
+            score += 0.10
+        return round(min(score, 0.98), 2)
+
+    @classmethod
+    def _platform_badge(cls, prof: SocialProfile) -> str:
+        """Compact, evidence-dense label: platform, handle, correlation and bio."""
+        meta = prof.metadata or {}
+        corr = cls._correlation_for(prof)
+        platform = (prof.network_name or "").upper()
         handle = prof.username or "?"
-        label = f"{platform.upper()}\n@{handle}"
-        if bits:
-            label += "\n" + " · ".join(bits[:2])
+        # Primera frase de la bio, recortada
+        bio = (prof.bio or "").strip().replace("\n", " ")
+        if len(bio) > 58:
+            bio = bio[:55] + "..."
+        label = f"{platform} @{handle}\ncorrelacion {int(corr * 100)}%"
+        if bio:
+            label += f"\n\"{bio}\""
         return label
 
     @classmethod
@@ -65,10 +84,24 @@ class GraphExporter:
         edges: list[GraphEdge] = []
         seen: set[str] = set()
 
-        def add_node(n_id: str, label: str, n_type: str, props: dict[str, Any] | None = None) -> None:
+        def add_node(
+            n_id: str,
+            label: str,
+            n_type: str,
+            props: dict[str, Any] | None = None,
+            correlation: float | None = None,
+            evidence: str | None = None,
+        ) -> None:
             if n_id not in seen:
                 seen.add(n_id)
-                nodes.append(GraphNode(id=n_id, label=label, type=n_type, properties=props or {}))
+                nodes.append(GraphNode(
+                    id=n_id,
+                    label=label,
+                    type=n_type,
+                    properties=props or {},
+                    correlation=correlation,
+                    evidence=evidence,
+                ))
 
         def add_edge(src: str, dst: str, etype: str, label: str | None = None) -> None:
             if src in seen and dst in seen:
@@ -95,13 +128,24 @@ class GraphExporter:
 
         for prof in kept:
             node_id = f"platform:{prof.network_name.lower()}"
+            corr = cls._correlation_for(prof)
+            evidence_parts = []
+            if prof.bio:
+                evidence_parts.append(f"bio: {prof.bio[:120]}")
+            if prof.url:
+                evidence_parts.append(f"url: {prof.url}")
             add_node(
                 node_id,
                 cls._platform_badge(prof),
                 "Platform",
                 {"url": prof.url, "bio": (prof.bio or "")[:160]},
+                correlation=corr,
+                evidence=" | ".join(evidence_parts) or None,
             )
-            add_edge(target_id, node_id, "HAS_PROFILE", "perfil confirmado")
+            add_edge(
+                target_id, node_id, "HAS_PROFILE",
+                f"correlacion {int(corr * 100)}%",
+            )
 
         # ── 3. AGGREGATED NOISE (one counter node, not 50 boxes) ──────────
         noise_parts: list[str] = []
@@ -128,6 +172,48 @@ class GraphExporter:
                 item.get("relation", "ASSOCIATED_WITH"),
                 item.get("relation_label") or item.get("relation"),
             )
+
+        # ── 5. CONCLUSIONES DEL ANÁLISIS (hallazgos con evidencia) ────────
+        analysis = getattr(person, "analysis", None)
+        if analysis:
+            confidence = getattr(analysis, "confidence", None)
+            highlights = list(getattr(analysis, "highlights", []) or [])
+            for idx, h in enumerate(highlights[:6]):
+                text = str(h).strip()
+                if not text:
+                    continue
+                # Clasificación temática de la conclusión para colorearla
+                low = text.lower()
+                if any(k in low for k in ("opsec", "expone", "vulnerab", "filtrac", "teléfono", "telefono")):
+                    ntype = "Breach"
+                elif any(k in low for k in ("descarta", "falso", "no es", "colaborador", "homónimo", "homonimo")):
+                    ntype = "Colleague"
+                elif any(k in low for k in ("identidad", "nombre", "confirm", "alias")):
+                    ntype = "Identity"
+                else:
+                    ntype = "Finding"
+                node_label = text if len(text) <= 90 else text[:87] + "..."
+                finding_id = f"finding:{idx}"
+                add_node(
+                    finding_id,
+                    node_label,
+                    ntype,
+                    {"full_text": text},
+                    correlation=confidence,
+                    evidence=text,
+                )
+                add_edge(target_id, finding_id, "CONCLUSION", ntype.lower())
+
+            if confidence is not None:
+                add_node(
+                    "finding:confidence",
+                    f"CONFIANZA GLOBAL\n{int(float(confidence) * 100)}%",
+                    "Identity",
+                    {"confidence": confidence},
+                    correlation=float(confidence),
+                    evidence=f"{len(highlights)} hallazgos correlacionados",
+                )
+                add_edge(target_id, "finding:confidence", "CONFIDENCE", "nivel de certeza")
 
         metadata = {
             "generated_by": "OSINT-D2",
