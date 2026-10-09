@@ -28,6 +28,7 @@ from core.services.agent_engine import AgentEngine, AgentStep
 from adapters.graph_exporter import GraphExporter
 from adapters.phone_scanner import PhoneScanner
 from adapters.report_exporter import export_person_html
+from adapters.report_theme import inject_brand_theme
 
 logger = logging.getLogger(__name__)
 
@@ -178,7 +179,9 @@ async def get_dashboard():
     dashboard_file = TEMPLATES_DIR / "dashboard.html"
     if not dashboard_file.exists():
         raise HTTPException(status_code=404, detail="Dashboard template not found.")
-    return HTMLResponse(content=dashboard_file.read_text(encoding="utf-8"))
+    html = dashboard_file.read_text(encoding="utf-8")
+    # Identidad visual compartida con el PDF (misma paleta y tipografía).
+    return HTMLResponse(content=inject_brand_theme(html))
 
 
 @app.post("/api/investigate")
