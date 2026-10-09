@@ -2,7 +2,7 @@
 <html lang="es" class="h-full bg-[#070a10]">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>OSINT-D2 // Live Intelligence Dashboard</title>
   
   <!-- Tailwind CSS & Vis.js (Zero Node.js build steps) -->
@@ -35,10 +35,10 @@
     ::-webkit-scrollbar-thumb:hover { background: #00f0ff; }
   </style>
 </head>
-<body class="h-full text-slate-200 flex flex-col font-sans overflow-hidden">
+<body class="h-full text-slate-200 flex flex-col font-sans overflow-hidden lg:overflow-hidden">
 
   <!-- TOPBAR HEADER -->
-  <header class="h-14 border-b border-cyber-border bg-cyber-card/90 backdrop-blur px-6 flex items-center justify-between z-20">
+  <header class="min-h-14 border-b border-cyber-border bg-cyber-card/90 backdrop-blur px-3 lg:px-6 py-2 flex items-center justify-between gap-2 z-20 flex-wrap">
     <div class="flex items-center space-x-3">
       <div class="w-8 h-8 rounded-lg bg-cyber-accent/10 border border-cyber-accent/40 flex items-center justify-center text-cyber-accent font-black tracking-wider text-sm shadow-[0_0_12px_rgba(0,240,255,0.3)]">
         D2
@@ -58,16 +58,16 @@
         <i class="fa-solid fa-file-pdf"></i> Descargar PDF
       </button>
       <button id="btn-download-canvas" onclick="downloadArtefact('canvas')" class="hidden px-3 py-1.5 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/40 text-purple-300 text-xs font-semibold transition flex items-center gap-2">
-        <i class="fa-solid fa-diagram-project"></i> Obsidian Canvas
+        <i class="fa-solid fa-diagram-project"></i> <span class="hidden sm:inline">Obsidian Canvas</span><span class="sm:hidden">Canvas</span>
       </button>
     </div>
   </header>
 
   <!-- MAIN WORKSPACE -->
-  <div class="flex-1 flex overflow-hidden">
+  <div class="flex-1 flex flex-col lg:flex-row overflow-hidden">
     
     <!-- PANEL IZQUIERDO: CONFIGURACIÓN MULTI-VECTOR -->
-    <aside class="w-[450px] border-r border-cyber-border bg-cyber-card/75 backdrop-blur flex flex-col z-10 overflow-y-auto">
+    <aside class="w-full lg:w-[450px] lg:shrink-0 border-b lg:border-b-0 lg:border-r border-cyber-border bg-cyber-card/75 backdrop-blur flex flex-col z-10 lg:overflow-y-auto max-h-[55vh] lg:max-h-none overflow-y-auto">
       
       <div class="p-4 space-y-3.5 border-b border-cyber-border">
         <div class="flex items-center justify-between">
@@ -173,10 +173,10 @@
     </aside>
 
     <!-- PANEL DERECHO: GRAFO VISUAL EN VIVO & DOSSIER -->
-    <main class="flex-1 flex flex-col relative bg-[#070a10]">
+    <main class="flex-1 flex flex-col relative bg-[#070a10] min-h-[50vh] lg:min-h-0">
 
       <!-- PANEL PRINCIPAL: GRAFO MULTI-VECTOR (SVG nativo) -->
-      <div id="graph-svg-container" class="w-full h-full overflow-auto p-6 hidden">
+      <div id="graph-svg-container" class="w-full flex-1 overflow-auto p-2 lg:p-6 hidden">
         <div id="graph-svg-holder" class="inline-block min-w-full"></div>
       </div>
 
@@ -193,7 +193,7 @@
       </div>
 
       <!-- Modal / Panel Inferior de Reporte Final -->
-      <div id="report-drawer" class="absolute bottom-0 left-0 right-0 max-h-[45%] bg-cyber-card/95 border-t border-cyber-border backdrop-blur-xl p-5 overflow-y-auto transform translate-y-full transition-transform duration-300 z-20 shadow-2xl">
+      <div id="report-drawer" class="absolute bottom-0 left-0 right-0 max-h-[60%] lg:max-h-[45%] bg-cyber-card/95 border-t border-cyber-border backdrop-blur-xl p-3 lg:p-5 overflow-y-auto transform translate-y-full transition-transform duration-300 z-20 shadow-2xl">
         <div class="flex items-center justify-between border-b border-cyber-border pb-3 mb-3">
           <div class="flex items-center gap-2">
             <span class="text-xs font-bold text-cyber-accent uppercase tracking-wider">Dossier Ejecutivo Final</span>
@@ -308,6 +308,13 @@
             if (svgEl) {
               svgEl.style.maxWidth = '100%';
               svgEl.style.height = 'auto';
+              svgEl.style.display = 'block';
+            }
+            const cont = document.getElementById('graph-svg-container');
+            if (cont) {
+              // En mobile el grafo es más alto que ancho: permitir zoom horizontal
+              cont.style.overflowX = 'auto';
+              cont.style.overflowY = 'auto';
             }
             showGraphSvg();
           }

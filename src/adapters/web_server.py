@@ -379,6 +379,7 @@ async def _run_investigation(session: InvestigationSession):
                 language=lang,
                 max_steps=req.max_steps,
                 trust_anchors=req.trust_anchors or None,
+                target=target,
             )
             session.person = result.person
             session.steps = list(getattr(result, "steps", []) or [])

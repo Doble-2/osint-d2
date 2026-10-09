@@ -115,6 +115,8 @@ class AgentEngine:
         self._on_step = on_step
         self._collected_profiles: list[SocialProfile] = []
         self._vector_store = VectorStore()
+        # Identificador real del objetivo, fijado por el llamador (web/CLI).
+        self._explicit_target: str | None = None
 
     async def run(
         self,
@@ -123,8 +125,18 @@ class AgentEngine:
         language: Language = Language.ENGLISH,
         max_steps: int = 10,
         trust_anchors: list[str] | None = None,
+        target: str | None = None,
     ) -> AgentResult:
-        """Run the agent loop until it calls generate_report or exhausts steps."""
+        """Run the agent loop until it calls generate_report or exhausts steps.
+
+        Parameters
+        ----------
+        target:
+            The identifier being investigated. When provided it becomes the
+            PersonEntity target verbatim, instead of guessing from the objective.
+        """
+        if target:
+            self._explicit_target = target
 
         # Determine effective API key and base URL (Ollama doesn't require real key)
         is_ollama = self._settings.ai_provider.lower() == "ollama"
@@ -334,8 +346,13 @@ class AgentEngine:
             except Exception as exc:
                 logger.warning("Forced report generation failed: %s", exc)
 
-        # Build the result.
-        target = objective.split()[-1] if objective else "unknown"
+        # Build the result. The target must be the identifier the caller supplied,
+        # never derived from the free-text objective: splitting the objective's
+        # last word produced garbage like "qué." for objectives ending in a
+        # question ("...y explica por qué.").
+        target = self._explicit_target or (
+            objective.split()[-1] if objective else "unknown"
+        )
         person = PersonEntity(
             target=target,
             profiles=self._collected_profiles,
