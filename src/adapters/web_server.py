@@ -128,21 +128,26 @@ async def download_artefact(inv_id: str, file_type: str):
     if not session:
         raise HTTPException(status_code=404, detail="Session not found.")
 
-    safe_name = session.request.target.replace("@", "").replace("/", "_").replace("+", "")
+    safe_name = session.request.target.replace("@", "").replace("/", "_").replace("+", "").replace(" ", "_")
 
     if file_type == "canvas":
         canvas_file = REPORTS_DIR / f"{safe_name}.canvas"
         if not canvas_file.exists():
-            raise HTTPException(status_code=404, detail="Canvas not generated yet.")
+            # Buscar cualquier canvas generado para esta sesión
+            if session.canvas_path and Path(session.canvas_path).exists():
+                canvas_file = Path(session.canvas_path)
+            else:
+                raise HTTPException(status_code=404, detail="Canvas not generated yet.")
         return FileResponse(canvas_file, filename=f"{safe_name}.canvas", media_type="application/json")
 
     if file_type == "pdf":
-        pdf_file = REPORTS_DIR / "angel_calderon_dossier_vectorial.pdf"
+        pdf_file = REPORTS_DIR / f"{safe_name}_dossier.pdf"
         if not pdf_file.exists():
-            pdf_file = REPORTS_DIR / f"{safe_name}.pdf"
-        if pdf_file.exists():
-            return FileResponse(pdf_file, filename=f"dossier_{safe_name}.pdf", media_type="application/pdf")
-        raise HTTPException(status_code=404, detail="PDF not generated yet.")
+            if session.pdf_path and Path(session.pdf_path).exists():
+                pdf_file = Path(session.pdf_path)
+            else:
+                raise HTTPException(status_code=404, detail="PDF not generated yet.")
+        return FileResponse(pdf_file, filename=f"dossier_{safe_name}.pdf", media_type="application/pdf")
 
     raise HTTPException(status_code=400, detail="Invalid format.")
 
@@ -258,17 +263,48 @@ async def _run_investigation(session: InvestigationSession):
             )
             session.person = result.person
 
-            # Exportar Canvas
-            safe_name = target.replace("@", "").replace("/", "_").replace("+", "")
+            # Exportar Canvas dinámico
+            safe_name = target.replace("@", "").replace("/", "_").replace("+", "").replace(" ", "_")
             graph = GraphExporter.build_graph(result.person)
             canvas_path = REPORTS_DIR / f"{safe_name}.canvas"
             GraphExporter.export_canvas(graph, canvas_path)
             session.canvas_path = str(canvas_path)
 
+            # Exportar HTML y compilar PDF dinámico con Playwright
+            html_path = REPORTS_DIR / f"{safe_name}.html"
+            export_person_html(person=result.person, output_path=html_path, language=lang)
+            
+            pdf_path = REPORTS_DIR / f"{safe_name}_dossier.pdf"
+            try:
+                from playwright.async_api import async_playwright
+                async with async_playwright() as p:
+                    browser = await p.chromium.launch()
+                    page = await browser.new_page()
+                    await page.goto(f"file://{html_path.resolve()}", wait_until="networkidle")
+                    await page.pdf(
+                        path=str(pdf_path),
+                        format="A4",
+                        print_background=True,
+                        margin={"top": "10mm", "bottom": "10mm", "left": "10mm", "right": "10mm"}
+                    )
+                    await browser.close()
+                session.pdf_path = str(pdf_path)
+            except Exception as pdf_err:
+                logger.warning("Fallo al generar PDF con Playwright: %s", pdf_err)
+
+            # Emitir todos los nodos confirmados al grafo visual del cliente
             for n in graph.nodes:
-                await session.broadcast("node_add", {"id": n.id, "label": n.label, "group": n.type.lower()})
+                await session.broadcast("node_add", {
+                    "id": n.id,
+                    "label": n.label,
+                    "group": n.type.lower(),
+                })
             for e in graph.edges:
-                await session.broadcast("edge_add", {"from": e.source, "to": e.target, "label": e.label or e.type})
+                await session.broadcast("edge_add", {
+                    "from": e.source,
+                    "to": e.target,
+                    "label": e.label or e.type,
+                })
 
             if result.person.analysis:
                 await session.broadcast("report_done", {

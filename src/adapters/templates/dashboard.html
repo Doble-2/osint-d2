@@ -220,9 +220,13 @@
         },
         nodes: { shape: 'box', margin: 8, borderWidth: 1.5 },
         edges: { font: { color: '#64748b', size: 9, align: 'top', background: '#070a10' }, arrows: 'to', smooth: { type: 'continuous' } },
-        physics: { forceAtlas2Based: { gravitationalConstant: -80, springLength: 120 } }
+        physics: { forceAtlas2Based: { gravitationalConstant: -90, centralGravity: 0.015, springLength: 140 } },
+        interaction: { hover: true, zoomView: true, dragView: true }
       };
       network = new vis.Network(container, data, options);
+      network.once('stabilizationIterationsDone', function() {
+        network.fit({ animation: { duration: 800, easingFunction: 'easeInOutQuad' } });
+      });
     }
 
     async function launchInvestigation() {
@@ -285,10 +289,16 @@
           if (!nodes.get(msg.data.id)) {
             nodes.add(msg.data);
             updateCounters();
+            if (network) {
+              network.fit({ animation: { duration: 400, easingFunction: 'easeInOutQuad' } });
+            }
           }
         } else if (msg.type === 'edge_add') {
           edges.add(msg.data);
           updateCounters();
+          if (network) {
+            network.fit({ animation: { duration: 400, easingFunction: 'easeInOutQuad' } });
+          }
         } else if (msg.type === 'phone_data') {
           logToTerminal(`[TELECOM DETECTED] Carrier: ${msg.data.carrier} | País: ${msg.data.country} | WhatsApp: ${msg.data.whatsapp ? 'SÍ' : 'NO'}`);
         } else if (msg.type === 'report_done') {
