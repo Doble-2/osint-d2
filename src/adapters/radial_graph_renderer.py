@@ -24,28 +24,31 @@ from typing import Any
 from core.domain.graph_models import GraphExportModel, GraphNode
 
 
-# border color, fill color, short label
+# ── Paleta del grafo ──────────────────────────────────────────────────────
+# Alineada con la identidad del informe PDF (esmeralda forense). Antes usaba
+# neon magenta/cian, que rompía la coherencia con el resto del producto.
+# (border color, fill color, short label)
 _KIND = {
-    "Target":    ("#ff0055", "#2b0713", "SEED"),
-    "Platform":  ("#00f0ff", "#0c1a2b", "PERFIL"),
-    "Domain":    ("#00f0ff", "#0c1a2b", "SITIO WEB"),
-    "Phone":     ("#00ff88", "#052b1a", "TELÉFONO"),
-    "Email":     ("#ffd000", "#2b2505", "CORREO"),
-    "Identity":  ("#ffaa00", "#2b1f05", "IDENTIDAD"),
-    "Finding":   ("#38bdf8", "#101c2b", "CONCLUSIÓN"),
-    "Colleague": ("#bd00ff", "#1c0a2b", "TERCERO"),
-    "Breach":    ("#ef4444", "#2b0505", "EXPOSICIÓN"),
-    "Noise":     ("#475569", "#0f172a", "DESCARTADO"),
+    "Target":    ("#34d399", "#0d3d33", "SUJETO"),      # accent-soft: el seed
+    "Platform":  ("#0d9488", "#0a231d", "PERFIL"),      # accent
+    "Domain":    ("#0d9488", "#0a231d", "SITIO WEB"),
+    "Phone":     ("#10b981", "#062b1f", "TELÉFONO"),    # green
+    "Email":     ("#f59e0b", "#2b1f05", "CORREO"),      # orange
+    "Identity":  ("#34d399", "#0e2c24", "IDENTIDAD"),   # accent-soft
+    "Finding":   ("#5a7d6e", "#0a231d", "CONCLUSIÓN"),  # muted
+    "Colleague": ("#7a9d92", "#0e2c24", "TERCERO"),     # text-muted
+    "Breach":    ("#ef4444", "#2b0707", "EXPOSICIÓN"),  # red
+    "Noise":     ("#5a7d6e", "#071b16", "DESCARTADO"),  # muted, bajo contraste
 }
 
-# action -> edge color
+# action -> edge colour (misma familia cromática que los nodos)
 _ACTION_COLOR = {
-    "scan_username": "#00f0ff",
-    "scan_email": "#ffd000",
-    "scan_phone": "#00ff88",
-    "fetch_url": "#38bdf8",
-    "compare_avatars": "#bd00ff",
-    "correlate_stylometry": "#ffaa00",
+    "scan_username": "#0d9488",
+    "scan_email": "#f59e0b",
+    "scan_phone": "#10b981",
+    "fetch_url": "#34d399",
+    "compare_avatars": "#5a7d6e",
+    "correlate_stylometry": "#f59e0b",
 }
 
 # Fields drawn as "label: value" rows, in visual priority order.
@@ -185,12 +188,12 @@ class RadialGraphRenderer:
         # ── defs: glow + arrow markers + grid ────────────────────────────
         parts.append('''  <defs>
     <filter id="g" x="-40%" y="-40%" width="180%" height="180%">
-      <feDropShadow dx="0" dy="0" stdDeviation="7" flood-color="#00f0ff" flood-opacity="0.3"/>
+      <feDropShadow dx="0" dy="0" stdDeviation="7" flood-color="#34d399" flood-opacity="0.3"/>
     </filter>''')
         for name, color in (
-            ("cyan", "#00f0ff"), ("green", "#00ff88"), ("yellow", "#ffd000"),
-            ("orange", "#ffaa00"), ("purple", "#bd00ff"), ("blue", "#38bdf8"),
-            ("grey", "#64748b"), ("red", "#ff0055"),
+            ("teal", "#0d9488"), ("emerald", "#10b981"), ("amber", "#f59e0b"),
+            ("sand", "#5a7d6e"), ("moss", "#7a9d92"), ("jade", "#34d399"),
+            ("slate", "#5a7d6e"), ("red", "#ef4444"),
         ):
             parts.append(
                 f'    <marker id="m-{name}" viewBox="0 0 10 10" refX="9" refY="5" '
@@ -202,7 +205,7 @@ class RadialGraphRenderer:
     </pattern>
   </defs>''')
 
-        parts.append(f'  <rect width="{width:.0f}" height="{height:.0f}" fill="#070a10"/>')
+        parts.append(f'  <rect width="{width:.0f}" height="{height:.0f}" fill="#04120e"/>')
         parts.append(f'  <rect width="{width:.0f}" height="{height:.0f}" fill="url(#grid)"/>')
 
         # ── band guides + vector labels ──────────────────────────────────
@@ -219,7 +222,7 @@ class RadialGraphRenderer:
             )
             label = "CONCLUSIONES" if is_conclusions else f"VECTOR {c + 1}"
             parts.append(
-                f'  <text x="{x:.0f}" y="{cls.MARGIN_Y - 68:.0f}" fill="#1e293b" font-size="10" '
+                f'  <text x="{x:.0f}" y="{cls.MARGIN_Y - 68:.0f}" fill="#5a7d6e" font-size="10" '
                 f'text-anchor="middle" letter-spacing="2.5">{label}</text>'
             )
 
@@ -232,10 +235,10 @@ class RadialGraphRenderer:
             action = m.group(1) if m else ""
             if e.type == "CONCLUSION":
                 action = "correlate_stylometry"
-            color = _ACTION_COLOR.get(action, "#64748b")
+            color = _ACTION_COLOR.get(action, "#5a7d6e")
             marker = {
-                "#00f0ff": "m-cyan", "#00ff88": "m-green", "#ffd000": "m-yellow",
-                "#ffaa00": "m-orange", "#bd00ff": "m-purple", "#38bdf8": "m-blue",
+                "#0d9488": "m-teal", "#10b981": "m-emerald", "#f59e0b": "m-amber",
+                "#5a7d6e": "m-sand", "#7a9d92": "m-moss", "#34d399": "m-jade",
             }.get(color, "m-grey")
 
             x1 = src.x + src.width
@@ -264,7 +267,7 @@ class RadialGraphRenderer:
         # ── cards ────────────────────────────────────────────────────────
         for c in cards:
             n = c.node
-            border, fill, kind = _KIND.get(n.type, ("#94a3b8", "#0f172a", n.type.upper()))
+            border, fill, kind = _KIND.get(n.type, ("#7a9d92", "#071b16", n.type.upper()))
             parts.append(
                 f'  <rect x="{c.x:.0f}" y="{c.y:.0f}" width="{c.width:.0f}" height="{c.height:.0f}" '
                 f'rx="10" fill="{fill}" stroke="{border}" stroke-width="2" filter="url(#g)"/>'
@@ -279,7 +282,7 @@ class RadialGraphRenderer:
             )
             if n.correlation is not None:
                 parts.append(
-                    f'  <text x="{c.x + c.width - 12:.0f}" y="{c.y + 20:.0f}" fill="#00ff88" '
+                    f'  <text x="{c.x + c.width - 12:.0f}" y="{c.y + 20:.0f}" fill="#10b981" '
                     f'font-size="11" font-weight="bold" text-anchor="end">'
                     f'{int(float(n.correlation) * 100)}%</text>'
                 )
@@ -294,7 +297,7 @@ class RadialGraphRenderer:
             for label, value in c.rows:
                 if label:
                     parts.append(
-                        f'  <text x="{c.x + 12:.0f}" y="{ry:.0f}" fill="#64748b" font-size="9.5" '
+                        f'  <text x="{c.x + 12:.0f}" y="{ry:.0f}" fill="#7a9d92" font-size="9.5" '
                         f'font-weight="600">{cls._esc(label)}</text>'
                     )
                     parts.append(
@@ -303,7 +306,7 @@ class RadialGraphRenderer:
                     )
                 else:
                     parts.append(
-                        f'  <text x="{c.x + 12:.0f}" y="{ry:.0f}" fill="#94a3b8" font-size="9.5">'
+                        f'  <text x="{c.x + 12:.0f}" y="{ry:.0f}" fill="#a8c5bb" font-size="9.5">'
                         f'{cls._esc(value)}</text>'
                     )
                 ry += cls.ROW_H
@@ -311,7 +314,7 @@ class RadialGraphRenderer:
         # ── global header ────────────────────────────────────────────────
         conf_txt = f"{int(float(confidence) * 100)}%" if confidence is not None else "—"
         parts.append(
-            f'  <text x="{cls.MARGIN_X:.0f}" y="52" fill="#00f0ff" font-size="16" font-weight="bold" '
+            f'  <text x="{cls.MARGIN_X:.0f}" y="52" fill="#34d399" font-size="16" font-weight="bold" '
             f'letter-spacing="1.6">GRAFO MULTI-VECTOR DE LA INVESTIGACIÓN</text>'
         )
         parts.append(
@@ -320,16 +323,16 @@ class RadialGraphRenderer:
             f'{len(chain.nodes)} entidades &nbsp;·&nbsp; {len(chain.edges)} relaciones</text>'
         )
         parts.append(
-            f'  <text x="{width - cls.MARGIN_X:.0f}" y="52" fill="#00ff88" font-size="26" '
+            f'  <text x="{width - cls.MARGIN_X:.0f}" y="52" fill="#10b981" font-size="26" '
             f'font-weight="bold" text-anchor="end">{conf_txt}</text>'
         )
         parts.append(
-            f'  <text x="{width - cls.MARGIN_X:.0f}" y="74" fill="#64748b" font-size="9.5" '
+            f'  <text x="{width - cls.MARGIN_X:.0f}" y="74" fill="#7a9d92" font-size="9.5" '
             f'text-anchor="end" letter-spacing="1.5">CONFIANZA GLOBAL</text>'
         )
         parts.append(
             f'  <line x1="{cls.MARGIN_X:.0f}" y1="96" x2="{width - cls.MARGIN_X:.0f}" y2="96" '
-            f'stroke="#1e293b" stroke-width="1"/>'
+            f'stroke="rgba(52,211,153,0.18)" stroke-width="1"/>'
         )
         parts.append(
             f'  <text x="{cls.MARGIN_X:.0f}" y="{height - 24:.0f}" fill="#334155" font-size="10">'
@@ -338,7 +341,7 @@ class RadialGraphRenderer:
 
         return (
             f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width:.0f} {height:.0f}" '
-            f'width="{width:.0f}" height="{height:.0f}" style="background:#070a10; '
+            f'width="{width:.0f}" height="{height:.0f}" style="background:#04120e; '
             f'font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif;">\n'
             + "\n".join(parts)
             + "\n</svg>"
@@ -368,7 +371,7 @@ class RadialGraphRenderer:
 
         page = (
             f'<!DOCTYPE html><html><head><meta charset="utf-8"><style>'
-            f'html,body{{margin:0;padding:0;background:#070a10;overflow:hidden;}}'
+            f'html,body{{margin:0;padding:0;background:#04120e;overflow:hidden;}}'
             f'svg{{display:block;width:{vw}px;height:{vh}px;}}</style></head>'
             f'<body>{svg}</body></html>'
         )

@@ -153,8 +153,8 @@ def _inject_graph_page_into_html(
     graph_page = f'''
     <div class="page" id="sec-graph">
       <h2 class="section-title">{heading}</h2>
-      <div class="card" style="padding: 12px; background: #070a10; border: 1px solid #1e293b; border-radius: 12px;">
-        <div style="color: #00f0ff; font-family: monospace; font-size: 10px; margin-bottom: 10px; font-weight: bold;">
+      <div class="card" style="padding: 12px; background: #04120e; border: 1px solid rgba(52,211,153,0.18); border-radius: 12px;">
+        <div style="color: #34d399; font-family: monospace; font-size: 10px; margin-bottom: 10px; font-weight: bold;">
           &gt; TOPOLOG&Iacute;A MULTI-VECTORIAL DE ENTIDADES &mdash; OBJETIVO: {target}
         </div>
         <img src="data:image/png;base64,{graph_png_base64}" style="width: 100%; border-radius: 8px;" alt="Grafo Forense" />
@@ -420,197 +420,172 @@ async def _run_investigation(session: InvestigationSession):
         )
         
         try:
-            try:
-                result = await engine.run(
-                    objective=objective,
-                    language=lang,
-                    max_steps=req.max_steps,
-                    trust_anchors=req.trust_anchors or None,
-                    target=target,
-                )
-            except _Cancelled:
+            result = await engine.run(
+                objective=objective,
+                language=lang,
+                max_steps=req.max_steps,
+                trust_anchors=req.trust_anchors or None,
+                target=target,
+            )
+        except _Cancelled:
+            await session.broadcast("log", "[CANCEL] Investigación detenida por el usuario.")
+            await session.broadcast("status", "cancelled")
+            return
+        except Exception as _cancel_probe:
+            # El callback puede haber lanzado la señal envuelta por el motor.
+            if session.cancelled or "_Cancelled" in type(_cancel_probe).__name__:
                 await session.broadcast("log", "[CANCEL] Investigación detenida por el usuario.")
                 await session.broadcast("status", "cancelled")
                 return
-            except Exception as _cancel_probe:
-                # El callback puede haber lanzado la señal envuelta por el motor.
-                if session.cancelled or "_Cancelled" in type(_cancel_probe).__name__:
-                    await session.broadcast("log", "[CANCEL] Investigación detenida por el usuario.")
-                    await session.broadcast("status", "cancelled")
-                    return
-                raise
-            session.person = result.person
-            session.steps = list(getattr(result, "steps", []) or [])
+            raise
 
-            # Exportar Canvas dinámico
-            safe_name = target.replace("@", "").replace("/", "_").replace("+", "").replace(" ", "_")
-            graph = GraphExporter.build_graph(result.person)
-            canvas_path = REPORTS_DIR / f"{safe_name}.canvas"
-            GraphExporter.export_canvas(graph, canvas_path)
-            session.canvas_path = str(canvas_path)
+        session.person = result.person
+        session.steps = list(getattr(result, "steps", []) or [])
 
-            # Renderizar el grafo a PNG de alta resolución para incrustarlo en el PDF
-            graph_png_base64 = None
+        # Exportar Canvas dinámico
+        safe_name = target.replace("@", "").replace("/", "_").replace("+", "").replace(" ", "_")
+        graph = GraphExporter.build_graph(result.person)
+        canvas_path = REPORTS_DIR / f"{safe_name}.canvas"
+        GraphExporter.export_canvas(graph, canvas_path)
+        session.canvas_path = str(canvas_path)
+
+        # ── GRAFO MULTI-VECTOR (bandas de vectores con datos ricos) ──────
+        # Se construye AQUÍ, antes de exportar el HTML, porque el PDF lo
+        # necesita. Antes vivía después del export y el dossier acababa
+        # llevando el grafo antiguo de GraphExporter.
+        try:
+            from adapters.chain_builder import ChainBuilder
+            from adapters.radial_graph_renderer import RadialGraphRenderer
+
+            chain = ChainBuilder.build_chain(session.steps, target, result.person)
+            conf_val = result.person.analysis.confidence if result.person.analysis else None
+
+            # Un solo render del SVG: sirve al cliente y al PDF
+            graph_svg = RadialGraphRenderer.render_svg(
+                chain, target=target, confidence=conf_val
+            )
+            svg_path = REPORTS_DIR / f"{safe_name}_grafo.svg"
+            svg_path.write_text(graph_svg, encoding="utf-8")
+            session.graph_svg_path = str(svg_path)
+
             try:
-                graph_png_path = REPORTS_DIR / f"{safe_name}_graph.png"
-                GraphExporter.export_graph_png(
-                    graph, graph_png_path, title=f"OSINT Intelligence Graph — {target}"
+                session.graph_png_path = RadialGraphRenderer.export_png(
+                    chain, str(REPORTS_DIR / f"{safe_name}_grafo.png"),
+                    target=target, confidence=conf_val, scale=2,
                 )
-                import base64
-                graph_png_base64 = base64.b64encode(graph_png_path.read_bytes()).decode("utf-8")
-                await session.broadcast("log", "[GRAFO] Topología de entidades renderizada en alta resolución.")
             except Exception as png_err:
-                logger.warning("Fallo al renderizar el grafo a PNG: %s", png_err)
+                logger.warning("Fallo al rasterizar el grafo: %s", png_err)
 
-            # Exportar HTML del dossier e inyectar la página dedicada del grafo
-            html_path = REPORTS_DIR / f"{safe_name}.html"
-            export_person_html(person=result.person, output_path=html_path, language=lang)
+            await session.broadcast("graph_svg", {
+                "target": target,
+                "confidence": conf_val,
+                "svg": graph_svg,
+                "nodes": len(chain.nodes),
+                "edges": len(chain.edges),
+                "vectors": max(
+                    (int(m.group(1)) for e in chain.edges
+                     if (m := __import__("re").search(r"#(\d+)", e.label or ""))),
+                    default=1,
+                ),
+            })
+            await session.broadcast(
+                "log",
+                f"[GRAFO] {len(chain.nodes)} entidades en {len(chain.edges)} relaciones "
+                f"con datos de perfil completos.",
+            )
+        except Exception as chain_err:
+            logger.warning("Fallo al construir el grafo multi-vector: %s", chain_err)
 
-            # 1) Página del GRAFO multi-vector (la que realmente se usa)
-            if session.graph_png_path and Path(session.graph_png_path).exists():
-                try:
-                    import base64 as _b64
-                    g_b64 = _b64.b64encode(Path(session.graph_png_path).read_bytes()).decode("utf-8")
-                    _inject_graph_page_into_html(
-                        html_path, g_b64, target,
-                        heading="01.5 // Grafo Multi-Vector de la Investigación",
-                        caption=(
-                            "Cada banda vertical es un vector de investigación abierto por el agente; "
-                            "las tarjetas muestran los datos de perfil recolectados."
-                        ),
-                    )
-                    await session.broadcast("log", "[PDF] Página del grafo inyectada en el dossier.")
-                except Exception as g_err:
-                    logger.warning("Fallo al inyectar el grafo en el PDF: %s", g_err)
-            elif session.timeline_path and Path(session.timeline_path).exists():
-                try:
-                    timeline_png = REPORTS_DIR / f"{safe_name}_hilo.png"
-                    from playwright.async_api import async_playwright as _apw
-                    # Render fuera del loop actual para evitar conflictos
-                    import concurrent.futures
+        # Exportar HTML del dossier e inyectar la página dedicada del grafo
+        html_path = REPORTS_DIR / f"{safe_name}.html"
+        export_person_html(person=result.person, output_path=html_path, language=lang)
 
-                    def _shot() -> None:
-                        import asyncio as _aio
-                        from playwright.async_api import async_playwright as _sync_apw
-
-                        async def _do():
-                            async with _sync_apw() as _p:
-                                _b = await _p.chromium.launch()
-                                _pg = await _b.new_page(
-                                    viewport={"width": 1100, "height": 900},
-                                    device_scale_factor=2,
-                                )
-                                await _pg.goto(
-                                    f"file://{Path(session.timeline_path).resolve()}",
-                                    wait_until="networkidle",
-                                )
-                                await _pg.wait_for_timeout(600)
-                                await _pg.screenshot(path=str(timeline_png), full_page=True)
-                                await _b.close()
-                        _aio.run(_do())
-
-                    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as _pool:
-                        _pool.submit(_shot).result()
-
-                    import base64 as _b64
-                    t_b64 = _b64.b64encode(timeline_png.read_bytes()).decode("utf-8")
-                    _inject_graph_page_into_html(
-                        html_path, t_b64, target,
-                        heading="01.5 // Hilo de Investigación (Cadena de Pivotes)",
-                        caption=(
-                            "Secuencia forense: qué se descubrió en cada paso, con qué acción "
-                            "y la evidencia que lo sustenta."
-                        ),
-                    )
-                    await session.broadcast("log", "[PDF] Página del hilo de investigación inyectada.")
-                except Exception as tl_err:
-                    logger.warning("Fallo al renderizar el hilo para el PDF: %s", tl_err)
-            elif graph_png_base64:
-                _inject_graph_page_into_html(html_path, graph_png_base64, target)
-
-            # Compilar PDF final (diseño HTML + página del grafo) con Playwright
-            pdf_path = REPORTS_DIR / f"{safe_name}_dossier.pdf"
+        # 1) Página del GRAFO multi-vector (la que realmente se usa)
+        if session.graph_png_path and Path(session.graph_png_path).exists():
             try:
-                from playwright.async_api import async_playwright
-                async with async_playwright() as p:
-                    browser = await p.chromium.launch()
-                    page = await browser.new_page()
-                    await page.goto(f"file://{html_path.resolve()}", wait_until="networkidle")
-                    await page.pdf(
-                        path=str(pdf_path),
-                        format="A4",
-                        print_background=True,
-                        margin={"top": "10mm", "bottom": "10mm", "left": "10mm", "right": "10mm"}
-                    )
-                    await browser.close()
-                session.pdf_path = str(pdf_path)
-                await session.broadcast("log", "[PDF] Dossier compilado con la página del grafo incluida.")
-            except Exception as pdf_err:
-                logger.warning("Fallo al generar PDF con Playwright: %s", pdf_err)
-
-            # ── GRAFO MULTI-VECTOR: bandas de vectores con datos ricos ───────
-            try:
-                from adapters.chain_builder import ChainBuilder
-                from adapters.radial_graph_renderer import RadialGraphRenderer
-
-                chain = ChainBuilder.build_chain(session.steps, target, result.person)
-                conf = result.person.analysis.confidence if result.person.analysis else None
-
-                # Renderizar el SVG una sola vez: sirve para el cliente y el PDF
-                graph_svg = RadialGraphRenderer.render_svg(
-                    chain, target=target, confidence=conf
-                )
-                svg_path = REPORTS_DIR / f"{safe_name}_grafo.svg"
-                svg_path.write_text(graph_svg, encoding="utf-8")
-                session.graph_svg_path = str(svg_path)
-
-                # PNG para incrustar en el dossier
-                try:
-                    graph_png = RadialGraphRenderer.export_png(
-                        chain, str(REPORTS_DIR / f"{safe_name}_grafo.png"),
-                        target=target, confidence=conf, scale=2,
-                    )
-                    session.graph_png_path = graph_png
-                except Exception as png_err:
-                    logger.warning("Fallo al rasterizar el grafo: %s", png_err)
-
-                # Enviar el grafo al cliente (SVG inline, se ve en el panel)
-                await session.broadcast("graph_svg", {
-                    "target": target,
-                    "confidence": conf,
-                    "svg": graph_svg,
-                    "nodes": len(chain.nodes),
-                    "edges": len(chain.edges),
-                    "vectors": max(
-                        (int(m.group(1)) for e in chain.edges
-                         if (m := __import__("re").search(r"#(\d+)", e.label or ""))),
-                        default=1,
+                import base64 as _b64
+                g_b64 = _b64.b64encode(Path(session.graph_png_path).read_bytes()).decode("utf-8")
+                _inject_graph_page_into_html(
+                    html_path, g_b64, target,
+                    heading="01.5 // Grafo Multi-Vector de la Investigación",
+                    caption=(
+                        "Cada banda vertical es un vector de investigación abierto por el agente; "
+                        "las tarjetas muestran los datos de perfil recolectados."
                     ),
-                })
-                await session.broadcast(
-                    "log",
-                    f"[GRAFO] {len(chain.nodes)} entidades en {len(chain.edges)} relaciones "
-                    f"con datos de perfil completos.",
                 )
-            except Exception as chain_err:
-                logger.warning("Fallo al construir el grafo: %s", chain_err)
-                for n in graph.nodes:
-                    await session.broadcast("node_add", {
-                        "id": n.id, "label": n.label, "group": n.type.lower(),
-                    })
-                for e in graph.edges:
-                    await session.broadcast("edge_add", {
-                        "from": e.source, "to": e.target, "label": e.label or e.type,
-                    })
+                await session.broadcast("log", "[PDF] Página del grafo inyectada en el dossier.")
+            except Exception as g_err:
+                logger.warning("Fallo al inyectar el grafo en el PDF: %s", g_err)
+        elif session.timeline_path and Path(session.timeline_path).exists():
+            try:
+                timeline_png = REPORTS_DIR / f"{safe_name}_hilo.png"
+                from playwright.async_api import async_playwright as _apw
+                # Render fuera del loop actual para evitar conflictos
+                import concurrent.futures
 
-            if result.person.analysis:
-                await session.broadcast("report_done", {
-                    "confidence": result.person.analysis.confidence,
-                    "highlights": result.person.analysis.highlights,
-                    "summary": result.person.analysis.summary,
-                })
-        except Exception as exc:
-            await session.broadcast("log", f"[ERROR] Falló la investigación: {exc}")
+                def _shot() -> None:
+                    import asyncio as _aio
+                    from playwright.async_api import async_playwright as _sync_apw
 
-    session.status = "completed"
-    await session.broadcast("status", "completed")
+                    async def _do():
+                        async with _sync_apw() as _p:
+                            _b = await _p.chromium.launch()
+                            _pg = await _b.new_page(
+                                viewport={"width": 1100, "height": 900},
+                                device_scale_factor=2,
+                            )
+                            await _pg.goto(
+                                f"file://{Path(session.timeline_path).resolve()}",
+                                wait_until="networkidle",
+                            )
+                            await _pg.wait_for_timeout(600)
+                            await _pg.screenshot(path=str(timeline_png), full_page=True)
+                            await _b.close()
+                    _aio.run(_do())
+
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as _pool:
+                    _pool.submit(_shot).result()
+
+                import base64 as _b64
+                t_b64 = _b64.b64encode(timeline_png.read_bytes()).decode("utf-8")
+                _inject_graph_page_into_html(
+                    html_path, t_b64, target,
+                    heading="01.5 // Hilo de Investigación (Cadena de Pivotes)",
+                    caption=(
+                        "Secuencia forense: qué se descubrió en cada paso, con qué acción "
+                        "y la evidencia que lo sustenta."
+                    ),
+                )
+                await session.broadcast("log", "[PDF] Página del hilo de investigación inyectada.")
+            except Exception as tl_err:
+                logger.warning("Fallo al renderizar el hilo para el PDF: %s", tl_err)
+        else:
+            # Sin grafo ni hilo no hay pagina que inyectar: se registra
+            # para no dejar el dossier silenciosamente sin seccion visual.
+            await session.broadcast(
+                "log",
+                "[PDF] Aviso: no se pudo generar el grafo ni el hilo; "
+                "el dossier saldra sin la seccion visual.",
+            )
+
+        # Compilar PDF final (diseño HTML + página del grafo) con Playwright
+        pdf_path = REPORTS_DIR / f"{safe_name}_dossier.pdf"
+        try:
+            from playwright.async_api import async_playwright
+            async with async_playwright() as p:
+                browser = await p.chromium.launch()
+                page = await browser.new_page()
+                await page.goto(f"file://{html_path.resolve()}", wait_until="networkidle")
+                await page.pdf(
+                    path=str(pdf_path),
+                    format="A4",
+                    print_background=True,
+                    margin={"top": "10mm", "bottom": "10mm", "left": "10mm", "right": "10mm"}
+                )
+                await browser.close()
+            session.pdf_path = str(pdf_path)
+            await session.broadcast("log", "[PDF] Dossier compilado con la página del grafo incluida.")
+        except Exception as pdf_err:
+            logger.warning("Fallo al generar PDF con Playwright: %s", pdf_err)
+
+        await session.broadcast("status", "completed")
