@@ -103,14 +103,28 @@ class ChainBuilder:
                 data["Perfiles confirmados"] = str(confirmed)
 
         # ── Estilometría ─────────────────────────────────────────────────
+        # El score se traduce a una etiqueta legible: un numero crudo (0.51) no
+        # le dice nada al analista. Los umbrales coinciden con los que el
+        # prompt del agente declara para que ambos hablen el mismo idioma.
         if tool == "correlate_stylometry":
-            for key, label in (
-                ("similarity_percentage", "Similitud"),
-                ("stylometric_score", "Score estilométrico"),
-                ("hamming_distance", "Distancia"),
-            ):
-                if payload.get(key) is not None:
-                    data[label] = str(payload[key])
+            if payload.get("similarity_percentage") is not None:
+                data["Similitud"] = f"{payload['similarity_percentage']}%"
+            score = payload.get("stylometric_score")
+            if score is not None:
+                try:
+                    value = float(score)
+                except (TypeError, ValueError):
+                    data["Score estilométrico"] = str(score)
+                else:
+                    if value >= 0.70:
+                        label = "mismo autor (muy probable)"
+                    elif value >= 0.40:
+                        label = "indicio moderado"
+                    else:
+                        label = "sin relación"
+                    data["Score estilométrico"] = f"{value:.2f} — {label}"
+            if payload.get("hamming_distance") is not None:
+                data["Distancia"] = str(payload["hamming_distance"])
 
         # ── Comparación de avatares ──────────────────────────────────────
         if tool == "compare_avatars":
