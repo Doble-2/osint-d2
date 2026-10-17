@@ -85,7 +85,7 @@ class ActivityTimeline:
         # Zero activity window starts at best_start and lasts sleep_window_hours.
         # Biological center of sleep is typically ~04:00 AM local time.
         sleep_midpoint_utc = (best_start + (sleep_window_hours / 2.0)) % 24
-        
+
         # Local 04:00 = UTC + offset  => offset = 4.0 - sleep_midpoint_utc
         # Note: if best_start is 5 (05:00 UTC) and sleep 7h -> midpoint is 8.5 UTC -> 4.0 - 8.5 = -4.5 -> -4 / -5
         raw_offset = 4.0 - sleep_midpoint_utc

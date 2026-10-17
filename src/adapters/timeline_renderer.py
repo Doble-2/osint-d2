@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import html
 import re
-from typing import Any
 
 from core.domain.graph_models import GraphExportModel, GraphNode
 
@@ -63,8 +62,7 @@ class TimelineRenderer:
         steps_html: list[str] = []
         for idx, node in enumerate(ordered):
             color, kind_label = _KIND_STYLE.get(node.type, ("#94a3b8", node.type.upper()))
-            title = cls._clean(node.label.splitlines()[0]) if node.label else node.id
-            full_title = cls._clean(node.label)
+            full_title = cls._clean(node.label) if node.label else node.id
             evidence = (node.evidence or "").strip()
             corr = ""
             if node.correlation is not None:

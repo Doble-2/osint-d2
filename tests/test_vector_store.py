@@ -1,4 +1,3 @@
-import pytest
 from adapters.vector_store import VectorStore
 
 

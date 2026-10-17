@@ -23,6 +23,7 @@ ENTRY = str(ROOT / "main.py")
 # These paths are used by adapters/report_exporter.py via sys._MEIPASS fallbacks.
 datas = [
     (str(ROOT / "src" / "adapters" / "templates"), "adapters/templates"),
+    (str(ROOT / "src" / "adapters" / "templates" / "i18n"), "adapters/templates/i18n"),
     (str(ROOT / "src" / "templates"), "templates"),
 ]
 

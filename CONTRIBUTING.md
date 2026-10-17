@@ -9,19 +9,30 @@ Thanks for your interest in contributing! Here's how to get started.
 git clone https://github.com/Doble-2/osint-d2.git
 cd osint-d2
 
-# Create a virtual environment with Python 3.11+
-python3.13 -m venv .venv
-source .venv/bin/activate
+# Install with Poetry (recommended)
+poetry install
+playwright install chromium
 
-# Install in editable mode with all extras
+# Or with pip
+python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[tls]"
 pip install pytest pytest-asyncio ruff
 
 # Run the test suite
-pytest tests/ -v
+poetry run pytest tests/ -v
 
 # Run the linter
-ruff check src/ tests/
+poetry run ruff check src/ tests/ --select=E,F,W --ignore=E501,E402
+```
+
+## Docker Development
+
+```bash
+# Build and run locally
+docker compose up --build
+
+# Run tests inside the container
+docker compose exec osint-d2 pytest tests/ -v
 ```
 
 ## Project Structure
@@ -35,6 +46,8 @@ src/
 ├── adapters/               # I/O implementations
 │   ├── osint_sources/      # Individual scanners (GitHub, X, etc.)
 │   ├── email_sources/      # Email-based scanners (Gravatar, PGP)
+│   ├── site_lists/         # Data-driven site lists (Sherlock, WMN)
+│   ├── templates/          # Jinja2 templates + i18n JSON
 │   ├── ai_analyst.py       # AI profiling + heuristic fallback
 │   ├── breach_check.py     # HIBP integration
 │   └── report_exporter.py  # HTML/PDF report generation
@@ -46,7 +59,7 @@ src/
 
 1. **Follow Clean Architecture**: domain logic in `core/`, I/O in `adapters/`.
 2. **Add tests** for new features in `tests/`.
-3. **Run `ruff check`** before submitting a PR.
+3. **Run linting** before submitting: `poetry run ruff check src/ tests/`
 4. **Use English** for code, comments, and commit messages.
 5. **Commit messages**: use [Conventional Commits](https://www.conventionalcommits.org/) (`fix:`, `feat:`, `chore:`, `refactor:`).
 
@@ -56,10 +69,23 @@ src/
 2. Implement the `OSINTScanner` protocol from `core/interfaces/scanner.py`
 3. Register it in `core/services/identity_pipeline.py`
 4. Add a test in `tests/`
+5. Update docs if the scanner adds a new capability
+
+See the [Adding Scanners guide](https://osint-d2.angelcalderon.dev/contributing/adding-scanners/) for a detailed walkthrough.
+
+## Adding Translations
+
+Translation files live in `src/adapters/templates/i18n/`. To add a new language:
+
+1. Copy `en.json` to `<code>.json` (e.g., `fr.json`)
+2. Translate all values (keys must remain identical)
+3. Add the language to the `Language` enum in `src/core/domain/language.py`
+4. Add the option to the dashboard language selector
 
 ## Reporting Bugs
 
-Open an issue with:
+Open an issue using the [Bug Report template](https://github.com/Doble-2/osint-d2/issues/new?template=bug_report.yml) with:
 - Steps to reproduce
 - Expected vs actual behavior
 - Python version and OS
+- Installation method (Docker / Poetry / pip)

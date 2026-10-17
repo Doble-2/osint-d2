@@ -113,7 +113,7 @@ AGENT_TOOLS: list[dict[str, Any]] = [
                 "properties": {
                     "url": {
                         "type": "string",
-                        "description": "The full URL to fetch (e.g. https://angelcalderon.dev).",
+                        "description": "The full URL to fetch (e.g. https://example.com/portfolio).",
                     },
                 },
                 "required": ["url"],
@@ -158,7 +158,7 @@ AGENT_TOOLS: list[dict[str, Any]] = [
                 "properties": {
                     "phone_number": {
                         "type": "string",
-                        "description": "Phone number in international or local format (e.g. +584241922882).",
+                        "description": "Phone number in international or local format (e.g. +12125551234, +442071234567).",
                     },
                 },
                 "required": ["phone_number"],

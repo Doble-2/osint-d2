@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import html
 import re
-from typing import Any
 
 from core.domain.graph_models import GraphExportModel, GraphNode
 
@@ -125,7 +124,7 @@ class SvgChainRenderer:
         parts: list[str] = []
 
         # ── Defs: filtros glow + marcadores de flecha + patrón de rejilla ──
-        parts.append(f'''  <defs>
+        parts.append('''  <defs>
     <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
       <feDropShadow dx="0" dy="0" stdDeviation="6" flood-color="#00f0ff" flood-opacity="0.35"/>
     </filter>
@@ -169,7 +168,7 @@ class SvgChainRenderer:
         for i, node in enumerate(nodes):
             y = cls.MARGIN_TOP + i * (cls.BOX_H + cls.GAP_Y)
             border, fill, kind_label = _KIND.get(node.type, ("#94a3b8", "#0f172a", node.type.upper()))
-            marker = _MARKER_FOR.get(border, "arr-cyan")
+            _marker = _MARKER_FOR.get(border, "arr-cyan")  # noqa: F841
 
             # Flecha desde la caja anterior
             if i > 0:

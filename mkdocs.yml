@@ -1,0 +1,92 @@
+site_name: OSINT-D2 Documentation
+site_url: https://osint-d2.angelcalderon.dev
+site_description: "Advanced open-source intelligence platform for identity investigation and cognitive profiling."
+site_author: Doble-2
+repo_url: https://github.com/Doble-2/osint-d2
+repo_name: Doble-2/osint-d2
+edit_uri: edit/main/docs/
+
+copyright: "© 2024-2026 Doble-2 — MIT License"
+
+theme:
+  name: material
+  palette:
+    - scheme: slate
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+    - scheme: default
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+  font:
+    text: Inter
+    code: JetBrains Mono
+  icon:
+    repo: fontawesome/brands/github
+    logo: material/shield-search
+  features:
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+    - toc.follow
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/Doble-2/osint-d2
+
+plugins:
+  - search
+  - minify:
+      minify_html: true
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Installation: getting-started/installation.md
+    - Configuration: getting-started/configuration.md
+    - Quick Start: getting-started/quickstart.md
+  - Guides:
+    - Web Dashboard: guides/web-dashboard.md
+    - CLI Reference: guides/cli-reference.md
+    - Agent Mode: guides/agent-mode.md
+    - Docker Deployment: guides/docker.md
+    - Languages: guides/languages.md
+  - API Reference:
+    - REST Endpoints: api/endpoints.md
+    - WebSocket Protocol: api/websocket.md
+  - Architecture:
+    - Overview: architecture/overview.md
+  - Contributing:
+    - Development Setup: contributing/development.md
+    - Adding Scanners: contributing/adding-scanners.md
+  - Changelog: changelog.md

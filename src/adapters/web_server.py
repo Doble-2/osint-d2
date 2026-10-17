@@ -28,7 +28,6 @@ from core.services.agent_engine import AgentEngine, AgentStep
 from adapters.graph_exporter import GraphExporter
 from adapters.phone_scanner import PhoneScanner
 from adapters.report_exporter import export_person_html
-from adapters.report_theme import inject_brand_theme
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +51,7 @@ class InvestigationRequest(BaseModel):
     usernames: list[str] = Field(default_factory=list, description="List of usernames/handles to investigate.")
     emails: list[str] = Field(default_factory=list, description="List of email addresses.")
     phones: list[str] = Field(default_factory=list, description="List of phone numbers.")
-    trust_anchors: list[str] = Field(default_factory=list, description="Verified trust anchors (e.g. github:Doble-2).")
+    trust_anchors: list[str] = Field(default_factory=list, description="Verified trust anchors (e.g. github:username).")
     mode: str = Field(default="agent", description="'agent' for autonomous AI, 'hunt' for full OSINT sweep, 'phone' for telecom.")
     ai_provider: str = Field(default="deepseek", description="AI provider: deepseek, ollama, openai.")
     language: str = Field(default="es", description="Language code: es, en, pt, ar, ru.")
@@ -175,13 +174,31 @@ def _inject_graph_page_into_html(
 
 
 @app.get("/", response_class=HTMLResponse)
-async def get_dashboard():
+async def get_dashboard(lang: str | None = None):
     dashboard_file = TEMPLATES_DIR / "dashboard.html"
     if not dashboard_file.exists():
         raise HTTPException(status_code=404, detail="Dashboard template not found.")
-    html = dashboard_file.read_text(encoding="utf-8")
-    # Identidad visual compartida con el PDF (misma paleta y tipografía).
-    return HTMLResponse(content=inject_brand_theme(html))
+
+    # ── Load i18n strings ──
+    lang_code = (lang or "en").strip().lower()[:2]
+    i18n_dir = TEMPLATES_DIR / "i18n"
+    i18n_file = i18n_dir / f"{lang_code}.json"
+    if not i18n_file.exists():
+        i18n_file = i18n_dir / "en.json"
+        lang_code = "en"
+    try:
+        t = json.loads(i18n_file.read_text(encoding="utf-8"))
+    except Exception:
+        t = {}
+
+    # ── Render with Jinja2 ──
+    from jinja2 import Environment, FileSystemLoader
+    from markupsafe import Markup
+    env = Environment(loader=FileSystemLoader(str(TEMPLATES_DIR)))
+    env.filters["tojson"] = lambda v: Markup(json.dumps(v, ensure_ascii=False))
+    template = env.get_template("dashboard.html")
+    html = template.render(t=t, ui_lang=lang_code)
+    return HTMLResponse(content=html)
 
 
 @app.post("/api/investigate")
@@ -261,7 +278,6 @@ async def download_artefact(inv_id: str, file_type: str):
 
 
 async def _run_investigation(session: InvestigationSession):
-    inv_id = session.inv_id
     req = session.request
     target = req.target
     lang = Language.from_str(req.language)
@@ -418,7 +434,7 @@ async def _run_investigation(session: InvestigationSession):
             "y la evidencia concreta que lo sustenta. "
             "(3) Descarta explícitamente los homónimos y explica por qué."
         )
-        
+
         try:
             result = await engine.run(
                 objective=objective,
@@ -493,6 +509,35 @@ async def _run_investigation(session: InvestigationSession):
                 f"[GRAFO] {len(chain.nodes)} entidades en {len(chain.edges)} relaciones "
                 f"con datos de perfil completos.",
             )
+
+            # ── TIMELINE (Hilo) ──────────────────────────────────────
+            timeline_steps = []
+            for s in session.steps:
+                step_kind = "Finding"
+                tool = getattr(s, "tool_name", "")
+                if "username" in tool:
+                    step_kind = "Platform"
+                elif "email" in tool:
+                    step_kind = "Email"
+                elif "phone" in tool:
+                    step_kind = "Phone"
+                elif "breach" in tool:
+                    step_kind = "Breach"
+                elif "correlate" in tool or "stylometry" in tool:
+                    step_kind = "Identity"
+                label = f"{tool} -> {getattr(s, 'tool_args', {})}"
+                evidence = str(getattr(s, "tool_result", ""))[:500]
+                corr = None
+                timeline_steps.append({
+                    "kind": step_kind,
+                    "label": label,
+                    "evidence": evidence,
+                    "correlation": corr,
+                })
+            await session.broadcast("timeline", {
+                "steps": timeline_steps,
+                "confidence": conf_val,
+            })
         except Exception as chain_err:
             logger.warning("Fallo al construir el grafo multi-vector: %s", chain_err)
 
@@ -519,7 +564,6 @@ async def _run_investigation(session: InvestigationSession):
         elif session.timeline_path and Path(session.timeline_path).exists():
             try:
                 timeline_png = REPORTS_DIR / f"{safe_name}_hilo.png"
-                from playwright.async_api import async_playwright as _apw
                 # Render fuera del loop actual para evitar conflictos
                 import concurrent.futures
 

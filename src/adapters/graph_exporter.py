@@ -59,7 +59,6 @@ class GraphExporter:
     @classmethod
     def _platform_badge(cls, prof: SocialProfile) -> str:
         """Compact, evidence-dense label: platform, handle, correlation and bio."""
-        meta = prof.metadata or {}
         corr = cls._correlation_for(prof)
         platform = (prof.network_name or "").upper()
         handle = prof.username or "?"

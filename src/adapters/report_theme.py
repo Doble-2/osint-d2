@@ -82,23 +82,23 @@ PDF_THEME_CSS = f"""
     --brand-orange: {BRAND['orange']};
     --brand-green: {BRAND['green']};
 
-    /* — Superficies: MISMA temperatura de color (verde), solo cambia la luz — */
-    --surface-deep:   #04120e;
-    --surface-base:   #071b16;
-    --surface-card:   #0a231d;
-    --surface-raised: #0e2c24;
-    --surface-inset:  #030d0a;
+    /* — Superficies: mayor separación de luminosidad entre capas — */
+    --surface-deep:   #081a14;
+    --surface-base:   #0c241d;
+    --surface-card:   #112e26;
+    --surface-raised: #16382f;
+    --surface-inset:  #061410;
 
-    /* — Bordes: capas por opacidad, nunca grises azulados — */
-    --border-subtle:  rgba(52, 211, 153, 0.08);
-    --border-default: rgba(52, 211, 153, 0.14);
-    --border-strong:  rgba(52, 211, 153, 0.26);
+    /* — Bordes: más visibles para separación clara entre paneles — */
+    --border-subtle:  rgba(52, 211, 153, 0.12);
+    --border-default: rgba(52, 211, 153, 0.20);
+    --border-strong:  rgba(52, 211, 153, 0.32);
     --border-focus:   {BRAND['accent_soft']};
 
-    /* — Texto: una sola rampa, con contraste verificado — */
-    --text-primary:   #e8f5f0;
-    --text-secondary: #a8c5bb;
-    --text-muted:     #7a9d92;
+    /* — Texto: rampa con mayor contraste para legibilidad — */
+    --text-primary:   #f0f8f5;
+    --text-secondary: #bdd4cb;
+    --text-muted:     #8fb0a5;
     --text-accent:    {BRAND['accent_soft']};
 
     /* — Tipografía — */
@@ -138,13 +138,7 @@ PDF_THEME_CSS = f"""
     color: var(--text-primary);
   }}
 
-  /* Rejilla forense: ahora en verde de marca, no en cian */
-  body {{
-    background-image:
-      linear-gradient(rgba(52, 211, 153, 0.022) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(52, 211, 153, 0.022) 1px, transparent 1px) !important;
-    background-size: 32px 32px !important;
-  }}
+   /* Fondo limpio: sin rejilla forense para un look profesional */
 
   /* ── Scrollbars ── */
   ::-webkit-scrollbar {{ width: 8px; height: 8px; }}
@@ -156,18 +150,13 @@ PDF_THEME_CSS = f"""
   }}
   ::-webkit-scrollbar-thumb:hover {{ background: rgba(52, 211, 153, 0.40); }}
 
-  /* ── C ABECERA: degradado de portada del PDF, con línea de acento ── */
-  header {{
-    background: {COVER_GRADIENT} !important;
-    border-bottom: 1px solid var(--border-strong) !important;
-    box-shadow: var(--shadow-md);
-    position: relative;
-  }}
-  header::after {{
-    content: "";
-    position: absolute; left: 0; right: 0; bottom: -1px; height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(52,211,153,0.55), transparent);
-  }}
+   /* ── Cabecera: superficie elevada, profesional ── */
+   header {{
+     background: var(--surface-card) !important;
+     border-bottom: 1px solid var(--border-default) !important;
+     box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+     position: relative;
+   }}
 
   /* ── Panel lateral: L1, con separador de acento ──
         Layout interno: el formulario hace scroll dentro de su propio espacio y
@@ -551,19 +540,45 @@ PDF_THEME_CSS = f"""
     letter-spacing: 0.06em;
   }}
 
-  /* ── Estados vacios: el detalle que separa un producto de un prototipo ── */
-  .empty-state {{
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    padding: 32px 20px;
-    text-align: center;
-    color: var(--text-muted);
-  }}
-  .empty-state i {{ font-size: 26px; opacity: 0.35; }}
-  .empty-state p {{ margin: 0; font-size: 12.5px; line-height: 1.5; max-width: 340px; }}
+   /* ── Estados vacíos: profesional con llamada a la acción ── */
+   .empty-state {{
+     display: flex;
+     flex-direction: column;
+     align-items: center;
+     justify-content: center;
+     gap: 16px;
+     padding: 48px 24px;
+     text-align: center;
+     color: var(--text-muted);
+     height: 100%;
+     min-height: 300px;
+   }}
+   .empty-state-icon {{
+     width: 72px; height: 72px;
+     border-radius: 18px;
+     background: rgba(52,211,153,0.12);
+     border: 1px solid rgba(52,211,153,0.25);
+     display: flex; align-items: center; justify-content: center;
+     font-size: 28px; color: var(--brand-accent-soft);
+   }}
+   .empty-state h3 {{
+     margin: 0; font-size: 17px; font-weight: 600;
+     color: var(--text-primary); letter-spacing: -0.01em;
+   }}
+   .empty-state p {{ margin: 0; font-size: 13.5px; line-height: 1.65; max-width: 400px; color: var(--text-secondary); }}
+   .empty-state-steps {{
+     display: flex; gap: 28px; margin-top: 12px;
+     font-size: 12.5px; color: var(--text-secondary);
+   }}
+   .empty-state-steps span {{
+     display: flex; align-items: center; gap: 8px;
+   }}
+   .empty-state-steps .step-num {{
+     width: 22px; height: 22px; border-radius: 50%;
+     background: rgba(52,211,153,0.15); border: 1px solid rgba(52,211,153,0.30);
+     display: flex; align-items: center; justify-content: center;
+     font-size: 11px; font-weight: 700; color: var(--text-accent);
+   }}
 
   /* ── Pestanas de vista: control segmentado, no enlaces sueltos ──
         Un solo control agrupado (Ley de Region Comun) con indicador de

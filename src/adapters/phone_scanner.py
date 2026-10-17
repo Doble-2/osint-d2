@@ -13,7 +13,6 @@ from __future__ import annotations
 import re
 import urllib.parse
 from dataclasses import dataclass, field
-from typing import Any
 
 import phonenumbers
 from phonenumbers import carrier, geocoder, timezone, PhoneNumberType
@@ -71,12 +70,12 @@ class PhoneScanner:
         local_digits = digits_only[len(str(parsed_num.country_code)) :]
 
         formats = [
-            e164,                                   # +584241922882
-            national,                               # 0424-1922882
-            intl,                                   # +58 424 192 2882
-            digits_only,                            # 584241922882
-            local_digits,                           # 4241922882
-            f"0{local_digits}",                      # 04241922882
+            e164,                                   # +12125551234
+            national,                               # (212) 555-1234
+            intl,                                   # +1 212 555 1234
+            digits_only,                            # 12125551234
+            local_digits,                           # 2125551234
+            f"0{local_digits}",                      # 02125551234
         ]
         # Deduplicate preserving order
         seen = set()
@@ -170,11 +169,11 @@ class PhoneScanner:
         # Buscamos variaciones exactas con comillas
         variations = cls.generate_phone_formats(parsed)
         query_parts = "+OR+".join(f'%22{urllib.parse.quote(v)}%22' for v in variations[:3])
-        
+
         headers = {
             "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         }
-        
+
         try:
             search_url = f"https://html.duckduckgo.com/html/?q={query_parts}"
             async with httpx.AsyncClient(timeout=10.0, follow_redirects=True, headers=headers) as client:
@@ -186,7 +185,7 @@ class PhoneScanner:
                         clean_url = url_match.group(1).strip()
                         if clean_url and not clean_url.startswith("duckduckgo"):
                             discovered_socials.append(clean_url)
-                    
+
                     # Extraer títulos / nombres de contacto que acompañan al número
                     for title_match in re.finditer(r'<a[^>]+class=\"result__snippet\"[^>]*>(.*?)</a>', html_text, re.DOTALL):
                         snippet = re.sub(r'<[^>]+>', '', title_match.group(1)).strip()

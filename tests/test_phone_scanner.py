@@ -3,16 +3,13 @@ from adapters.phone_scanner import PhoneScanner
 
 
 @pytest.mark.asyncio
-async def test_phone_scanner_valid_venezuela():
-    result = await PhoneScanner.scan("+584241922882")
+async def test_phone_scanner_valid_us():
+    result = await PhoneScanner.scan("+12125551234", default_region="US")
 
     assert result.is_valid is True
-    assert result.e164 == "+584241922882"
-    assert result.country_iso == "VE"
-    assert "Venezuela" in result.country_name
-    assert result.carrier_name.lower() == "movistar"
-    assert result.line_type in ("MOBILE", "FIXED_OR_MOBILE")
-    assert "America/Caracas" in result.timezones
+    assert result.e164 == "+12125551234"
+    assert result.country_iso == "US"
+    assert result.line_type in ("MOBILE", "FIXED_LINE", "FIXED_OR_MOBILE", "VOIP", "PERSONAL_NUMBER")
     assert "whatsapp" in result.footprint_urls
     assert "telegram" in result.footprint_urls
 

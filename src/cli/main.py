@@ -1196,7 +1196,7 @@ def hunt(
 def agent(
     objective: str = typer.Argument(
         ...,
-        help="Investigation target or free-form objective (e.g. 'torvalds', 'angel@email.com').",
+        help="Investigation target or free-form objective (e.g. 'torvalds', 'user@example.com').",
     ),
     ai_provider: str | None = typer.Option(
         None,
@@ -1508,7 +1508,7 @@ async def _agent_async(
 
 @app.command(name="phone", help="Telecom intelligence and reverse footprint lookup on a phone number.")
 def phone(
-    phone_number: str = typer.Argument(..., help="Target phone number (e.g. +584241922882, +14155552671)."),
+    phone_number: str = typer.Argument(..., help="Target phone number (e.g. +12125551234, +442071234567)."),
     default_region: str = typer.Option("US", "--region", "-r", help="Default ISO country code if international prefix is omitted (default: US)."),
     language: Language | None = typer.Option(
         None,
@@ -1522,12 +1522,11 @@ def phone(
     """Telecom analysis, carrier, WhatsApp presence and footprint dorks."""
     import asyncio
     from adapters.phone_scanner import PhoneScanner
-    from rich.panel import Panel
     from rich.table import Table
 
     console = _console
     print_banner(console)
-    lang = _resolve_language(language)
+    _lang = _resolve_language(language)  # noqa: F841
 
     async def _run_phone():
         with console.status(f"[cyan]Scanning phone number [bold]{phone_number}[/bold]...", spinner="dots"):

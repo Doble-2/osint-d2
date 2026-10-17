@@ -4,10 +4,10 @@ An intelligence graph is not an inventory of findings: it is the STORY of how
 each finding was reached. This module reads the agent's step trace and converts
 it into a directed chain of pivots:
 
-    @Doble-2  --[scan_username]-->  GitHub profile (bio mentions angelcalderon.dev)
-              --[fetch_url]------>  Portfolio (exposes phone +58...)
-              --[scan_phone]----->  Movistar / WhatsApp active
-              --[correlate]------>  X @angelcaldev (84% estilo)
+    @johndoe  --[scan_username]-->  GitHub profile (bio mentions johndoe.dev)
+              --[fetch_url]------>  Portfolio (exposes phone +1...)
+              --[scan_phone]----->  AT&T / WhatsApp active
+              --[correlate]------>  X @jdoe_dev (84% style match)
 
 Each node carries: WHAT was found, HOW it was found (the tool/action) and the
 concrete EVIDENCE (snippet from the tool result) that justified moving on.

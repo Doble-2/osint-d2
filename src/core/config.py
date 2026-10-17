@@ -206,7 +206,7 @@ class AppSettings(BaseSettings):
     )
     proxy_username: str | None = Field(
         default=None,
-        description="ScrapingAnt proxy username (e.g. 'angeldOzt2u').",
+        description="ScrapingAnt proxy username (e.g. 'myuser123').",
     )
     proxy_country: str = Field(
         default="",

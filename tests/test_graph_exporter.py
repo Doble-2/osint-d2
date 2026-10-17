@@ -6,40 +6,40 @@ from core.domain.models import PersonEntity, SocialProfile
 
 def test_graph_exporter_build_and_export_canvas(tmp_path: Path):
     prof1 = SocialProfile(
-        url="https://github.com/Doble-2",
-        username="Doble-2",
+        url="https://github.com/testuser",
+        username="testuser",
         network_name="GitHub",
         exists=True,
-        metadata={"other_websites": ["https://angelcalderon.dev"]},
+        metadata={"other_websites": ["https://example.com/portfolio"]},
     )
     prof2 = SocialProfile(
-        url="https://gitlab.com/Doble-2",
-        username="Doble-2",
+        url="https://gitlab.com/testuser",
+        username="testuser",
         network_name="GitLab",
         exists=True,
     )
     prof_unconfirmed = SocialProfile(
-        url="https://fake.com/Doble-2",
-        username="Doble-2",
+        url="https://fake.com/testuser",
+        username="testuser",
         network_name="FakeNet",
         exists=False,
     )
 
-    person = PersonEntity(target="Doble-2", profiles=[prof1, prof2, prof_unconfirmed])
+    person = PersonEntity(target="testuser", profiles=[prof1, prof2, prof_unconfirmed])
 
     extra = [
         {
-            "id": "phone:+584241922882",
-            "label": "+58 424-192-2882",
+            "id": "phone:+12125551234",
+            "label": "+1 212-555-1234",
             "type": "Phone",
-            "source": "platform:github:doble-2",
+            "source": "platform:github:testuser",
             "relation": "EXPOSES_PHONE",
         },
         {
-            "id": "colleague:raishid",
-            "label": "Federico David (raishid)",
+            "id": "colleague:johndoe",
+            "label": "John Doe (johndoe)",
             "type": "Colleague",
-            "source": "domain:https://angelcalderon.dev",
+            "source": "domain:https://example.com/portfolio",
             "relation": "COLLABORATES_WITH",
         },
     ]
