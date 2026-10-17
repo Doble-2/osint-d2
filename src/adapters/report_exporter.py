@@ -732,6 +732,39 @@ def _parse_ai_sections(summary: str) -> dict[str, str]:
 _MAX_UNCONFIRMED = 20
 
 
+def _pick_primary_handle(person: PersonEntity) -> str | None:
+    """Selects the most representative confirmed handle for the cover page.
+
+    The cover used to interpolate `person.target` directly, which printed
+    "@qué." when the target was a free-text name the agent chose. A handle is
+    only a valid cover identifier if it looks like one (no spaces, not a
+    person's full name), so we fall back to the best confirmed profile.
+    """
+    target = (person.target or "").strip()
+    # Un nombre completo con espacios no es un handle.
+    if target and " " not in target and "@" not in target and len(target) >= 3:
+        # Evitar nombres de pila solos o cadenas sospechosas
+        if not target.endswith("."):
+            return target
+
+    priority = ("github", "github_user", "gitlab", "x", "twitter", "instagram", "linkedin")
+    candidates = []
+    for p in person.profiles:
+        if not p.exists:
+            continue
+        u = (p.username or "").strip().lstrip("@")
+        if not u or " " in u or "@" in u:
+            continue
+        net = (p.network_name or "").lower()
+        rank = priority.index(net) if net in priority else len(priority)
+        candidates.append((rank, -len(u), u))
+
+    if candidates:
+        candidates.sort()
+        return candidates[0][2]
+    return None
+
+
 def render_person_html(*, person: PersonEntity, language: Language) -> str:
     """Renderiza un HTML autocontenido para el reporte."""
 
@@ -808,8 +841,14 @@ def render_person_html(*, person: PersonEntity, language: Language) -> str:
     report_id = f"{person.target}:{generated_at}"
     template = _get_env().get_template("report.html")
     strings = _STRINGS.get(language, _STRINGS[Language.ENGLISH])
+
+    # Handle principal para la portada: nunca el nombre propio del sujeto.
+    # Se prioriza el username confirmado del perfil de mayor señal (github primero).
+    primary_handle = _pick_primary_handle(person)
+
     return template.render(
         person=person,
+        primary_handle=primary_handle,
         generated_at=generated_at,
         generated_at_local=generated_at_local,
         report_id=report_id,

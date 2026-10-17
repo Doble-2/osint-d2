@@ -12,6 +12,9 @@ Architecture note:
 
 from __future__ import annotations
 
+import eval_type_backport
+eval_type_backport.install_patch()  # Patch typing globally for PEP 604 unions
+
 import asyncio
 import errno
 import json
@@ -355,12 +358,31 @@ def _handle_exports(
     console: Console,
     export_pdf: bool,
     export_json: bool,
+    export_canvas: bool = False,
+    export_html: bool = False,
     language: Language,
 ) -> None:
-    if not export_pdf and not export_json:
+    if not export_pdf and not export_json and not export_canvas and not export_html:
         return
 
     safe_name = sanitize_target_for_filename(person.target)
+    reports_dir = Path("reports")
+    reports_dir.mkdir(parents=True, exist_ok=True)
+
+    if export_canvas or export_html:
+        try:
+            from adapters.graph_exporter import GraphExporter
+            graph = GraphExporter.build_graph(person)
+            if export_canvas:
+                canvas_path = reports_dir / f"{safe_name}.canvas"
+                GraphExporter.export_canvas(graph, canvas_path)
+                console.print(f"\n[green]Obsidian Canvas graph generated:[/green] {canvas_path}")
+            if export_html:
+                html_graph_path = reports_dir / f"{safe_name}_graph.html"
+                GraphExporter.export_html(graph, html_graph_path, title=f"OSINT Graph — {person.target}")
+                console.print(f"[green]Interactive HTML graph generated:[/green] {html_graph_path}")
+        except Exception as exc:
+            console.print(f"\n[red]Graph export failed:[/red] {exc}")
 
     if export_pdf:
         try:
@@ -1174,7 +1196,7 @@ def hunt(
 def agent(
     objective: str = typer.Argument(
         ...,
-        help="Investigation target or free-form objective (e.g. 'torvalds', 'angel@email.com').",
+        help="Investigation target or free-form objective (e.g. 'torvalds', 'user@example.com').",
     ),
     ai_provider: str | None = typer.Option(
         None,
@@ -1238,6 +1260,16 @@ def agent(
         "--export-pdf/--no-export-pdf",
         help="Export a PDF/HTML dossier.",
     ),
+    export_canvas: bool = typer.Option(
+        False,
+        "--export-canvas/--no-export-canvas",
+        help="Export an interactive Obsidian Canvas (.canvas) entity graph.",
+    ),
+    export_html_graph: bool = typer.Option(
+        False,
+        "--export-html-graph/--no-export-html-graph",
+        help="Export a standalone dark-themed interactive HTML graph.",
+    ),
     trust: list[str] | None = typer.Option(
         None,
         "--trust",
@@ -1275,6 +1307,8 @@ def agent(
             breach_check=breach_check,
             export_json=export_json,
             export_pdf=export_pdf,
+            export_canvas=export_canvas,
+            export_html=export_html_graph,
             trust_anchors=trust or [],
         )
     )
@@ -1289,7 +1323,9 @@ async def _agent_async(
     breach_check: bool,
     export_json: bool,
     export_pdf: bool,
-    trust_anchors: list[str] | None = None,
+    export_canvas: bool = False,
+    export_html: bool = False,
+    trust_anchors: list[str],
 ) -> None:
     from core.services.agent_engine import AgentEngine, AgentStep
 
@@ -1464,8 +1500,76 @@ async def _agent_async(
         console=console,
         export_pdf=export_pdf,
         export_json=export_json,
+        export_canvas=export_canvas,
+        export_html=export_html,
         language=language,
     )
+
+
+@app.command(name="phone", help="Telecom intelligence and reverse footprint lookup on a phone number.")
+def phone(
+    phone_number: str = typer.Argument(..., help="Target phone number (e.g. +12125551234, +442071234567)."),
+    default_region: str = typer.Option("US", "--region", "-r", help="Default ISO country code if international prefix is omitted (default: US)."),
+    language: Language | None = typer.Option(
+        None,
+        "--language",
+        "-l",
+        help="Switch output language: --language [es|en|pt|ar|ru] (default: en).",
+        show_default=False,
+    ),
+    export_json: bool = typer.Option(False, "--export-json", help="Export phone intelligence report to JSON."),
+) -> None:
+    """Telecom analysis, carrier, WhatsApp presence and footprint dorks."""
+    import asyncio
+    from adapters.phone_scanner import PhoneScanner
+    from rich.table import Table
+
+    console = _console
+    print_banner(console)
+    _lang = _resolve_language(language)  # noqa: F841
+
+    async def _run_phone():
+        with console.status(f"[cyan]Scanning phone number [bold]{phone_number}[/bold]...", spinner="dots"):
+            return await PhoneScanner.scan(phone_number, default_region=default_region)
+
+    result = asyncio.run(_run_phone())
+
+    if not result.is_valid:
+        console.print(f"[red]Error:[/red] {result.error or 'Invalid phone number format.'}")
+        raise typer.Exit(code=1)
+
+    table = Table(title="[bold cyan]Telecom & Geotemporal Intelligence[/bold cyan]", border_style="cyan")
+    table.add_column("Property", style="bold white")
+    table.add_column("Value", style="green")
+
+    table.add_row("E.164 Format", result.e164)
+    table.add_row("Country", f"{result.country_name} ({result.country_iso}) [+{result.country_code}]")
+    table.add_row("Carrier / Operator", result.carrier_name or "Unknown / Unassigned")
+    table.add_row("Line Type", result.line_type)
+    table.add_row("Timezone(s)", ", ".join(result.timezones) if result.timezones else "Unknown")
+    wa_status = "[bold green]YES (Registered)[/bold green]" if result.whatsapp_active else "[yellow]No / Unknown[/yellow]"
+    table.add_row("WhatsApp Active", wa_status)
+
+    console.print(table)
+
+    if result.footprint_urls:
+        dork_table = Table(title="[bold magenta]OSINT Footprint & Reverse Queries[/bold magenta]", border_style="magenta")
+        dork_table.add_column("Service", style="bold yellow")
+        dork_table.add_column("Footprint URL", style="cyan")
+        for k, v in result.footprint_urls.items():
+            dork_table.add_row(k.upper(), v)
+        console.print(dork_table)
+
+    if export_json:
+        import re
+        safe_num = re.sub(r"\D", "", result.e164)
+        out_dir = Path("reports")
+        out_dir.mkdir(parents=True, exist_ok=True)
+        json_file = out_dir / f"phone_{safe_num}.json"
+        import dataclasses
+        import json
+        json_file.write_text(json.dumps(dataclasses.asdict(result), indent=2, ensure_ascii=False))
+        console.print(f"\n[green]JSON report generated:[/green] {json_file}")
 
 
 @app.command(help="Step-by-step interactive assistant for newcomers.")
@@ -1478,6 +1582,7 @@ def wizard() -> None:
         "What do you want to hunt?",
         choices=["username", "email", "both", "agent"],
         default="both",
+        console=console,
     )
 
     # ── Agent mode (autonomous AI investigation) ──────────────────────
@@ -1750,6 +1855,23 @@ def wizard() -> None:
             trust_anchors=wiz_trust_anchors,
         )
     )
+
+
+@app.command(name="serve", help="Launch the real-time Cyberpunk Web Dashboard (FastAPI + WebSockets).")
+def serve(
+    host: str = typer.Option("127.0.0.1", "--host", "-h", help="Host interface to bind to."),
+    port: int = typer.Option(8000, "--port", "-p", help="Port number for the web server."),
+    reload: bool = typer.Option(False, "--reload", help="Enable auto-reload for development."),
+) -> None:
+    """Starts the OSINT-D2 live intelligence web server."""
+    import uvicorn
+    from adapters.web_server import app as web_app
+
+    console = _console
+    print_banner(console)
+    console.print(f"[bold cyan]Starting Live Intelligence Dashboard at:[/bold cyan] [underline green]http://{host}:{port}[/underline green]")
+    console.print("[dim]Press Ctrl+C to terminate the web server.[/dim]\n")
+    uvicorn.run(web_app, host=host, port=port, reload=reload)
 
 
 @app.command(help="Re-run the AI profiler on a previously exported JSON dossier.")

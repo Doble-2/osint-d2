@@ -25,9 +25,10 @@ reports/
 *.json
 *.log
 
-# Allow HTML templates (they must be committed for packaging)
+# Allow HTML templates and i18n JSON (they must be committed for packaging)
 !src/templates/*.html
 !src/adapters/templates/*.html
+!src/adapters/templates/i18n/*.json
 
 # Downloaded datasets (no se commitean)
 data/
@@ -48,3 +49,4 @@ data/
 
 # OS
 Thumbs.db
+ui-skills/

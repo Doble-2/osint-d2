@@ -19,6 +19,7 @@ from openai import AsyncOpenAI
 from core.config import AppSettings
 from core.domain.language import Language
 from core.domain.models import AnalysisReport, PersonEntity, SocialProfile
+from adapters.vector_store import VectorStore
 from core.services.agent_tools import AGENT_TOOLS, execute_tool
 
 logger = logging.getLogger(__name__)
@@ -68,7 +69,18 @@ def _build_agent_system_prompt(*, language: Language, max_steps: int) -> str:
             f"- Máximo {max_steps} pasos. Prioriza las fuentes más ricas en datos.\n"
             "- No inventes datos. Solo reporta lo que las herramientas confirmen.\n"
             "- Si un scan falla o no encuentra nada, continúa con otras fuentes.\n"
-            "- Busca patrones: mismo avatar en varias redes, misma bio, emails cruzados.\n"
+            "- Busca patrones: mismo avatar en varias redes, misma bio, emails cruzados.\n\n"
+            "INTERPRETACIÓN DE PUNTUACIONES (crítico, no las malinterprete):\n"
+            "- search_vector_memory devuelve 'score' con la métrica BM25. NO es un porcentaje: "
+            "rango típico 0-5, donde más alto = mejor coincidencia. Nunca lo reporte como %.\n"
+            "- correlate_stylometry devuelve 'stylometric_score' entre 0 y 1 (similitud coseno "
+            "de n-gramas). Interpretación: >0.70 muy probable mismo autor; 0.40-0.70 indicio "
+            "moderado; <0.15 sin relación. Solo es válido en textos de 40+ caracteres; si la "
+            "lista viene vacía es porque la muestra era demasiado corta, NO porque no haya match.\n"
+            "- compare_avatars devuelve 'similarity_percentage' (0-100%) y 'hamming_distance' "
+            "(bits distintos: 0 = idénticas, <=10 = probablemente la misma imagen).\n"
+            "- Un handle genérico marcado como 'falso positivo probable' es un homónimo: "
+            "no lo trates como identidad confirmada.\n"
             "- El reporte final debe seguir las 6 dimensiones: Identidad, Geo-temporal, "
             "Psicológico (OCEAN), Técnico/Profesional, Ideología, y Vectores de Ataque (OpSec).\n\n"
             "IDIOMA DE RESPUESTA: Español neutro."
@@ -87,7 +99,19 @@ def _build_agent_system_prompt(*, language: Language, max_steps: int) -> str:
         f"- Maximum {max_steps} steps. Prioritize data-rich sources.\n"
         "- Do NOT fabricate data. Only report what the tools confirm.\n"
         "- If a scan fails or returns nothing, move on to other sources.\n"
-        "- Look for patterns: same avatar across networks, same bio, cross-referenced emails.\n"
+        "- Look for patterns: same avatar across networks, same bio, cross-referenced emails.\n\n"
+        "SCORE INTERPRETATION (critical - do not misread these):\n"
+        "- search_vector_memory returns 'score' using BM25. It is NOT a percentage: "
+        "typical range 0-5, higher is a better match. Never report it as %.\n"
+        "- correlate_stylometry returns 'stylometric_score' between 0 and 1 (cosine "
+        "similarity of character n-grams). Interpretation: >0.70 very likely the same "
+        "author; 0.40-0.70 moderate signal; <0.15 unrelated. Only valid for 40+ "
+        "character samples; an empty list means the sample was too short, NOT that "
+        "there was no match.\n"
+        "- compare_avatars returns 'similarity_percentage' (0-100%) and 'hamming_distance' "
+        "(differing bits: 0 = identical, <=10 = probably the same image).\n"
+        "- A generic handle flagged as a probable false positive is a namesake: do not "
+        "treat it as a confirmed identity.\n"
         "- The final report must cover 6 dimensions: Identity & Demographics, "
         "Geo-temporal Analysis, Psychological Profile (OCEAN), Technical/Professional, "
         "Ideology & Values, and Attack Surface (OpSec).\n\n"
@@ -113,6 +137,9 @@ class AgentEngine:
         self._enable_breach_check = enable_breach_check
         self._on_step = on_step
         self._collected_profiles: list[SocialProfile] = []
+        self._vector_store = VectorStore()
+        # Identificador real del objetivo, fijado por el llamador (web/CLI).
+        self._explicit_target: str | None = None
 
     async def run(
         self,
@@ -121,17 +148,34 @@ class AgentEngine:
         language: Language = Language.ENGLISH,
         max_steps: int = 10,
         trust_anchors: list[str] | None = None,
+        target: str | None = None,
     ) -> AgentResult:
-        """Run the agent loop until it calls generate_report or exhausts steps."""
+        """Run the agent loop until it calls generate_report or exhausts steps.
 
-        if not self._settings.ai_api_key:
+        Parameters
+        ----------
+        target:
+            The identifier being investigated. When provided it becomes the
+            PersonEntity target verbatim, instead of guessing from the objective.
+        """
+        if target:
+            self._explicit_target = target
+
+        # Determine effective API key and base URL (Ollama doesn't require real key)
+        is_ollama = self._settings.ai_provider.lower() == "ollama"
+        api_key_str = ""
+        if self._settings.ai_api_key:
+            api_key_str = self._settings.ai_api_key.get_secret_value()
+        elif is_ollama:
+            api_key_str = "ollama"
+        else:
             raise ValueError(
                 "OSINT_D2_AI_API_KEY is not configured. "
-                "Set it via environment variable, .env file, or run: osint-d2 doctor setup-ai"
+                "Set it via environment variable, .env file, or set OSINT_D2_AI_PROVIDER=ollama"
             )
 
         client = AsyncOpenAI(
-            api_key=self._settings.ai_api_key.get_secret_value(),
+            api_key=api_key_str,
             base_url=self._settings.ai_base_url,
         )
 
@@ -239,6 +283,7 @@ class AgentEngine:
                             tc_step.tool_args,
                             settings=self._settings,
                             enable_breach_check=self._enable_breach_check,
+                            vector_store=self._vector_store,
                         )
                     except Exception as exc:
                         logger.warning("Tool %s failed: %s", tool_call.function.name, exc)
@@ -324,8 +369,13 @@ class AgentEngine:
             except Exception as exc:
                 logger.warning("Forced report generation failed: %s", exc)
 
-        # Build the result.
-        target = objective.split()[-1] if objective else "unknown"
+        # Build the result. The target must be the identifier the caller supplied,
+        # never derived from the free-text objective: splitting the objective's
+        # last word produced garbage like "qué." for objectives ending in a
+        # question ("...y explica por qué.").
+        target = self._explicit_target or (
+            objective.split()[-1] if objective else "unknown"
+        )
         person = PersonEntity(
             target=target,
             profiles=self._collected_profiles,
@@ -367,7 +417,7 @@ class AgentEngine:
             if not isinstance(p, dict):
                 continue
             try:
-                self._collected_profiles.append(SocialProfile(
+                prof = SocialProfile(
                     url=p.get("url", ""),
                     username=p.get("username", "unknown"),
                     network_name=p.get("network", "unknown"),
@@ -375,6 +425,21 @@ class AgentEngine:
                     metadata=p,
                     bio=p.get("bio"),
                     image_url=p.get("avatar"),
-                ))
+                )
+                self._collected_profiles.append(prof)
+
+                # Index into vector store if exists and has text
+                if prof.exists:
+                    bio = p.get("bio") or ""
+                    title = p.get("title") or ""
+                    desc = p.get("description") or ""
+                    combined = f"{title} {desc} {bio}".strip()
+                    if combined:
+                        self._vector_store.add_document(
+                            doc_id=f"{prof.network_name}:{prof.username}",
+                            source=prof.network_name,
+                            text=combined,
+                            metadata={"url": prof.url, "username": prof.username},
+                        )
             except Exception:
                 continue

@@ -14,24 +14,24 @@ class TestBuildProxyUrlStandalone:
     def test_residential_with_username(self):
         settings = AppSettings(
             proxy_api_key="my-password",
-            proxy_username="angeldOzt2u",
+            proxy_username="testuser",
             proxy_mode="residential",
         )
         base_url, auth = _build_proxy_url(settings)
         assert base_url == "http://residential.scrapingant.com:8080"
-        assert auth == ("customer-angeldOzt2u", "my-password")
+        assert auth == ("customer-testuser", "my-password")
         # Key must NOT appear in the URL
         assert "my-password" not in base_url
 
     def test_datacenter_with_username(self):
         settings = AppSettings(
             proxy_api_key="my-password",
-            proxy_username="angeldOzt2u",
+            proxy_username="testuser",
             proxy_mode="datacenter",
         )
         base_url, auth = _build_proxy_url(settings)
         assert base_url == "http://datacenter.scrapingant.com:8080"
-        assert auth == ("customer-angeldOzt2u", "my-password")
+        assert auth == ("customer-testuser", "my-password")
         assert "my-password" not in base_url
 
     def test_residential_with_country(self):
@@ -94,11 +94,11 @@ class TestBuildProxyUrlEdgeCases:
         assert auth is None
 
     def test_auto_detect_mode_from_key(self):
-        settings = AppSettings(proxy_api_key="test-key", proxy_mode=None)
+        settings = AppSettings(proxy_api_key="test-key", proxy_mode=None, proxy_username=None)
         base_url, auth = _build_proxy_url(settings)
         assert base_url is not None
         assert auth is not None
-        # Auto-detected mode is "residential" — visible in the auth username
+        # With no username, it goes to API proxy mode where 'residential' appears in auth
         assert "residential" in auth[0]
 
     def test_unknown_mode_returns_none(self):
