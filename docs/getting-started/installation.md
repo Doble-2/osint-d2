@@ -2,96 +2,167 @@
 
 ## Requirements
 
-- **Python 3.11+**
-- **API Key** for at least one AI provider (DeepSeek, OpenAI, or Ollama)
+- **Python 3.11+** (tested on 3.11, 3.12, 3.13)
+- **Poetry** for dependency management
+- **Playwright** browsers (auto-installed during setup)
 
-## Docker (Recommended)
+---
 
-The fastest way to get started. No system dependencies needed.
+## Install
 
-```bash
-git clone https://github.com/Doble-2/osint-d2.git
-cd osint-d2
-cp .env.example .env
-```
+=== "Poetry (recommended)"
 
-Edit `.env` with your API keys:
-
-```bash
-nano .env
-```
-
-Launch:
-
-```bash
-docker compose up -d
-```
-
-The dashboard will be available at **http://localhost:8000**.
-
-!!! tip "Custom Port"
-    Set `OSINT_PORT=9090` in your environment to use a different port:
     ```bash
-    OSINT_PORT=9090 docker compose up -d
+    git clone https://github.com/Doble-2/osint-d2.git
+    cd osint-d2
+    poetry install
+    poetry run playwright install chromium
     ```
 
-## Poetry (Development)
+=== "pip"
 
-```bash
-# Clone
-git clone https://github.com/Doble-2/osint-d2.git
-cd osint-d2
+    ```bash
+    git clone https://github.com/Doble-2/osint-d2.git
+    cd osint-d2
+    pip install -e .
+    playwright install chromium
+    ```
 
-# Install dependencies
-poetry install
+=== "Docker"
 
-# Install Playwright browser for PDF generation
-playwright install chromium
+    ```bash
+    git clone https://github.com/Doble-2/osint-d2.git
+    cd osint-d2
+    cp .env.example .env
+    docker compose up -d
+    ```
 
-# Configure
-cp .env.example .env
-nano .env
+    See the [Docker Deployment guide](../guides/docker.md) for full configuration.
 
-# Launch
-poetry run osint-d2 serve
-```
-
-## pip
-
-```bash
-pip install -e .
-playwright install chromium
-cp .env.example .env
-osint-d2 serve
-```
+---
 
 ## System Dependencies
 
-If not using Docker, you'll need these for PDF generation:
+Playwright and WeasyPrint require native libraries for headless browser rendering and PDF generation.
 
-=== "Ubuntu/Debian"
+=== "Ubuntu / Debian"
 
     ```bash
-    sudo apt-get install -y \
-        libcairo2 libpango-1.0-0 libpangoft2-1.0-0 \
-        libgdk-pixbuf2.0-0 libffi-dev shared-mime-info
+    sudo apt-get update && sudo apt-get install -y \
+        libgdk-pixbuf-2.0-0 \
+        libpango-1.0-0 \
+        libpangocairo-1.0-0 \
+        libcairo2 \
+        libffi-dev \
+        shared-mime-info
+    ```
+
+    !!! warning "Debian Trixie / bookworm"
+        The package is `libgdk-pixbuf-2.0-0` (with hyphens), **not** `libgdk-pixbuf2.0-0` (without hyphens). The latter was deprecated in recent Debian versions.
+
+=== "Fedora / RHEL"
+
+    ```bash
+    sudo dnf install -y \
+        gdk-pixbuf2 \
+        pango \
+        cairo
     ```
 
 === "macOS"
 
     ```bash
-    brew install cairo pango gdk-pixbuf libffi shared-mime-info
+    brew install cairo pango gdk-pixbuf libffi
     ```
 
 === "Windows"
 
-    PDF generation uses Playwright (Chromium), which works out of the box.
-    WeasyPrint-based export requires the [GTK3 Runtime](https://github.com/nickvdp/osint-d2/wiki/Windows-GTK).
+    Install [GTK3 runtime](https://github.com/nickvdyck/weasyprint-win) for WeasyPrint, then:
+
+    ```bash
+    pip install osint-d2
+    playwright install chromium
+    ```
+
+---
+
+## AI Provider Setup
+
+OSINT-D2 requires an LLM provider for Agent Mode and AI analysis. Choose one:
+
+=== "DeepSeek (default, cheapest)"
+
+    1. Get an API key at [platform.deepseek.com](https://platform.deepseek.com)
+    2. Configure:
+
+    ```env
+    OSINT_D2_AI_PROVIDER=deepseek
+    OSINT_D2_AI_API_KEY=sk-xxxxxxxxxxxxxxxx
+    OSINT_D2_AI_BASE_URL=https://api.deepseek.com
+    OSINT_D2_AI_MODEL=deepseek-chat
+    ```
+
+=== "OpenAI"
+
+    ```env
+    OSINT_D2_AI_PROVIDER=openai
+    OSINT_D2_AI_API_KEY=sk-xxxxxxxxxxxxxxxx
+    OSINT_D2_AI_BASE_URL=https://api.openai.com/v1
+    OSINT_D2_AI_MODEL=gpt-4o-mini
+    ```
+
+=== "Ollama (fully offline)"
+
+    1. Install [Ollama](https://ollama.ai)
+    2. Pull a model: `ollama pull llama3.1`
+    3. Configure:
+
+    ```env
+    OSINT_D2_AI_PROVIDER=ollama
+    OSINT_D2_AI_BASE_URL=http://localhost:11434/v1
+    OSINT_D2_AI_MODEL=llama3.1
+    ```
+
+    No API key needed — everything runs locally.
+
+---
 
 ## Verify Installation
 
+Run the built-in diagnostic tool:
+
 ```bash
-osint-d2 doctor run
+poetry run osint-d2 doctor
 ```
 
-This checks: Python version, API key configuration, system dependencies, and browser availability.
+This checks:
+
+- Python version compatibility
+- Required packages installed
+- Playwright browsers available
+- WeasyPrint rendering capability
+- AI provider connectivity
+- Environment variable configuration
+
+---
+
+## Configuration File
+
+OSINT-D2 reads configuration from two locations (in priority order):
+
+1. **Project `.env`** — in the repository root (development)
+2. **User config** — `~/.config/osint-d2/.env` (cross-platform, PyInstaller-compatible)
+
+All variables use the `OSINT_D2_` prefix. See the [Configuration reference](configuration.md) for the full list.
+
+---
+
+## Optional: Sherlock Integration
+
+For the `--sherlock` flag (400+ additional sites), install Sherlock separately:
+
+```bash
+pip install sherlock-project
+```
+
+OSINT-D2 will auto-detect and use it when available.

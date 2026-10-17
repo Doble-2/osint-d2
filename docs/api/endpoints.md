@@ -91,7 +91,14 @@ Downloads generated artifacts from a completed investigation.
 | `file_type` | `json` | Raw investigation data (JSON) |
 | `file_type` | `graph_html` | Interactive HTML entity graph |
 
-**Response:** File download (binary).
+**Response Headers:**
+
+| File Type | Content-Type |
+|-----------|-------------|
+| `pdf` | `application/pdf` |
+| `canvas` | `application/json` |
+| `json` | `application/json` |
+| `graph_html` | `text/html` |
 
 **Error (404):**
 
@@ -100,6 +107,9 @@ Downloads generated artifacts from a completed investigation.
   "detail": "PDF not generated yet."
 }
 ```
+
+!!! note "File generation"
+    PDF and HTML graph files are generated asynchronously during investigation. They may not be available immediately after the investigation completes — wait a few seconds for the rendering pipeline (WeasyPrint/Playwright) to finish.
 
 ---
 

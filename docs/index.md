@@ -1,83 +1,161 @@
+---
+hide:
+  - toc
+  - navigation
+---
+
+<div class="os-hero" markdown>
+
+<span class="os-hero__badge">Identity Intelligence Platform</span>
+
 # OSINT-D2
 
-<div align="center" markdown>
+<p class="os-hero__subtitle">
+Turn a username into a <strong>structured identity dossier</strong>.<br>
+Not a Sherlock wrapper — an <strong>autonomous AI agent</strong> that reasons, pivots, and cross-correlates across 30+ platforms.
+</p>
 
-**Advanced Open-Source Intelligence Platform**
+<div class="os-hero__actions" markdown>
 
-*Transform usernames and emails into structured identity dossiers powered by agentic AI.*
+[:material-rocket-launch: Quick Start](getting-started/quickstart.md){ .md-button .md-button--primary }
+[:material-github: Source Code](https://github.com/Doble-2/osint-d2){ .md-button }
 
-[:material-github: GitHub](https://github.com/Doble-2/osint-d2){ .md-button }
-[:material-docker: Docker Hub](https://ghcr.io/doble-2/osint-d2){ .md-button }
+</div>
+
+<div class="os-stats">
+<div class="os-stat">
+<span class="os-stat__value">30+</span>
+<span class="os-stat__label">Platform Scanners</span>
+</div>
+<div class="os-stat">
+<span class="os-stat__value">9</span>
+<span class="os-stat__label">Agent Tools</span>
+</div>
+<div class="os-stat">
+<span class="os-stat__value">6D</span>
+<span class="os-stat__label">Cognitive Profile</span>
+</div>
+<div class="os-stat">
+<span class="os-stat__value">5</span>
+<span class="os-stat__label">Languages</span>
+</div>
+</div>
 
 </div>
 
 ---
 
-## What is OSINT-D2?
+## Why OSINT-D2?
 
-OSINT-D2 is an **advanced open-source intelligence platform** that correlates digital identities across 30+ platforms using autonomous AI agents. From a single username or email, it builds comprehensive identity dossiers with cognitive profiling, breach analysis, and stylometric correlation.
+Most OSINT tools run a **fixed checklist**: scan this list of sites, check this API, generate a report. OSINT-D2 is different — it **thinks**.
 
-## Key Features
+The core of the platform is an **agentic AI** that uses LLM function calling to autonomously investigate identities. It starts with what you give it (a username, an email), scans it, analyzes the results, and **pivots** — discovering new leads and investigating them without being told to.
 
-| Feature | Description |
-|---|---|
-| :material-robot: **Agentic AI** | Autonomous investigation — the LLM decides which tools to invoke and pivots across identities |
-| :material-link-variant: **Multi-source Correlation** | Links usernames, emails, and aliases across 30+ platforms |
-| :material-brain: **Cognitive Profiling** | 6-dimension analysis: Identity, Geo-temporal, OCEAN psychology, Tech, Ideology, OpSec |
-| :material-shield-check: **Trust Anchors** | Define verified sources to eliminate false positives |
-| :material-file-pdf-box: **PDF Dossiers** | Classified-style reports with identity cards, OCEAN profiles, and risk matrices |
-| :material-earth: **5 Languages** | English, Spanish, Portuguese, Arabic, Russian |
-| :material-docker: **Docker Ready** | One-command deployment with `docker compose up` |
+**A real investigation**: the agent scanned `torvalds`, found the GitHub profile, extracted two email addresses, scanned both as separate identities, fetched the GitHub and Keybase pages for social links, and identified that multiple people share the handle across platforms — producing a report that distinguishes the real Linus Torvalds from impersonators.
+
+---
+
+## Core Capabilities
+
+<div class="os-features" markdown>
+
+<div class="os-feature" markdown>
+<span class="os-feature__icon">🤖</span>
+
+### Agentic AI
+
+The LLM decides which tools to invoke, interprets results, and pivots to new leads. ReAct reasoning loop with forced-report fallback when steps are exhausted.
+</div>
+
+<div class="os-feature" markdown>
+<span class="os-feature__icon">🔗</span>
+
+### Identity Triangulation
+
+Cross-correlates usernames, emails, bios, avatars, and writing style across platforms. Perceptual avatar hashing (dHash) detects the same photo even when resized.
+</div>
+
+<div class="os-feature" markdown>
+<span class="os-feature__icon">🧠</span>
+
+### 6D Cognitive Profiling
+
+Every investigation produces a structured analysis across 6 dimensions: Identity, Geo-temporal, OCEAN Psychology, Tech Stack, Ideology, and OpSec/Attack Surface.
+</div>
+
+<div class="os-feature" markdown>
+<span class="os-feature__icon">🛡️</span>
+
+### Trust Anchor Verification
+
+Declare known-good sources (`--trust github:user`). The system builds a reference identity and uses 4-signal weighted scoring (name, bio, avatar, location) to filter false positives.
+</div>
+
+<div class="os-feature" markdown>
+<span class="os-feature__icon">📊</span>
+
+### Classified-Style PDF Dossiers
+
+Generate intelligence briefs with identity cards, OCEAN profiles, risk matrices, and entity graphs. CSS-rendered via WeasyPrint with Playwright fallback.
+</div>
+
+<div class="os-feature" markdown>
+<span class="os-feature__icon">🌍</span>
+
+### 5 Languages, Full Stack
+
+English, Spanish, Portuguese, Arabic, Russian — across CLI, web dashboard, AI prompts, and PDF reports. Not just translated labels; the AI system prompt changes per language.
+</div>
+
+</div>
+
+---
+
+## See It In Action
+
+<div class="os-screenshot">
+<img src="assets/demo.png" alt="OSINT-D2 Agent Investigation">
+<div class="os-screenshot__caption">Agent Mode — autonomous investigation with real-time reasoning</div>
+</div>
+
+<div class="os-screenshot">
+<img src="assets/trust_anchors.png" alt="Trust Anchor Verification">
+<div class="os-screenshot__caption">Trust anchors verified 1 source and discarded 2 false positives</div>
+</div>
+
+<div class="os-screenshot">
+<img src="assets/ai_analysis.png" alt="6D Cognitive Profile">
+<div class="os-screenshot__caption">6D cognitive profile — identity, geo-temporal, psychological analysis</div>
+</div>
+
+---
 
 ## Quick Start
 
-=== "Docker (recommended)"
-
-    ```bash
-    git clone https://github.com/Doble-2/osint-d2.git
-    cd osint-d2
-    cp .env.example .env
-    # Edit .env with your API keys
-    docker compose up -d
-    # Open http://localhost:8000
-    ```
-
-=== "Poetry"
-
-    ```bash
-    git clone https://github.com/Doble-2/osint-d2.git
-    cd osint-d2
-    poetry install
-    playwright install chromium
-    cp .env.example .env
-    poetry run osint-d2 serve
-    ```
-
-=== "pip"
-
-    ```bash
-    pip install -e .
-    playwright install chromium
-    cp .env.example .env
-    osint-d2 serve
-    ```
-
-## Architecture
-
+```bash
+git clone https://github.com/Doble-2/osint-d2.git && cd osint-d2
+cp .env.example .env          # Add your API keys
+docker compose up -d           # Dashboard at http://localhost:8000
 ```
-src/
-├── core/           # Domain models, services, business logic
-│   ├── domain/     # PersonEntity, Language, GraphModels
-│   ├── config.py   # Application settings (Pydantic)
-│   └── services/   # AgentEngine, pipelines
-├── adapters/       # External integrations
-│   ├── ai_analyst.py        # LLM-powered analysis
-│   ├── web_server.py        # FastAPI dashboard
-│   ├── report_exporter.py   # PDF generation
-│   └── osint_sources/       # Platform scanners
-└── cli/            # Typer CLI interface
+
+Or investigate from the command line:
+
+```bash
+# Quick scan across 18+ platforms
+osint-d2 scan -u johndoe
+
+# Autonomous AI agent with 10 reasoning steps
+osint-d2 agent -u johndoe --provider deepseek --max-steps 10
+
+# Full pipeline with Sherlock (400+ sites) + breach check
+osint-d2 hunt -u johndoe,jdoe123 -e john@example.com --sherlock --breach
 ```
+
+[:material-arrow-right: Full Installation Guide](getting-started/installation.md){ .md-button .md-button--primary }
+[:material-arrow-right: Agent Mode Deep Dive](guides/agent-mode.md){ .md-button }
+
+---
 
 ## License
 
-OSINT-D2 is released under the [MIT License](https://github.com/Doble-2/osint-d2/blob/main/LICENSE).
+OSINT-D2 is released under the [MIT License](https://github.com/Doble-2/osint-d2/blob/main/LICENSE). Designed for **authorized security research**, **journalism**, and **OSINT investigations**. Users are responsible for compliance with applicable laws.

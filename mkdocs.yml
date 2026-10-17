@@ -1,6 +1,6 @@
-site_name: OSINT-D2 Documentation
+site_name: OSINT-D2
 site_url: https://osint-d2.angelcalderon.dev
-site_description: "Advanced open-source intelligence platform for identity investigation and cognitive profiling."
+site_description: "Agentic OSINT platform — autonomous identity investigation, 6D cognitive profiling, breach analysis."
 site_author: Doble-2
 repo_url: https://github.com/Doble-2/osint-d2
 repo_name: Doble-2/osint-d2
@@ -10,9 +10,10 @@ copyright: "© 2024-2026 Doble-2 — MIT License"
 
 theme:
   name: material
+  custom_dir: docs/overrides
   palette:
     - scheme: slate
-      primary: teal
+      primary: black
       accent: teal
       toggle:
         icon: material/brightness-4
@@ -28,23 +29,28 @@ theme:
     code: JetBrains Mono
   icon:
     repo: fontawesome/brands/github
-    logo: material/shield-search
   features:
     - navigation.tabs
     - navigation.tabs.sticky
     - navigation.sections
     - navigation.expand
     - navigation.top
+    - navigation.instant
+    - navigation.instant.progress
     - search.suggest
     - search.highlight
     - content.code.copy
     - content.code.annotate
+    - content.tabs.link
     - toc.follow
 
 extra:
   social:
     - icon: fontawesome/brands/github
       link: https://github.com/Doble-2/osint-d2
+
+extra_css:
+  - stylesheets/extra.css
 
 plugins:
   - search
@@ -54,7 +60,11 @@ plugins:
 markdown_extensions:
   - admonition
   - pymdownx.details
-  - pymdownx.superfences
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
   - pymdownx.highlight:
       anchor_linenums: true
   - pymdownx.inlinehilite
@@ -68,6 +78,8 @@ markdown_extensions:
   - tables
   - toc:
       permalink: true
+  - pymdownx.keys
+  - pymdownx.mark
 
 nav:
   - Home: index.md
@@ -86,6 +98,7 @@ nav:
     - WebSocket Protocol: api/websocket.md
   - Architecture:
     - Overview: architecture/overview.md
+    - Trust Anchor System: architecture/trust-anchors.md
   - Contributing:
     - Development Setup: contributing/development.md
     - Adding Scanners: contributing/adding-scanners.md
