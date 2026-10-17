@@ -1,0 +1,21 @@
+# OSINT-D2 — Docker Compose
+# Quick start: cp .env.example .env && docker compose up -d
+# Dashboard: http://localhost:8000
+
+services:
+  osint-d2:
+    build: .
+    image: ghcr.io/doble-2/osint-d2:latest
+    container_name: osint-d2
+    ports:
+      - "${OSINT_PORT:-8000}:8000"
+    env_file: .env
+    volumes:
+      - ./reports:/app/reports
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s

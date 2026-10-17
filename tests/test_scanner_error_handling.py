@@ -9,9 +9,10 @@ Covers:
 
 from __future__ import annotations
 
-from unittest.mock import patch
+from unittest.mock import patch, AsyncMock
 
 import pytest
+import httpx
 
 from core.config import AppSettings
 from core.services.identity_pipeline import PipelineResult, hunt, HuntRequest
@@ -101,7 +102,7 @@ class TestSherlockErrorCounting:
     async def test_returns_error_count(self):
         from adapters.sherlock_runner import run_sherlock_username
 
-        # Create a manifest with one site that will fail (invalid URL)
+        # Create a manifest with one site that will fail
         manifest = {
             "TestSite": {
                 "url": "http://localhost:1/__NONEXISTENT__/{}",
@@ -109,16 +110,24 @@ class TestSherlockErrorCounting:
                 "urlMain": "http://localhost:1",
             },
         }
-        settings = AppSettings()
-        found, error_count = await run_sherlock_username(
-            usernames=["testuser"],
-            manifest=manifest,
-            settings=settings,
-            max_concurrency=5,
-            no_nsfw=False,
-        )
-        # The request to localhost:1 should fail (connection refused)
-        # so error_count should be 1 and found should be empty
+        settings = AppSettings(proxy_api_key=None)
+
+        # Mock the HTTP client to always raise a connection error
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(side_effect=httpx.ConnectError("Connection refused"))
+        mock_client.head = AsyncMock(side_effect=httpx.ConnectError("Connection refused"))
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("adapters.sherlock_runner.build_async_client", return_value=mock_client):
+            found, error_count = await run_sherlock_username(
+                usernames=["testuser"],
+                manifest=manifest,
+                settings=settings,
+                max_concurrency=5,
+                no_nsfw=False,
+            )
+        # The mocked client raises, so error_count should be >= 1
         assert error_count >= 1
         assert isinstance(found, list)
 
@@ -144,15 +153,24 @@ class TestSiteListErrorCounting:
                 cat="test",
             ),
         ]
-        settings = AppSettings()
-        found, error_count = await run_username_sites(
-            usernames=["testuser"],
-            sites=sites,
-            settings=settings,
-            max_concurrency=5,
-            categories=None,
-            no_nsfw=False,
-        )
+        settings = AppSettings(proxy_api_key=None)
+
+        # Mock the HTTP client to always raise a connection error
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(side_effect=httpx.ConnectError("Connection refused"))
+        mock_client.head = AsyncMock(side_effect=httpx.ConnectError("Connection refused"))
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("adapters.site_lists.runner.build_async_client", return_value=mock_client):
+            found, error_count = await run_username_sites(
+                usernames=["testuser"],
+                sites=sites,
+                settings=settings,
+                max_concurrency=5,
+                categories=None,
+                no_nsfw=False,
+            )
         assert error_count >= 1
         assert isinstance(found, list)
 
@@ -172,14 +190,23 @@ class TestSiteListErrorCounting:
                 cat="test",
             ),
         ]
-        settings = AppSettings()
-        found, error_count = await run_email_sites(
-            emails=["test@test.com"],
-            sites=sites,
-            settings=settings,
-            max_concurrency=5,
-            categories=None,
-            no_nsfw=False,
-        )
+        settings = AppSettings(proxy_api_key=None)
+
+        # Mock the HTTP client to always raise a connection error
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(side_effect=httpx.ConnectError("Connection refused"))
+        mock_client.head = AsyncMock(side_effect=httpx.ConnectError("Connection refused"))
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("adapters.site_lists.runner.build_async_client", return_value=mock_client):
+            found, error_count = await run_email_sites(
+                emails=["test@test.com"],
+                sites=sites,
+                settings=settings,
+                max_concurrency=5,
+                categories=None,
+                no_nsfw=False,
+            )
         assert error_count >= 1
         assert isinstance(found, list)

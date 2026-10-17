@@ -13,6 +13,9 @@ from typing import Any
 from adapters.breach_check import enrich_profiles_with_breach_data
 from core.config import AppSettings
 from core.domain.models import SocialProfile
+from adapters.vector_store import VectorStore
+from adapters.avatar_analyzer import AvatarAnalyzer
+from adapters.phone_scanner import PhoneScanner
 from core.services.identity_pipeline import (
     scan_email,
     scan_username,
@@ -110,10 +113,99 @@ AGENT_TOOLS: list[dict[str, Any]] = [
                 "properties": {
                     "url": {
                         "type": "string",
-                        "description": "The full URL to fetch (e.g. https://angelcalderon.dev).",
+                        "description": "The full URL to fetch (e.g. https://example.com/portfolio).",
                     },
                 },
                 "required": ["url"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "compare_avatars",
+            "description": (
+                "Compare two avatar image URLs or file paths using perceptual hashing (dHash). "
+                "Detects if both accounts use the same photo even if resized or recompressed."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "avatar_url_1": {
+                        "type": "string",
+                        "description": "First image URL or local path.",
+                    },
+                    "avatar_url_2": {
+                        "type": "string",
+                        "description": "Second image URL or local path.",
+                    },
+                },
+                "required": ["avatar_url_1", "avatar_url_2"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "scan_phone",
+            "description": (
+                "Investigate a phone number. Validates E.164 standard, identifies carrier, "
+                "country, line type (mobile/voip/fixed), timezones, active WhatsApp status, "
+                "and generates reverse lookup footprints (Telegram, Truecaller, Sync.me, dorks)."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "phone_number": {
+                        "type": "string",
+                        "description": "Phone number in international or local format (e.g. +12125551234, +442071234567).",
+                    },
+                },
+                "required": ["phone_number"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_vector_memory",
+            "description": (
+                "Search in-memory vector database containing previously scraped web pages, "
+                "bios, and snippets using semantic concept similarity."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Semantic query or topic to search for in collected evidence.",
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of snippets to retrieve (default 3).",
+                    },
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "correlate_stylometry",
+            "description": (
+                "Compare a suspect text sample or anonymous post against known target writing styles "
+                "using character n-gram stylometry. Returns similarity score (0.0 to 1.0)."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "sample_text": {
+                        "type": "string",
+                        "description": "Text sample from an anonymous or suspect account to correlate.",
+                    },
+                },
+                "required": ["sample_text"],
             },
         },
     },
@@ -201,6 +293,7 @@ async def execute_tool(
     *,
     settings: AppSettings,
     enable_breach_check: bool = False,
+    vector_store: VectorStore | None = None,
 ) -> str:
     """Execute an agent tool and return a JSON string result.
 
@@ -299,6 +392,61 @@ async def execute_tool(
             }, ensure_ascii=False)
         except Exception as exc:
             return json.dumps({"url": url, "error": str(exc)})
+
+    if name == "compare_avatars":
+        url1 = arguments.get("avatar_url_1", "")
+        url2 = arguments.get("avatar_url_2", "")
+        if not url1 or not url2:
+            return json.dumps({"error": "Both avatar_url_1 and avatar_url_2 are required."})
+
+        try:
+            from adapters.http_client import build_async_client
+            async with build_async_client(settings=settings) as client:
+                resp1 = await client.get(url1)
+                resp2 = await client.get(url2)
+                if resp1.status_code != 200 or resp2.status_code != 200:
+                    return json.dumps({
+                        "error": f"Failed fetching avatars: img1={resp1.status_code}, img2={resp2.status_code}"
+                    })
+                comp = AvatarAnalyzer.compare_avatars(resp1.content, resp2.content)
+                return json.dumps(comp, ensure_ascii=False)
+        except Exception as exc:
+            return json.dumps({"error": str(exc)})
+
+    if name == "scan_phone":
+        phone_num = arguments.get("phone_number", "")
+        if not phone_num:
+            return json.dumps({"error": "phone_number is required"})
+        res = await PhoneScanner.scan(phone_number=phone_num, settings=settings)
+        return json.dumps({
+            "e164": res.e164,
+            "is_valid": res.is_valid,
+            "country": res.country_name,
+            "country_iso": res.country_iso,
+            "carrier": res.carrier_name,
+            "line_type": res.line_type,
+            "timezones": res.timezones,
+            "whatsapp_active": res.whatsapp_active,
+            "associated_names": res.associated_names,
+            "associated_usernames": res.associated_usernames,
+            "footprint_urls": res.footprint_urls,
+            "error": res.error,
+        }, ensure_ascii=False)
+
+    if name == "search_vector_memory":
+        if not vector_store:
+            return json.dumps({"error": "Vector store not initialized or empty."})
+        query = arguments.get("query", "")
+        limit = arguments.get("limit", 3)
+        results = vector_store.search_semantic(query=query, limit=limit)
+        return json.dumps({"query": query, "results": results}, ensure_ascii=False)
+
+    if name == "correlate_stylometry":
+        if not vector_store:
+            return json.dumps({"error": "Vector store not initialized or empty."})
+        sample = arguments.get("sample_text", "")
+        matches = vector_store.correlate_author_style(sample_text=sample)
+        return json.dumps({"sample_length": len(sample), "stylometric_matches": matches}, ensure_ascii=False)
 
     if name == "generate_report":
         # This is handled by the engine — just echo back.

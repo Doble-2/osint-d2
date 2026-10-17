@@ -136,7 +136,7 @@ class TestExtractNameFromEmail:
         assert parts == ["joe"]
 
     def test_single_long_word_splits(self):
-        parts = _extract_name_from_email("angelcalderon@gmail.com")
+        parts = _extract_name_from_email("janedoe@gmail.com")
         assert len(parts) >= 2  # Should attempt to split
 
 
@@ -238,7 +238,7 @@ class TestVerifyProfile:
         assert result.confidence == 0.5
 
     def test_non_existing_profile_always_verified(self):
-        ref = self._make_ref(names={"angel calderon"})
+        ref = self._make_ref(names={"jane doe"})
         profile = self._make_profile(exists=False)
         result = verify_profile(profile, ref)
         assert result.verified is True

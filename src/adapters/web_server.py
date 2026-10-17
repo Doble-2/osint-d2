@@ -1,0 +1,635 @@
+"""OSINT-D2 Live Intelligence Web Server (FastAPI + WebSockets).
+
+Features:
+1. Real-time WebSocket streaming of agent thoughts and tool executions.
+2. Incremental Entity Graph streaming (Vis.js compatible).
+3. REST endpoints for launching targets, downloading PDF/Canvas dossiers.
+4. Clean Architecture integration: Zero Node.js build steps, pure Python ASGI.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import logging
+import uuid
+from pathlib import Path
+from typing import Any
+
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, HTMLResponse
+from pydantic import BaseModel, Field
+
+from core.config import AppSettings
+from core.domain.language import Language
+from core.domain.models import PersonEntity
+from core.services.agent_engine import AgentEngine, AgentStep
+from adapters.graph_exporter import GraphExporter
+from adapters.phone_scanner import PhoneScanner
+from adapters.report_exporter import export_person_html
+
+logger = logging.getLogger(__name__)
+
+app = FastAPI(title="OSINT-D2 Forensic Dashboard", version="0.2.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+TEMPLATES_DIR = Path(__file__).parent / "templates"
+REPORTS_DIR = Path("reports")
+REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+
+
+class InvestigationRequest(BaseModel):
+    target: str = Field(..., description="Target name or primary identifier.")
+    usernames: list[str] = Field(default_factory=list, description="List of usernames/handles to investigate.")
+    emails: list[str] = Field(default_factory=list, description="List of email addresses.")
+    phones: list[str] = Field(default_factory=list, description="List of phone numbers.")
+    trust_anchors: list[str] = Field(default_factory=list, description="Verified trust anchors (e.g. github:username).")
+    mode: str = Field(default="agent", description="'agent' for autonomous AI, 'hunt' for full OSINT sweep, 'phone' for telecom.")
+    ai_provider: str = Field(default="deepseek", description="AI provider: deepseek, ollama, openai.")
+    language: str = Field(default="es", description="Language code: es, en, pt, ar, ru.")
+    max_steps: int = Field(default=6, description="Max agent reasoning steps.")
+    enable_breach_check: bool = Field(default=False, description="Check data breaches.")
+
+
+class InvestigationSession:
+    def __init__(self, inv_id: str, request: InvestigationRequest):
+        self.inv_id = inv_id
+        self.request = request
+        self.status = "running"
+        self.websockets: list[WebSocket] = []
+        self.person: PersonEntity | None = None
+        self.pdf_path: str | None = None
+        self.canvas_path: str | None = None
+        self.steps: list[Any] = []
+        self.timeline_path: str | None = None
+        self.graph_svg_path: str | None = None
+        self.graph_png_path: str | None = None
+        # Cancelación cooperativa: el bucle del agente consulta este flag.
+        self.cancelled: bool = False
+
+    def cancel(self) -> None:
+        """Marca la sesión como cancelada; el bucle del agente la detiene."""
+        self.cancelled = True
+        self.status = "cancelled"
+
+    async def broadcast(self, message_type: str, data: Any):
+        payload = {"type": message_type, "data": data}
+        dead_ws = []
+        for ws in self.websockets:
+            try:
+                await ws.send_json(payload)
+            except Exception:
+                dead_ws.append(ws)
+        for ws in dead_ws:
+            if ws in self.websockets:
+                self.websockets.remove(ws)
+
+
+# Nombres de pila muy comunes: buscar "@angel", "@jose", "@maria" produce
+# homónimos masivos. Estos NO son identificadores, son nombres propios.
+_COMMON_GIVEN_NAMES = {
+    "angel", "jose", "maria", "juan", "carlos", "luis", "miguel", "pedro",
+    "ana", "laura", "david", "daniel", "javier", "fernando", "ricardo",
+    "andres", "alejandro", "pablo", "sergio", "antonio", "francisco",
+    "john", "james", "michael", "david", "robert", "mary", "anna", "paul",
+    "peter", "mark", "chris", "alex", "sam", "max", "leo", "luca", "hugo",
+}
+
+# Prefijos de correo genéricos que no identifican a nadie por sí solos.
+_GENERIC_EMAIL_LOCALPARTS = {
+    "contacto", "contact", "info", "hello", "hola", "admin", "support",
+    "soporte", "ventas", "sales", "mail", "email", "correo", "privacidad",
+}
+
+
+def _is_generic_handle(handle: str, target: str, declared_usernames: list[str]) -> bool:
+    """Detects identifiers that are names, not handles (homonym generators).
+
+    Scanning a common given name like "angel" hits hundreds of unrelated people,
+    which is exactly the false-positive flood observed with real targets.
+    """
+    h = (handle or "").strip().lower().lstrip("@")
+    if not h:
+        return True
+    # Si el usuario lo declaró explícitamente como handle, se respeta.
+    declared = {(u or "").strip().lower().lstrip("@") for u in declared_usernames}
+    if h in declared:
+        return False
+    # Si es una sola palabra y coincide con un nombre de pila común -> genérico.
+    if h in _COMMON_GIVEN_NAMES:
+        return True
+    # Si coincide con el primer nombre del sujeto -> genérico.
+    target_words = [w.lower() for w in (target or "").replace(",", " ").split() if len(w) > 2]
+    if target_words and h == target_words[0] and h not in declared:
+        return True
+    # Muy corto (< 4 chars) y sin dígitos -> poca entropía, probable homónimo.
+    if len(h) < 4 and not any(c.isdigit() for c in h):
+        return True
+    return False
+
+
+active_sessions: dict[str, InvestigationSession] = {}
+
+
+def _inject_graph_page_into_html(
+    html_path: Path,
+    graph_png_base64: str,
+    target: str,
+    heading: str = "01.5 // Grafo de Inteligencia Forense",
+    caption: str = "Topología multi-vectorial de entidades correlacionadas.",
+) -> None:
+    """Injects a dedicated full-page figure section into the dossier HTML before section 02."""
+    html_content = html_path.read_text(encoding="utf-8")
+
+    graph_page = f'''
+    <div class="page" id="sec-graph">
+      <h2 class="section-title">{heading}</h2>
+      <div class="card" style="padding: 12px; background: #04120e; border: 1px solid rgba(52,211,153,0.18); border-radius: 12px;">
+        <div style="color: #34d399; font-family: monospace; font-size: 10px; margin-bottom: 10px; font-weight: bold;">
+          &gt; TOPOLOG&Iacute;A MULTI-VECTORIAL DE ENTIDADES &mdash; OBJETIVO: {target}
+        </div>
+        <img src="data:image/png;base64,{graph_png_base64}" style="width: 100%; border-radius: 8px;" alt="Grafo Forense" />
+        <p class="muted" style="font-size: 9px; margin-top: 10px;">
+          {caption} &mdash; Objetivo: {target}
+        </p>
+      </div>
+    </div>
+'''
+
+    target_tag = '<div class="page" id="sec-02">'
+    if target_tag in html_content:
+        new_html = html_content.replace(target_tag, graph_page + "\n    " + target_tag)
+    else:
+        new_html = html_content + graph_page
+
+    html_path.write_text(new_html, encoding="utf-8")
+
+
+@app.get("/", response_class=HTMLResponse)
+async def get_dashboard(lang: str | None = None):
+    dashboard_file = TEMPLATES_DIR / "dashboard.html"
+    if not dashboard_file.exists():
+        raise HTTPException(status_code=404, detail="Dashboard template not found.")
+
+    # ── Load i18n strings ──
+    lang_code = (lang or "en").strip().lower()[:2]
+    i18n_dir = TEMPLATES_DIR / "i18n"
+    i18n_file = i18n_dir / f"{lang_code}.json"
+    if not i18n_file.exists():
+        i18n_file = i18n_dir / "en.json"
+        lang_code = "en"
+    try:
+        t = json.loads(i18n_file.read_text(encoding="utf-8"))
+    except Exception:
+        t = {}
+
+    # ── Render with Jinja2 ──
+    from jinja2 import Environment, FileSystemLoader
+    from markupsafe import Markup
+    env = Environment(loader=FileSystemLoader(str(TEMPLATES_DIR)))
+    env.filters["tojson"] = lambda v: Markup(json.dumps(v, ensure_ascii=False))
+    template = env.get_template("dashboard.html")
+    html = template.render(t=t, ui_lang=lang_code)
+    return HTMLResponse(content=html)
+
+
+@app.post("/api/investigate")
+async def start_investigation(req: InvestigationRequest):
+    inv_id = str(uuid.uuid4())[:8]
+    session = InvestigationSession(inv_id, req)
+    active_sessions[inv_id] = session
+
+    asyncio.create_task(_run_investigation(session))
+    return {"investigation_id": inv_id, "status": "started", "target": req.target}
+
+
+@app.post("/api/cancel/{inv_id}")
+async def cancel_investigation(inv_id: str):
+    """Cancelación cooperativa de una investigación en curso.
+
+    Nielsen #3 (user control and freedom): el usuario debe poder salir de
+    cualquier proceso largo. El bucle del agente consulta session.cancelled.
+    """
+    session = active_sessions.get(inv_id)
+    if not session:
+        return {"status": "not_found", "investigation_id": inv_id}
+    if session.status not in ("running",):
+        return {"status": session.status, "investigation_id": inv_id}
+    session.cancel()
+    await session.broadcast("status", "cancelled")
+    return {"status": "cancelled", "investigation_id": inv_id}
+
+
+@app.websocket("/ws/{inv_id}")
+async def websocket_stream(websocket: WebSocket, inv_id: str):
+    await websocket.accept()
+    session = active_sessions.get(inv_id)
+    if not session:
+        await websocket.send_json({"type": "error", "data": "Investigation not found."})
+        await websocket.close()
+        return
+
+    session.websockets.append(websocket)
+    try:
+        while True:
+            # Keep alive / listen for client actions
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        if websocket in session.websockets:
+            session.websockets.remove(websocket)
+
+
+@app.get("/api/download/{inv_id}/{file_type}")
+async def download_artefact(inv_id: str, file_type: str):
+    session = active_sessions.get(inv_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found.")
+
+    safe_name = session.request.target.replace("@", "").replace("/", "_").replace("+", "").replace(" ", "_")
+
+    if file_type == "canvas":
+        canvas_file = REPORTS_DIR / f"{safe_name}.canvas"
+        if not canvas_file.exists():
+            # Buscar cualquier canvas generado para esta sesión
+            if session.canvas_path and Path(session.canvas_path).exists():
+                canvas_file = Path(session.canvas_path)
+            else:
+                raise HTTPException(status_code=404, detail="Canvas not generated yet.")
+        return FileResponse(canvas_file, filename=f"{safe_name}.canvas", media_type="application/json")
+
+    if file_type == "pdf":
+        pdf_file = REPORTS_DIR / f"{safe_name}_dossier.pdf"
+        if not pdf_file.exists():
+            if session.pdf_path and Path(session.pdf_path).exists():
+                pdf_file = Path(session.pdf_path)
+            else:
+                raise HTTPException(status_code=404, detail="PDF not generated yet.")
+        return FileResponse(pdf_file, filename=f"dossier_{safe_name}.pdf", media_type="application/pdf")
+
+    raise HTTPException(status_code=400, detail="Invalid format.")
+
+
+async def _run_investigation(session: InvestigationSession):
+    req = session.request
+    target = req.target
+    lang = Language.from_str(req.language)
+    settings = AppSettings()
+
+    if req.ai_provider:
+        settings.ai_provider = req.ai_provider
+        if req.ai_provider == "ollama":
+            settings.ai_base_url = "http://localhost:11434/v1"
+            settings.ai_model = "qwen2.5-coder:7b"
+
+    await session.broadcast("log", f"[INIT] Objetivo inicializado: {target} (Modo: {req.mode.upper()})")
+
+    def _cancelled() -> bool:
+        return session.cancelled
+
+    if _cancelled():
+        await session.broadcast("log", "[CANCEL] Investigación cancelada antes de empezar.")
+        return
+
+    # Si hay teléfonos especificados
+    for phone_num in req.phones:
+        if _cancelled():
+            await session.broadcast("log", "[CANCEL] Detenido durante el escaneo de teléfonos.")
+            return
+        await session.broadcast("log", f"[TELECOM] Escaneando teléfono {phone_num}...")
+        phone_res = await PhoneScanner.scan(phone_number=phone_num, settings=settings)
+        await session.broadcast("phone_data", {
+            "e164": phone_res.e164,
+            "carrier": phone_res.carrier_name,
+            "country": phone_res.country_name,
+            "line_type": phone_res.line_type,
+            "whatsapp": phone_res.whatsapp_active,
+            "timezones": phone_res.timezones,
+        })
+        await session.broadcast("node_add", {
+            "id": f"phone:{phone_res.e164}",
+            "label": f"{phone_res.e164}\\n({phone_res.carrier_name or 'Tel'})",
+            "group": "phone",
+        })
+        await session.broadcast("edge_add", {
+            "from": f"target:{target}",
+            "to": f"phone:{phone_res.e164}",
+            "label": "PHONE_NUM",
+        })
+
+    # Si hay emails especificados
+    for email in req.emails:
+        await session.broadcast("node_add", {
+            "id": f"email:{email}",
+            "label": f"{email}",
+            "group": "email",
+        })
+        await session.broadcast("edge_add", {
+            "from": f"target:{target}",
+            "to": f"email:{email}",
+            "label": "USES_EMAIL",
+        })
+
+    # Si hay anclas de confianza
+    for anchor in req.trust_anchors:
+        await session.broadcast("log", f"[TRUST ANCHOR] Ancla verificada fijada: {anchor}")
+        await session.broadcast("node_add", {
+            "id": f"anchor:{anchor}",
+            "label": f"[VERIFIED]\\n{anchor}",
+            "group": "identity",
+        })
+        await session.broadcast("edge_add", {
+            "from": f"target:{target}",
+            "to": f"anchor:{anchor}",
+            "label": "TRUST_ANCHOR",
+        })
+
+    if _cancelled():
+        await session.broadcast("log", "[CANCEL] Detenido antes de la fase de agente.")
+        return
+
+    # Modo Agente Autónomo
+    if req.mode == "agent":
+        # Registro de correlaciones verificadas durante la corrida.
+        correlation_log: list[dict[str, Any]] = []
+
+        class _Cancelled(Exception):
+            """Señal interna para abortar el bucle del agente al cancelar."""
+
+        def on_step_callback(step: AgentStep):
+            if session.cancelled:
+                raise _Cancelled()
+            asyncio.create_task(session.broadcast("log", f"[PASO {step.step_number}] {step.tool_name} -> {step.tool_args}"))
+
+            # Marca homónimos: buscar "angel" cuando el sujeto se llama Angel
+            # produce decenas de falsos positivos. Se anotan, no se dan por ciertos.
+            if step.tool_name == "scan_username":
+                uname = str(step.tool_args.get("username", "")).strip()
+                if not uname:
+                    return
+                is_generic = _is_generic_handle(uname, target, req.usernames)
+                correlation_log.append({
+                    "kind": "handle",
+                    "value": uname,
+                    "generic": is_generic,
+                    "step": step.step_number,
+                })
+                label = f"@{uname}" + (" | falso positivo probable" if is_generic else "")
+                asyncio.create_task(session.broadcast("node_add", {
+                    "id": f"user:{uname}",
+                    "label": label,
+                    "group": "noise" if is_generic else "platform",
+                }))
+            elif step.tool_name == "scan_email":
+                em = str(step.tool_args.get("email", "")).strip()
+                if em:
+                    correlation_log.append({"kind": "email", "value": em, "step": step.step_number})
+            elif step.tool_name == "scan_phone":
+                ph = str(step.tool_args.get("phone_number", "")).strip()
+                if ph:
+                    correlation_log.append({"kind": "phone", "value": ph, "step": step.step_number})
+            elif step.tool_name == "correlate_stylometry":
+                correlation_log.append({
+                    "kind": "stylometry",
+                    "value": str(step.tool_args.get("sample_text", ""))[:80],
+                    "result": str(step.tool_result)[:200],
+                    "step": step.step_number,
+                })
+
+        await session.broadcast("node_add", {
+            "id": "target:root",
+            "label": f"{target}",
+            "group": "target"
+        })
+
+        engine = AgentEngine(settings=settings, enable_breach_check=req.enable_breach_check, on_step=on_step_callback)
+
+        # IMPORTANTE: el nombre del sujeto NUNCA se escanea como handle, porque
+        # produce decenas de homónimos (ver _is_generic_handle).
+        all_handles = ", ".join(req.usernames) if req.usernames else "N/A (no aportados)"
+        all_emails = ", ".join(req.emails) if req.emails else "N/A"
+        all_phones = ", ".join(req.phones) if req.phones else "N/A"
+        # Las anclas de confianza son la fuente de verdad: si existen, el agente
+        # debe partir de ellas y descartar todo lo que no correlacione.
+        anchors_line = (
+            f"ANCLAS DE CONFIANZA VERIFICADAS (fuente de verdad, priorízalas): [{', '.join(req.trust_anchors)}]. "
+            if req.trust_anchors else
+            "Sin anclas verificadas: marca toda atribución como NO CONFIRMADA. "
+        )
+        objective = (
+            f"Investigación de inteligencia del sujeto '{target}'. "
+            f"{anchors_line}"
+            f"Handles a correlacionar: [{all_handles}]. "
+            f"Emails a investigar: [{all_emails}]. "
+            f"Teléfonos a investigar: [{all_phones}]. "
+            "REGLAS ESTRICTAS: (1) '{target}' es un NOMBRE PROPIO, nunca lo uses como handle. "
+            "(2) Para cada hallazgo indica el nivel de correlación (confirmado/ probable/ descartado) "
+            "y la evidencia concreta que lo sustenta. "
+            "(3) Descarta explícitamente los homónimos y explica por qué."
+        )
+
+        try:
+            result = await engine.run(
+                objective=objective,
+                language=lang,
+                max_steps=req.max_steps,
+                trust_anchors=req.trust_anchors or None,
+                target=target,
+            )
+        except _Cancelled:
+            await session.broadcast("log", "[CANCEL] Investigación detenida por el usuario.")
+            await session.broadcast("status", "cancelled")
+            return
+        except Exception as _cancel_probe:
+            # El callback puede haber lanzado la señal envuelta por el motor.
+            if session.cancelled or "_Cancelled" in type(_cancel_probe).__name__:
+                await session.broadcast("log", "[CANCEL] Investigación detenida por el usuario.")
+                await session.broadcast("status", "cancelled")
+                return
+            raise
+
+        session.person = result.person
+        session.steps = list(getattr(result, "steps", []) or [])
+
+        # Exportar Canvas dinámico
+        safe_name = target.replace("@", "").replace("/", "_").replace("+", "").replace(" ", "_")
+        graph = GraphExporter.build_graph(result.person)
+        canvas_path = REPORTS_DIR / f"{safe_name}.canvas"
+        GraphExporter.export_canvas(graph, canvas_path)
+        session.canvas_path = str(canvas_path)
+
+        # ── GRAFO MULTI-VECTOR (bandas de vectores con datos ricos) ──────
+        # Se construye AQUÍ, antes de exportar el HTML, porque el PDF lo
+        # necesita. Antes vivía después del export y el dossier acababa
+        # llevando el grafo antiguo de GraphExporter.
+        try:
+            from adapters.chain_builder import ChainBuilder
+            from adapters.radial_graph_renderer import RadialGraphRenderer
+
+            chain = ChainBuilder.build_chain(session.steps, target, result.person)
+            conf_val = result.person.analysis.confidence if result.person.analysis else None
+
+            # Un solo render del SVG: sirve al cliente y al PDF
+            graph_svg = RadialGraphRenderer.render_svg(
+                chain, target=target, confidence=conf_val
+            )
+            svg_path = REPORTS_DIR / f"{safe_name}_grafo.svg"
+            svg_path.write_text(graph_svg, encoding="utf-8")
+            session.graph_svg_path = str(svg_path)
+
+            try:
+                session.graph_png_path = RadialGraphRenderer.export_png(
+                    chain, str(REPORTS_DIR / f"{safe_name}_grafo.png"),
+                    target=target, confidence=conf_val, scale=2,
+                )
+            except Exception as png_err:
+                logger.warning("Fallo al rasterizar el grafo: %s", png_err)
+
+            await session.broadcast("graph_svg", {
+                "target": target,
+                "confidence": conf_val,
+                "svg": graph_svg,
+                "nodes": len(chain.nodes),
+                "edges": len(chain.edges),
+                "vectors": max(
+                    (int(m.group(1)) for e in chain.edges
+                     if (m := __import__("re").search(r"#(\d+)", e.label or ""))),
+                    default=1,
+                ),
+            })
+            await session.broadcast(
+                "log",
+                f"[GRAFO] {len(chain.nodes)} entidades en {len(chain.edges)} relaciones "
+                f"con datos de perfil completos.",
+            )
+
+            # ── TIMELINE (Hilo) ──────────────────────────────────────
+            timeline_steps = []
+            for s in session.steps:
+                step_kind = "Finding"
+                tool = getattr(s, "tool_name", "")
+                if "username" in tool:
+                    step_kind = "Platform"
+                elif "email" in tool:
+                    step_kind = "Email"
+                elif "phone" in tool:
+                    step_kind = "Phone"
+                elif "breach" in tool:
+                    step_kind = "Breach"
+                elif "correlate" in tool or "stylometry" in tool:
+                    step_kind = "Identity"
+                label = f"{tool} -> {getattr(s, 'tool_args', {})}"
+                evidence = str(getattr(s, "tool_result", ""))[:500]
+                corr = None
+                timeline_steps.append({
+                    "kind": step_kind,
+                    "label": label,
+                    "evidence": evidence,
+                    "correlation": corr,
+                })
+            await session.broadcast("timeline", {
+                "steps": timeline_steps,
+                "confidence": conf_val,
+            })
+        except Exception as chain_err:
+            logger.warning("Fallo al construir el grafo multi-vector: %s", chain_err)
+
+        # Exportar HTML del dossier e inyectar la página dedicada del grafo
+        html_path = REPORTS_DIR / f"{safe_name}.html"
+        export_person_html(person=result.person, output_path=html_path, language=lang)
+
+        # 1) Página del GRAFO multi-vector (la que realmente se usa)
+        if session.graph_png_path and Path(session.graph_png_path).exists():
+            try:
+                import base64 as _b64
+                g_b64 = _b64.b64encode(Path(session.graph_png_path).read_bytes()).decode("utf-8")
+                _inject_graph_page_into_html(
+                    html_path, g_b64, target,
+                    heading="01.5 // Grafo Multi-Vector de la Investigación",
+                    caption=(
+                        "Cada banda vertical es un vector de investigación abierto por el agente; "
+                        "las tarjetas muestran los datos de perfil recolectados."
+                    ),
+                )
+                await session.broadcast("log", "[PDF] Página del grafo inyectada en el dossier.")
+            except Exception as g_err:
+                logger.warning("Fallo al inyectar el grafo en el PDF: %s", g_err)
+        elif session.timeline_path and Path(session.timeline_path).exists():
+            try:
+                timeline_png = REPORTS_DIR / f"{safe_name}_hilo.png"
+                # Render fuera del loop actual para evitar conflictos
+                import concurrent.futures
+
+                def _shot() -> None:
+                    import asyncio as _aio
+                    from playwright.async_api import async_playwright as _sync_apw
+
+                    async def _do():
+                        async with _sync_apw() as _p:
+                            _b = await _p.chromium.launch()
+                            _pg = await _b.new_page(
+                                viewport={"width": 1100, "height": 900},
+                                device_scale_factor=2,
+                            )
+                            await _pg.goto(
+                                f"file://{Path(session.timeline_path).resolve()}",
+                                wait_until="networkidle",
+                            )
+                            await _pg.wait_for_timeout(600)
+                            await _pg.screenshot(path=str(timeline_png), full_page=True)
+                            await _b.close()
+                    _aio.run(_do())
+
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as _pool:
+                    _pool.submit(_shot).result()
+
+                import base64 as _b64
+                t_b64 = _b64.b64encode(timeline_png.read_bytes()).decode("utf-8")
+                _inject_graph_page_into_html(
+                    html_path, t_b64, target,
+                    heading="01.5 // Hilo de Investigación (Cadena de Pivotes)",
+                    caption=(
+                        "Secuencia forense: qué se descubrió en cada paso, con qué acción "
+                        "y la evidencia que lo sustenta."
+                    ),
+                )
+                await session.broadcast("log", "[PDF] Página del hilo de investigación inyectada.")
+            except Exception as tl_err:
+                logger.warning("Fallo al renderizar el hilo para el PDF: %s", tl_err)
+        else:
+            # Sin grafo ni hilo no hay pagina que inyectar: se registra
+            # para no dejar el dossier silenciosamente sin seccion visual.
+            await session.broadcast(
+                "log",
+                "[PDF] Aviso: no se pudo generar el grafo ni el hilo; "
+                "el dossier saldra sin la seccion visual.",
+            )
+
+        # Compilar PDF final (diseño HTML + página del grafo) con Playwright
+        pdf_path = REPORTS_DIR / f"{safe_name}_dossier.pdf"
+        try:
+            from playwright.async_api import async_playwright
+            async with async_playwright() as p:
+                browser = await p.chromium.launch()
+                page = await browser.new_page()
+                await page.goto(f"file://{html_path.resolve()}", wait_until="networkidle")
+                await page.pdf(
+                    path=str(pdf_path),
+                    format="A4",
+                    print_background=True,
+                    margin={"top": "10mm", "bottom": "10mm", "left": "10mm", "right": "10mm"}
+                )
+                await browser.close()
+            session.pdf_path = str(pdf_path)
+            await session.broadcast("log", "[PDF] Dossier compilado con la página del grafo incluida.")
+        except Exception as pdf_err:
+            logger.warning("Fallo al generar PDF con Playwright: %s", pdf_err)
+
+        await session.broadcast("status", "completed")
