@@ -12,6 +12,8 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
+import sys
 import uuid
 from pathlib import Path
 from typing import Any
@@ -19,6 +21,7 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from core.config import AppSettings
@@ -31,19 +34,41 @@ from adapters.report_exporter import export_person_html
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="OSINT-D2 Forensic Dashboard", version="0.2.0")
+app = FastAPI(title="OSINT-D2 Forensic Dashboard", version="3.0.0")
+
+# CORS: locked to localhost by default. Override with OSINT_D2_CORS_ORIGINS
+# (comma-separated) for LAN access, e.g. "http://192.168.1.50:8000".
+_cors_env = os.getenv("OSINT_D2_CORS_ORIGINS", "").strip()
+_allowed_origins = (
+    [o.strip() for o in _cors_env.split(",") if o.strip()]
+    if _cors_env
+    else ["http://localhost:8000", "http://127.0.0.1:8000"]
+)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
+
+# PyInstaller: templates are extracted under sys._MEIPASS/adapters/templates
+_meipass = getattr(sys, "_MEIPASS", None)
+if _meipass:
+    _mei_templates = Path(str(_meipass)) / "adapters" / "templates"
+    if _mei_templates.is_dir():
+        TEMPLATES_DIR = _mei_templates
+
+VENDOR_DIR = TEMPLATES_DIR / "vendor"
 REPORTS_DIR = Path("reports")
 REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+
+# Serve vendorized JS/CSS (vis-network, Font Awesome) from /static/vendor/
+if VENDOR_DIR.is_dir():
+    app.mount("/static/vendor", StaticFiles(directory=str(VENDOR_DIR)), name="vendor")
 
 
 class InvestigationRequest(BaseModel):

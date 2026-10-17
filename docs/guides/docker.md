@@ -11,6 +11,16 @@ docker compose up -d
 
 Open **http://localhost:8000** to access the web dashboard.
 
+!!! success "Batteries Included"
+    The Docker image includes **all native dependencies** for full functionality:
+
+    - **PDF generation** — WeasyPrint + Cairo/Pango/GDK-Pixbuf pre-installed
+    - **Graph PNG rendering** — Playwright + Chromium pre-installed
+    - **Web dashboard** — all assets vendorized (no external CDN calls)
+    - **Non-root execution** — runs as unprivileged `osint` user
+
+    No additional setup steps required beyond configuring your AI provider.
+
 ---
 
 ## Configuration
@@ -75,6 +85,17 @@ All OSINT-D2 configuration uses the `OSINT_D2_` prefix. Edit your `.env` file:
 
 ---
 
+## LAN / Network Access
+
+By default, the dashboard's CORS policy restricts access to `localhost`. To access the dashboard from other machines on your network, set `OSINT_D2_CORS_ORIGINS`:
+
+```env
+# Allow access from any host on the LAN
+OSINT_D2_CORS_ORIGINS=http://192.168.1.100:8000,http://my-server.local:8000
+```
+
+---
+
 ## Ollama (Fully Offline)
 
 Run LLM inference locally with zero data leaving your machine:
@@ -133,6 +154,17 @@ docker run -p 8000:8000 --env-file .env ghcr.io/doble-2/osint-d2
 ```
 
 The image is built for `linux/amd64` via GitHub Actions on every push to `main`.
+
+!!! note "ARM / Apple Silicon"
+    The pre-built image is `linux/amd64`. On ARM machines (Apple Silicon, Raspberry Pi), build locally instead: `docker compose build`.
+
+---
+
+## Security
+
+The container runs as a non-root user (`osint`) by default. This provides defense-in-depth: even if Chromium has a sandbox escape vulnerability, the attacker lands in an unprivileged context.
+
+The web dashboard makes **zero external network requests** — all JavaScript and CSS dependencies are vendorized inside the image.
 
 ---
 

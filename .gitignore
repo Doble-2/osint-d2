@@ -1,5 +1,9 @@
 .venv
 .venv/
+
+# MkDocs build output (deployed by CI via mkdocs gh-deploy)
+site/
+
 __pycache__/
 *.py[cod]
 *.so

@@ -38,7 +38,7 @@ osint-d2 doctor setup-ai
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `OSINT_D2_HTTP_TIMEOUT_SECONDS` | `20` | Timeout per HTTP request in seconds. |
-| `OSINT_D2_USER_AGENT` | `osint-d2/0.1` | User-Agent header for OSINT requests. |
+| `OSINT_D2_USER_AGENT` | `osint-d2/3.0` | User-Agent header for OSINT requests. |
 | `OSINT_D2_SITES_MAX_CONCURRENCY` | `30` | Max concurrent requests across all site-list scanners. |
 | `OSINT_D2_REQUEST_DELAY_MS` | `200` | Minimum delay (ms) between requests to the same domain. |
 | `OSINT_D2_REQUEST_JITTER_MS` | `100` | Random jitter ± (ms) added to delay for naturalness. |
@@ -53,6 +53,12 @@ osint-d2 doctor setup-ai
 | `OSINT_D2_SITES_NO_NSFW` | `true` | Exclude NSFW categories from site-list scans. |
 | `OSINT_D2_USERNAME_SITES_PATH` | — | Path to custom username sites JSON (WhatsMyName format). |
 | `OSINT_D2_EMAIL_SITES_PATH` | — | Path to custom email sites JSON. |
+
+### Web Server
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OSINT_D2_CORS_ORIGINS` | `http://localhost:8000,http://127.0.0.1:8000` | Comma-separated list of allowed CORS origins. Set this to access the dashboard from LAN hosts. |
 
 ### Agent Mode
 

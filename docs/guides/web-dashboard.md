@@ -21,6 +21,9 @@ docker compose up -d         # Docker deployment
 
 The dashboard is a single-page application built with vanilla JavaScript and the OSINT-D2 design system (dark intelligence theme). It communicates with the backend entirely via WebSocket.
 
+!!! info "Offline & Private"
+    The dashboard makes **zero external network requests**. All JavaScript (vis-network, DOMPurify) and CSS (Font Awesome) dependencies are vendorized locally. No CDNs, no telemetry, no data leaks — suitable for air-gapped and sensitive environments.
+
 ### Key Components
 
 | Component | What it shows |

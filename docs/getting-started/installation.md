@@ -37,7 +37,33 @@
     docker compose up -d
     ```
 
+    !!! success "Batteries included"
+        The Docker image includes all native dependencies (Cairo, Pango, Chromium). **No additional system setup needed** — PDFs, graph PNGs, and the web dashboard work out of the box.
+
     See the [Docker Deployment guide](../guides/docker.md) for full configuration.
+
+=== "Standalone Binary (PyInstaller)"
+
+    ```bash
+    git clone https://github.com/Doble-2/osint-d2.git
+    cd osint-d2
+    poetry install
+    pyinstaller -y packaging/pyinstaller/osint-d2.spec
+    ```
+
+    The binary is output to `dist/osint-d2/`. After building:
+
+    ```bash
+    # Required for graph PNG rendering:
+    playwright install chromium
+
+    # Required for PDF generation (system packages):
+    # Ubuntu: sudo apt-get install libcairo2 libpango-1.0-0 libgdk-pixbuf-2.0-0
+    # macOS:  brew install cairo pango gdk-pixbuf
+    ```
+
+    !!! warning "Native dependencies"
+        The standalone binary bundles Python code but **not** native system libraries. PDF generation requires Cairo/Pango on the host, and graph PNG rendering requires a Chromium install via Playwright.
 
 ---
 
@@ -77,12 +103,17 @@ Playwright and WeasyPrint require native libraries for headless browser renderin
 
 === "Windows"
 
-    Install [GTK3 runtime](https://github.com/nickvdyck/weasyprint-win) for WeasyPrint, then:
+    Install [GTK3 runtime](https://github.com/nickvdyck/weasyprint-win) for WeasyPrint PDF support, then:
 
     ```bash
-    pip install osint-d2
+    git clone https://github.com/Doble-2/osint-d2.git
+    cd osint-d2
+    pip install -e .
     playwright install chromium
     ```
+
+    !!! note "PyPI"
+        Once published, you'll also be able to install with `pip install osint-d2`.
 
 ---
 
