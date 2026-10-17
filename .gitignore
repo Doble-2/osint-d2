@@ -29,6 +29,7 @@ reports/
 !src/templates/*.html
 !src/adapters/templates/*.html
 !src/adapters/templates/i18n/*.json
+!docs/overrides/*.html
 
 # Downloaded datasets (no se commitean)
 data/
