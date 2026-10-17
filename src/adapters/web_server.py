@@ -18,7 +18,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -198,8 +198,11 @@ def _inject_graph_page_into_html(
     html_path.write_text(new_html, encoding="utf-8")
 
 
-@app.get("/", response_class=HTMLResponse)
-async def get_dashboard(lang: str | None = None):
+@app.api_route("/", methods=["GET", "HEAD"], response_class=HTMLResponse)
+async def get_dashboard(request: Request, lang: str | None = None):
+    # HEAD requests: return empty body with correct headers (for healthchecks).
+    if request.method == "HEAD":
+        return HTMLResponse(content="", status_code=200)
     dashboard_file = TEMPLATES_DIR / "dashboard.html"
     if not dashboard_file.exists():
         raise HTTPException(status_code=404, detail="Dashboard template not found.")

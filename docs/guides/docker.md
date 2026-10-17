@@ -142,6 +142,15 @@ volumes:
   - ./reports:/app/reports
 ```
 
+!!! warning "Volume permissions"
+    The container runs as user `osint` (UID 1000). Ensure the mounted directory is writable by UID 1000:
+
+    ```bash
+    mkdir -p ./reports && chmod 777 ./reports
+    # or, for tighter permissions:
+    chown 1000:1000 ./reports
+    ```
+
 ---
 
 ## Pre-built Image
