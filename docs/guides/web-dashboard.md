@@ -1,77 +1,123 @@
 # Web Dashboard
 
-The OSINT-D2 web dashboard provides a real-time investigation interface powered by FastAPI and WebSockets.
-
-## Launching
+The web dashboard provides a real-time visual interface for OSINT investigations, powered by WebSocket streaming from the FastAPI backend.
 
 ```bash
-# Local
-osint-d2 serve --host 127.0.0.1 --port 8000
-
-# Docker
-docker compose up -d
-# Dashboard at http://localhost:8000
+osint-d2 serve              # Start dashboard at http://localhost:8000
+# or
+docker compose up -d         # Docker deployment
 ```
 
-## Interface Overview
+---
 
-### Sidebar — Investigation Vectors
+## Interface
 
-The left panel configures your investigation:
+<div class="os-screenshot" markdown>
 
-- **Primary Identity**: The target's real name (required)
-- **Usernames**: Known handles, comma-separated
-- **Communication Channels**: Email addresses and phone numbers
-- **Trust Anchors**: Verified sources (e.g., `github:username`) that filter false positives
-- **Configuration**: Investigation mode, AI provider, language, max steps
+![OSINT-D2 Dashboard](../assets/demo.png)
+<div class="os-screenshot__caption">Investigation wizard with real-time agent reasoning</div>
 
-### Main Area — Three Views
+</div>
 
-Switch between views using the tab bar:
+The dashboard is a single-page application built with vanilla JavaScript and the OSINT-D2 design system (dark intelligence theme). It communicates with the backend entirely via WebSocket.
 
-#### 📊 Graph View
-Real-time entity graph built with Vis.js. Nodes represent discovered entities (profiles, emails, phones, breaches) and edges show relationships. The graph updates live as the agent discovers new connections.
+### Key Components
 
-- **Green nodes**: Target and verified identities
-- **Cyan nodes**: Confirmed platform profiles
-- **Red nodes**: Security exposures and breaches
-- **Grey nodes**: Aggregated unconfirmed scans
+| Component | What it shows |
+|-----------|--------------|
+| **Investigation Panel** | Configure target, mode, language, trust anchors, AI provider |
+| **Agent Console** | Real-time streaming of agent reasoning steps and tool calls |
+| **Social Profiles Table** | Discovered profiles with confirmation status, avatars, and metadata |
+| **Entity Graph** | Interactive relationship visualization between identities |
+| **AI Analysis** | Full 6D cognitive profile when using Agent Mode |
+| **Export Actions** | Download JSON, PDF dossier, or HTML report |
 
-#### 🕐 Timeline View
-Vertical investigation thread showing the sequence of pivots. Each step shows:
-- What was discovered
-- Which tool produced it
-- Correlation confidence
-- Concrete evidence chips (phone numbers, emails, follower counts)
+---
 
-#### 💻 Console View
-Real-time agent reasoning log. Shows each step's thought process, tool invocations, and results. Color-coded:
-- **Teal**: Agent reasoning steps
-- **Red**: Errors
-- **Grey**: Tool outputs
+## Real-Time Architecture
 
-### Report Drawer
+The dashboard uses a **WebSocket connection** to stream investigation progress:
 
-When the investigation completes, the Final Dossier drawer opens with:
-- **Confidence score** (0-100%)
-- **Key highlights** from the analysis
-- **Summary** of findings
+```mermaid
+sequenceDiagram
+    participant B as Browser
+    participant S as FastAPI Server
+    participant A as Agent Engine
+    participant T as OSINT Tools
 
-### Actions
+    B->>S: WebSocket connect
+    B->>S: Start investigation (target, mode, options)
+    S->>A: Initialize agent
+    loop Each reasoning step
+        A->>T: Call tool (scan_username, fetch_url, etc.)
+        T-->>A: Tool result
+        A-->>S: Step update (tool, args, result)
+        S-->>B: Stream step via WebSocket
+    end
+    A-->>S: Final report (6D profile)
+    S-->>B: Stream complete report
+```
 
-- **Start Investigation**: Launches the investigation (shows loading state while running)
-- **Cancel**: Stops the running investigation
-- **Download PDF**: Downloads the classified-style PDF dossier
-- **Download Canvas**: Downloads the Obsidian Canvas graph
+Each agent step is pushed to the browser **as it happens** — you can watch the AI reason in real time.
 
-## Language Selector
+---
 
-Use the `?lang=XX` query parameter or the sidebar dropdown to switch the UI language:
+## Investigation Modes
 
-- `http://localhost:8000/?lang=en` — English
-- `http://localhost:8000/?lang=es` — Spanish
-- `http://localhost:8000/?lang=pt` — Portuguese
-- `http://localhost:8000/?lang=ar` — Arabic
-- `http://localhost:8000/?lang=ru` — Russian
+### Quick Scan
 
-The language persists across sessions via the URL parameter.
+Select **Username** or **Email** mode for a fast scan across native scanners. Results appear in the social profiles table within seconds.
+
+### Agent Mode
+
+Select **AI Agent** for autonomous investigation:
+
+1. Set the **AI provider** (DeepSeek, OpenAI, Ollama)
+2. Set **max reasoning steps** (default: 10)
+3. Optionally enable **breach checking**
+4. Optionally add **trust anchors** to filter false positives
+5. Click **Start Investigation**
+
+<div class="os-screenshot" markdown>
+
+![Agent Mode Steps](../assets/agent_mode.png)
+<div class="os-screenshot__caption">Agent reasoning steps streamed in real time</div>
+
+</div>
+
+---
+
+## Entity Graph
+
+The dashboard renders an interactive entity graph showing relationships between discovered identities:
+
+- **Green node** — the investigation target
+- **Cyan nodes** — confirmed profiles (exists = YES)
+- **Grey nodes** — unconfirmed or non-existent profiles
+- **Red markers** — profiles with breach data
+- **Edges** — connection type (username match, email link, avatar match)
+
+---
+
+## Language Support
+
+Switch languages via the sidebar dropdown or URL parameter:
+
+```
+http://localhost:8000/?lang=es
+```
+
+The dashboard UI, AI prompts, and PDF exports all adapt to the selected language. See [Languages](languages.md) for supported languages.
+
+---
+
+## Configuration
+
+| Setting | Where | Options |
+|---------|-------|---------|
+| AI Provider | Sidebar | DeepSeek, OpenAI, Ollama |
+| Max Steps | Sidebar | 1-20 (default: 10) |
+| Breach Check | Sidebar toggle | On/Off |
+| Trust Anchors | Sidebar input | `network:username` format |
+| Proxy | `.env` file | ScrapingAnt residential/datacenter |
+| Language | Sidebar dropdown | en, es, pt, ar, ru |

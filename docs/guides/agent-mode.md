@@ -1,51 +1,125 @@
 # Agent Mode
 
-OSINT-D2's Agent Mode uses **agentic AI with function calling** to autonomously investigate identities. Instead of running a fixed sequence of scanners, the AI decides which tools to invoke, interprets results, and pivots to new leads — just like a human analyst would.
+OSINT-D2's Agent Mode is the core differentiator: an **autonomous AI investigator** that uses LLM function calling to reason about evidence, decide what to scan next, and pivot across identities — just like a human analyst, but faster.
 
-## How It Works
+!!! abstract "Not a script — an agent"
+    Most OSINT tools run a fixed pipeline. Agent Mode uses a **ReAct reasoning loop**: the AI observes evidence, thinks about what's missing, calls a tool, and repeats until it has enough to build a cognitive profile.
 
-```
-┌─────────────────────────────────────────┐
-│              LLM (ReAct Loop)           │
-│                                         │
-│  1. Observe → current evidence          │
-│  2. Think  → what should I look for?    │
-│  3. Act    → call a tool                │
-│  4. Repeat → until confident or limit   │
-└─────────────┬───────────────────────────┘
-              │ function calls
-              ▼
-┌─────────────────────────────────────────┐
-│           Available Tools               │
-│                                         │
-│  • scan_username    • scan_email        │
-│  • search_breaches  • scan_phone        │
-│  • scrape_url       • scan_sherlock     │
-│  • scan_site_lists  • generate_report   │
-└─────────────────────────────────────────┘
+## How the ReAct Loop Works
+
+```mermaid
+flowchart TD
+    A["📋 User provides target + usernames/emails"] --> B["🧠 LLM receives context + 9 available tools"]
+    B --> C{"LLM decides: call a tool or generate report?"}
+    C -->|"Call tool"| D["⚡ Execute tool, append result to conversation"]
+    D --> E{"Step limit reached?"}
+    E -->|"No"| B
+    E -->|"Yes"| F["⚠️ Force generate_report with tool_choice"]
+    C -->|"generate_report"| G["📊 6D Cognitive Profile produced"]
+    F --> G
 ```
 
-### Step-by-step
+Each step, the LLM receives the **full conversation history** (system prompt + all previous tool calls and results) and decides autonomously what to do next. The engine (`agent_engine.py`) manages the loop, collects discovered profiles, and indexes them into the in-memory vector store for cross-reference.
 
-1. **You provide** a target name + initial usernames/emails
-2. **The AI receives** the target context and available tools
-3. **Each step**, the AI decides which tool to call and with what arguments
-4. **Tool results** are fed back to the AI as observations
-5. **The AI pivots** — e.g., finds an email in a GitHub profile → scans that email → finds linked accounts
-6. **After N steps** (configurable), the AI generates a 6D cognitive profile
+### Forced Report Fallback
 
-## Available Tools
+If the agent exhausts its `max_steps` without calling `generate_report`, the engine forces one final LLM call with `tool_choice={"type": "function", "function": {"name": "generate_report"}}` — guaranteeing every investigation produces a structured output, even if the agent was too eager investigating.
 
-| Tool | Description |
-|------|-------------|
-| `scan_username` | Scan a username across default OSINT sources (GitHub, X, Instagram, etc.) |
-| `scan_email` | Pivot from an email address (Gravatar, PGP keyservers, HIBP) |
-| `scan_sherlock` | Deep scan across 400+ platforms via the Sherlock manifest |
-| `scan_site_lists` | WhatsMyName-style data-driven site checks |
-| `scan_phone` | Telecom intelligence: carrier, country, WhatsApp status |
-| `scrape_url` | Extract metadata from any URL (emails, social links, OG data) |
-| `search_breaches` | Check credentials against HIBP using k-anonymity |
-| `generate_report` | Finalize the investigation with a 6D cognitive profile |
+---
+
+## The 9-Tool Arsenal
+
+The agent has access to 9 tools, each wrapping an existing OSINT scanner and compacting results to fit the LLM context window.
+
+| # | Tool | What it does | Key output |
+|---|------|-------------|------------|
+| 1 | `scan_username` | Scan across 18+ platforms (GitHub, X, Instagram, Reddit, Telegram, etc.) | Confirmed profiles with bios, avatars, metadata |
+| 2 | `scan_email` | Pivot from email via Gravatar, PGP keyservers, Ubuntu keyserver. Optionally scans local part as username. | Cross-platform profiles, PGP keys |
+| 3 | `breach_check` | HaveIBeenPwned k-anonymity check | Breach names, dates, compromised data types |
+| 4 | `fetch_url` | Extract intelligence from any URL: title, emails, social links, OG metadata | Discovered usernames, emails, social links |
+| 5 | `compare_avatars` | Perceptual hashing (dHash) to compare two avatar images | Similarity %, hamming distance |
+| 6 | `scan_phone` | Telecom intelligence: E.164 validation, carrier, country, WhatsApp status | Carrier, line type, timezones, footprint URLs |
+| 7 | `search_vector_memory` | BM25 search across all evidence collected during the investigation | Ranked snippets with relevance scores |
+| 8 | `correlate_stylometry` | Character n-gram stylometric comparison against known target writing | Cosine similarity (0-1) per candidate |
+| 9 | `generate_report` | Finalize investigation with structured 6D analysis | Summary, highlights, confidence score |
+
+### SSRF Protection
+
+The `fetch_url` tool validates URLs against private IP ranges and cloud IMDS endpoints before fetching. Attempts to access `169.254.169.254`, `localhost`, `10.x.x.x`, or similar are blocked with an `SSRFBlockedError`.
+
+---
+
+## Score Interpretation
+
+!!! danger "Critical — do not misread these"
+    The agent's system prompt explicitly instructs the LLM how to interpret each scoring metric. Misinterpretation leads to false conclusions in the final report.
+
+### `search_vector_memory` → BM25 Score
+
+| Range | Meaning |
+|-------|---------|
+| **0 – 1** | Weak match — few overlapping terms |
+| **1 – 3** | Moderate match — relevant content |
+| **3 – 5+** | Strong match — highly relevant |
+
+BM25 scores are **not percentages**. They depend on corpus size, document length, and term frequency saturation (`k1=1.5`, `b=0.75`). A score of 4.2 means "very relevant", not "42%".
+
+### `correlate_stylometry` → Cosine Similarity
+
+| Range | Interpretation |
+|-------|---------------|
+| **> 0.70** | Very likely the same author |
+| **0.40 – 0.70** | Moderate signal — needs corroboration |
+| **< 0.15** | Unrelated writing styles |
+
+Based on character 4-gram frequency vectors with accent folding (`Calderón` → `Calderon`). **Minimum 40 characters** required — shorter samples are silently skipped to avoid false certainty.
+
+### `compare_avatars` → Perceptual Hash
+
+| Metric | Interpretation |
+|--------|---------------|
+| `hamming_distance = 0` | Identical images |
+| `hamming_distance ≤ 10` | Probably the same photo (resized, recompressed) |
+| `hamming_distance > 20` | Different images |
+| `similarity_percentage` | 0–100% based on hamming distance |
+
+Uses difference hash (dHash) which is robust to JPEG compression, resizing, and minor color adjustments.
+
+---
+
+## Vector Memory Architecture
+
+During an investigation, every discovered profile with text content (bios, descriptions, titles) is indexed into an **in-memory vector store**. This allows the agent to cross-reference evidence later.
+
+```
+Profile discovered → tokenize (accent fold + trilingual stem) → TF-IDF vector
+                                                               → character 4-gram stylometric vector
+                     → index in BM25 store
+```
+
+The vector store is **pure Python** (no numpy/scipy dependency):
+
+- **Accent folding**: `unicodedata.normalize("NFD")` strips diacritics so `calderón` matches `calderon`
+- **Trilingual stemming**: Light suffix stripping for Spanish, English, and Portuguese (`desarrollo` → `desarr`, `developer` → `develop`)
+- **Stopword removal**: 150+ stopwords across ES/EN/PT
+- **BM25 scoring**: Length-normalized term frequency with IDF weighting (not cosine similarity, which penalized long documents)
+
+---
+
+## System Prompt Strategy
+
+The agent's system prompt is dynamically constructed based on the investigation language. It includes:
+
+1. **Role definition** — "expert OSINT investigator and Criminal Profiler"
+2. **Method** — 5-step investigation methodology (start → gather → analyze → pivot → report)
+3. **Rules** — step limits, no data fabrication, pattern recognition guidance
+4. **Score interpretation** — explicit instructions for BM25, stylometry, and avatar metrics
+5. **Report structure** — must cover the 6 dimensions
+6. **Language** — response language matches the investigation
+
+The prompt changes per language. In Spanish, the agent receives instructions in Spanish and responds in "español neutro". This isn't just translation — the investigation methodology description adapts to the linguistic context.
+
+---
 
 ## Configuration
 
@@ -57,32 +131,52 @@ osint-d2 agent -u johndoe --provider deepseek --max-steps 10
 
 ### Web Dashboard
 
-Select **AI Agent** mode in the sidebar, configure the provider and max steps, then click **Start Investigation**.
+Select **AI Agent** mode in the sidebar configuration, set the AI provider and max steps, then click **Start Investigation**.
 
 ### Environment
 
 ```env
 OSINT_D2_AGENT_MAX_STEPS=10       # Default max reasoning steps
-OSINT_D2_AI_PROVIDER=deepseek     # deepseek, openai, ollama
-OSINT_D2_AI_MODEL=deepseek-chat   # Model to use
+OSINT_D2_AI_API_KEY=sk-...        # API key (not needed for Ollama)
+OSINT_D2_AI_BASE_URL=https://api.deepseek.com
+OSINT_D2_AI_MODEL=deepseek-chat
 ```
+
+| Provider | Base URL | Model |
+|----------|----------|-------|
+| DeepSeek | `https://api.deepseek.com` | `deepseek-chat` |
+| OpenAI | `https://api.openai.com/v1` | `gpt-4o-mini` |
+| Ollama | `http://localhost:11434/v1` | `llama3.1` |
+| Groq | `https://api.groq.com/openai/v1` | `llama-3.1-70b-versatile` |
+
+---
 
 ## 6D Cognitive Profile
 
 When the agent finishes, it generates a structured analysis across 6 dimensions:
 
-| Dimension | What it analyzes |
-|-----------|-----------------|
-| **Identity** | Real name, aliases, handle patterns, profile consistency |
-| **Geo-temporal** | Timezone, language, location signals, activity patterns |
-| **OCEAN Psychology** | Big Five personality traits inferred from writing style and content |
-| **Tech Stack** | Programming languages, frameworks, tools, platforms |
-| **Ideology** | Interests, causes, political signals, community affiliations |
-| **OpSec** | Privacy hygiene, data exposure, handle reuse, email patterns |
+| Dimension | What the agent analyzes |
+|-----------|------------------------|
+| **Identity & Demographics** | Real name, aliases, handle patterns, estimated age, gender, education level. Cross-references names across platforms to identify impersonators. |
+| **Geo-temporal** | Timezone inference, location signals, language patterns, activity hours, sleep routine estimation |
+| **OCEAN Psychology** | Big Five personality traits inferred from writing style, content choices, and online behavior patterns |
+| **Tech Stack** | Programming languages, frameworks, tools, platforms, contribution patterns, skill level indicators |
+| **Ideology & Values** | Interests, causes, community affiliations, political signals, content themes |
+| **OpSec / Attack Surface** | Password reuse signals, email exposure, handle consistency, data breach exposure, privacy hygiene |
+
+<div class="os-screenshot" markdown>
+
+![6D Cognitive Profile Output](../assets/ai_analysis.png)
+<div class="os-screenshot__caption">Real agent output — 6D profile for the handle "torvalds"</div>
+
+</div>
+
+---
 
 ## Tips
 
-- **More steps = deeper investigation** — 6 steps is good for quick scans, 10-15 for thorough investigations
-- **Trust anchors** help the AI filter false positives (e.g., `github:johndoe` confirms that GitHub profile is the real target)
+- **More steps = deeper investigation** — 6 for quick scans, 10-15 for thorough investigations
+- **Trust anchors** filter false positives — `--trust github:johndoe` tells the agent that GitHub profile is confirmed
 - **Ollama** works fully offline — no data leaves your machine
-- The agent **never fabricates data** — every claim traces back to a tool observation
+- **The agent never fabricates data** — every claim traces back to a tool observation
+- **Parallel tool calls**: some LLMs (GPT-4o) call multiple tools per step, making investigations faster
