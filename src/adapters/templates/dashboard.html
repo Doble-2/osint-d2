@@ -1,14 +1,14 @@
 <!DOCTYPE html>
-<html lang="{{ ui_lang }}" class="h-full">
+<html lang="{{ ui_lang }}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>{{ t.app_title }}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="/static/vendor/vis-network.min.js"></script>
+  <script src="/static/vendor/purify.min.js"></script>
+  <link rel="stylesheet" href="/static/vendor/fontawesome/css/all.min.css">
   <style>
     :root {
       --bg: #0c0f12; --surface: #141820; --surface-2: #1a1f28;
@@ -485,7 +485,7 @@
         else if (msg.type === 'graph_svg') {
           const holder = document.getElementById('graph-svg-holder');
           if (holder && msg.data.svg) {
-            holder.innerHTML = msg.data.svg;
+            holder.innerHTML = DOMPurify.sanitize(msg.data.svg, {USE_PROFILES: {svg: true, svgFilters: true}});
             const svgEl = holder.querySelector('svg');
             if (svgEl) { svgEl.style.maxWidth = '100%'; svgEl.style.height = 'auto'; svgEl.style.display = 'block'; }
             showGraphSvg();
@@ -570,7 +570,7 @@
     function showTimeline(){ switchView('timeline'); }
     function logToTerminal(text){const logs=document.getElementById('terminal-logs');const row=document.createElement('div');if(text.includes('[PASO'))row.style.cssText='color:var(--accent);font-weight:600';else if(text.includes('[ERROR]'))row.style.color='var(--red)';else row.style.color='var(--text-2)';row.innerText=text;logs.appendChild(row);logs.scrollTop=logs.scrollHeight;}
     function updateCounters(){const nc=document.getElementById('node-count'),ec=document.getElementById('edge-count');if(nc)nc.innerText=nodes.length;if(ec)ec.innerText=edges.length;}
-    function showReport(rep){const c=document.getElementById('report-confidence');if(c)c.innerText=Math.round(rep.confidence*100)+'%';const h=document.getElementById('report-highlights');if(h){h.innerHTML='';(rep.highlights||[]).forEach(t=>{const d=document.createElement('div');d.innerHTML='<span style="color:var(--accent);margin-right:6px">•</span>'+t;h.appendChild(d);});}document.getElementById('report-summary').innerText=rep.summary||'';document.getElementById('report-drawer').classList.add('open');}
+    function showReport(rep){const c=document.getElementById('report-confidence');if(c)c.innerText=Math.round(rep.confidence*100)+'%';const h=document.getElementById('report-highlights');if(h){h.innerHTML='';(rep.highlights||[]).forEach(t=>{const d=document.createElement('div');d.innerHTML=DOMPurify.sanitize('<span style="color:var(--accent);margin-right:6px">•</span>'+t);h.appendChild(d);});}document.getElementById('report-summary').innerText=rep.summary||'';document.getElementById('report-drawer').classList.add('open');}
     function toggleReportDrawer(){document.getElementById('report-drawer').classList.toggle('open');}
     function downloadArtefact(type){const id=currentInvId||lastInvId;if(!id)return;window.open(`/api/download/${id}/${type}`,'_blank');}
     window.onload = function(){};

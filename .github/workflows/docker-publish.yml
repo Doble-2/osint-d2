@@ -54,3 +54,14 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          load: true
+
+      - name: Smoke test container
+        run: |
+          docker build -t osint-d2:smoke .
+          docker run -d --name smoke -p 8000:8000 osint-d2:smoke
+          echo "Waiting for container to start..."
+          sleep 20
+          curl -sf http://localhost:8000/ > /dev/null || (echo "::error::Dashboard not responding" && docker logs smoke && exit 1)
+          echo "✅ Container is healthy"
+          docker rm -f smoke

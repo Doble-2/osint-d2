@@ -5,16 +5,19 @@
 services:
   osint-d2:
     build: .
-    image: ghcr.io/doble-2/osint-d2:latest
+    # Uncomment to pull pre-built image from GHCR instead of building locally:
+    # image: ghcr.io/doble-2/osint-d2:latest
     container_name: osint-d2
     ports:
       - "${OSINT_PORT:-8000}:8000"
-    env_file: .env
+    env_file:
+      - path: .env
+        required: false
     volumes:
       - ./reports:/app/reports
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:8000/"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/')"]
       interval: 30s
       timeout: 10s
       retries: 3

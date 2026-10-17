@@ -96,10 +96,12 @@ class TestBuildProxyUrlEdgeCases:
     def test_auto_detect_mode_from_key(self):
         settings = AppSettings(proxy_api_key="test-key", proxy_mode=None, proxy_username=None)
         base_url, auth = _build_proxy_url(settings)
-        assert base_url is not None
-        assert auth is not None
-        # With no username, it goes to API proxy mode where 'residential' appears in auth
-        assert "residential" in auth[0]
+        assert base_url == "http://proxy.scrapingant.com:8080"
+        assert auth[0].startswith("scrapingant")
+        assert "proxy_type=residential" in auth[0]
+        assert auth[1] == "test-key"
+        # Key must NOT appear in the URL
+        assert "test-key" not in base_url
 
     def test_unknown_mode_returns_none(self):
         settings = AppSettings(
@@ -122,20 +124,37 @@ class TestBuildProxyUrlEdgeCases:
 # ---------------------------------------------------------------------------
 
 class TestBuildAsyncClient:
-    def test_client_without_proxy(self):
+    def test_client_without_proxy_has_no_proxy_transport(self):
+        """Without proxy config, client must use a direct transport (no proxy)."""
         settings = AppSettings(proxy_api_key=None)
         client = build_async_client(settings)
-        assert client is not None
-        assert client._transport is not None
+        # _mounts contains proxy-specific transports (URLPattern → transport);
+        # without proxy it should be empty.
+        assert len(client._mounts) == 0, (
+            "Client without proxy should have no mounts, "
+            f"but found {len(client._mounts)}"
+        )
 
-    def test_client_with_proxy(self):
+    def test_client_with_proxy_has_proxy_transport(self):
+        """With proxy config, client must route through the proxy transport."""
         settings = AppSettings(
             proxy_api_key="test-key",
             proxy_username="testuser",
             proxy_mode="residential",
         )
         client = build_async_client(settings)
-        assert client is not None
+        # httpx stores proxy transports in _mounts with URLPattern keys.
+        assert len(client._mounts) > 0, (
+            "Client with proxy config must have a proxy mount — "
+            "if this fails, the proxy is silently being skipped"
+        )
+
+    def test_client_headers_include_user_agent(self):
+        """Client must send a User-Agent header (stealth requirement)."""
+        settings = AppSettings(proxy_api_key=None)
+        client = build_async_client(settings)
+        assert "User-Agent" in client.headers
+        assert len(client.headers["User-Agent"]) > 10  # not empty/default
 
     def test_tls_verify_enabled_without_proxy(self):
         """TLS verification must be enabled when no proxy is configured."""

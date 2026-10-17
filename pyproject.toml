@@ -1,15 +1,30 @@
 [tool.poetry]
 name = "osint-d2"
-version = "0.1.0"
-description = "Modern OSINT CLI toolkit for identity investigation and profiling (Clean Architecture)."
+version = "3.0.0"
+description = "Modern OSINT platform for identity investigation: AI-powered agent, web dashboard, and PDF dossier generation."
 authors = ["Doble-2"]
 license = "MIT"
 readme = "README.md"
 repository = "https://github.com/Doble-2/osint-d2"
+homepage = "https://doble-2.github.io/osint-d2"
+documentation = "https://doble-2.github.io/osint-d2"
 keywords = ["osint", "intelligence", "cli", "identity", "recon"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Environment :: Web Environment",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Information Technology",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Security",
+]
 include = [
   "src/adapters/templates/*.html",
   "src/adapters/templates/i18n/*.json",
+  "src/adapters/templates/vendor/**/*",
 ]
 packages = [
   { include = "core", from = "src" },

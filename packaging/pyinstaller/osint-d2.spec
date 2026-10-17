@@ -1,6 +1,11 @@
 # PyInstaller spec for OSINT-D2
 # Build:
 #   pyinstaller -y packaging/pyinstaller/osint-d2.spec
+#
+# IMPORTANT: Playwright (Chromium) is NOT bundled — it would add ~150 MB to
+# the binary.  After building, users must run:
+#   playwright install chromium
+# Graph PNG rendering and PDF graph pages will fail without it.
 
 from __future__ import annotations
 
@@ -19,13 +24,24 @@ if not (ROOT / "pyproject.toml").exists():
 # Entry point: root main.py injects src/ into sys.path (important for src-layout)
 ENTRY = str(ROOT / "main.py")
 
-# Data files to bundle (templates)
+# ── Collect WeasyPrint & pydyf native libs + data files ──
+# WeasyPrint dynamically loads Cairo/Pango via cffi; without collect_all the
+# binary produces ImportError or OSError at PDF-export time.
+from PyInstaller.utils.hooks import collect_all
+
+wp_datas, wp_binaries, wp_hiddens = collect_all("weasyprint")
+pydyf_datas, pydyf_binaries, pydyf_hiddens = collect_all("pydyf")
+
+# Data files to bundle (templates + vendor assets)
 # These paths are used by adapters/report_exporter.py via sys._MEIPASS fallbacks.
 datas = [
     (str(ROOT / "src" / "adapters" / "templates"), "adapters/templates"),
     (str(ROOT / "src" / "adapters" / "templates" / "i18n"), "adapters/templates/i18n"),
+    (str(ROOT / "src" / "adapters" / "templates" / "vendor"), "adapters/templates/vendor"),
     (str(ROOT / "src" / "templates"), "templates"),
-]
+] + wp_datas + pydyf_datas
+
+binaries = wp_binaries + pydyf_binaries
 
 hiddenimports = [
     # WeasyPrint pulls some modules dynamically
@@ -34,7 +50,7 @@ hiddenimports = [
     "weasyprint.formatting_structure",
     "weasyprint.css",
     "pydyf",
-]
+] + wp_hiddens + pydyf_hiddens
 
 # NOTE: tls-client uses native components; PyInstaller can work but may need
 # platform-specific tweaks depending on distro/glibc.
@@ -45,7 +61,7 @@ from PyInstaller.building.build_main import Analysis, PYZ, EXE, COLLECT
 a = Analysis(
     [ENTRY],
     pathex=[str(ROOT), str(ROOT / "src")],
-    binaries=[],
+    binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,
     hookspath=[],
