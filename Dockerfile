@@ -13,7 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpango-1.0-0 \
     libpangocairo-1.0-0 \
     libpangoft2-1.0-0 \
-    libgdk-pixbuf2.0-0 \
+    libgdk-pixbuf-2.0-0 \
     libffi-dev \
     shared-mime-info \
     fonts-noto-color-emoji \
@@ -28,7 +28,7 @@ WORKDIR /app
 # ── Dependencies (cached layer) ──
 COPY pyproject.toml poetry.lock ./
 RUN poetry config virtualenvs.create false \
-    && poetry install --no-interaction --no-ansi --only main \
+    && poetry install --no-interaction --no-ansi --only main --no-root \
     && rm -rf /root/.cache/pip /root/.cache/pypoetry
 
 # ── Install Playwright Chromium for PDF generation ──
