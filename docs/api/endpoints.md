@@ -38,7 +38,7 @@ Launches an asynchronous investigation. Results are streamed via WebSocket.
   "mode": "agent",
   "ai_provider": "deepseek",
   "language": "en",
-  "max_steps": 6,
+  "max_steps": 10,
   "enable_breach_check": false
 }
 ```
@@ -63,7 +63,7 @@ Launches an asynchronous investigation. Results are streamed via WebSocket.
 
 ---
 
-## `POST /api/cancel/{investigation_id}` — Cancel Investigation
+## `POST /api/cancel/{inv_id}` — Cancel Investigation
 
 Stops a running investigation.
 
@@ -78,7 +78,7 @@ Stops a running investigation.
 
 ---
 
-## `GET /api/download/{investigation_id}/{file_type}` — Download Artifacts
+## `GET /api/download/{inv_id}/{file_type}` — Download Artifacts
 
 Downloads generated artifacts from a completed investigation.
 
@@ -113,22 +113,10 @@ Downloads generated artifacts from a completed investigation.
 
 ---
 
-## `GET /api/status/{investigation_id}` — Investigation Status
-
-Returns the current status of an investigation.
-
-**Response:**
-
-```json
-{
-  "status": "completed",
-  "investigation_id": "a1b2c3d4"
-}
-```
-
-| Status | Description |
-|--------|-------------|
 | `running` | Investigation in progress |
 | `completed` | All scanners finished |
 | `cancelled` | User-cancelled |
 | `error` | Failed with error |
+
+!!! note "No dedicated status endpoint"
+    Investigation status is delivered in real-time via [WebSocket](websocket.md) messages (`type: "status"`). There is no `GET /api/status/{inv_id}` endpoint — connect to the WebSocket to receive status updates.

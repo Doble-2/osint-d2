@@ -142,13 +142,13 @@ Or investigate from the command line:
 
 ```bash
 # Quick scan across 18+ platforms
-osint-d2 scan -u johndoe
+osint-d2 scan johndoe
 
 # Autonomous AI agent with 10 reasoning steps
-osint-d2 agent -u johndoe --provider deepseek --max-steps 10
+osint-d2 agent johndoe --ai-provider deepseek --max-steps 10
 
 # Full pipeline with Sherlock (400+ sites) + breach check
-osint-d2 hunt -u johndoe,jdoe123 -e john@example.com --sherlock --breach
+osint-d2 hunt -u johndoe,jdoe123 -e john@example.com --sherlock --breach-check
 ```
 
 [:material-arrow-right: Full Installation Guide](getting-started/installation.md){ .md-button .md-button--primary }
