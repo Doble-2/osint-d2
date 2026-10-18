@@ -53,29 +53,29 @@ For scripting or quick lookups, use direct CLI commands:
 
 ```bash
 # Quick username scan
-osint-d2 scan -u johndoe
+osint-d2 scan johndoe
 
 # Scan multiple usernames + emails
 osint-d2 hunt -u johndoe,jdoe123 -e john@example.com
 
 # Full autonomous investigation
-osint-d2 agent -u johndoe --provider deepseek --max-steps 10
+osint-d2 agent johndoe --ai-provider deepseek --max-steps 10
 
 # Scan + Sherlock (400+ sites) + breach check
-osint-d2 hunt -u johndoe --sherlock --breach
+osint-d2 hunt -u johndoe --sherlock --breach-check
 ```
 
 ### Export Results
 
 ```bash
 # Export as JSON
-osint-d2 hunt -u johndoe --json
+osint-d2 hunt -u johndoe --export-json
 
 # Export as PDF dossier (classified-style)
-osint-d2 hunt -u johndoe --pdf
+osint-d2 hunt -u johndoe --export-pdf
 
 # Both
-osint-d2 agent -u johndoe --json --pdf --max-steps 10
+osint-d2 agent johndoe --export-json --export-pdf --max-steps 10
 ```
 
 <div class="os-screenshot" markdown>

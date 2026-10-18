@@ -53,13 +53,13 @@ poetry run ruff check src/ tests/ --select=E,F,W --ignore=E501,E402 --fix
 
 ```bash
 # CLI mode
-poetry run python -m cli.main scan -u johndoe
+poetry run python -m cli.main scan johndoe
 
 # Web dashboard
 poetry run python -m cli.main serve --port 8000
 
 # Doctor (environment diagnostics)
-poetry run python -m cli.main doctor
+poetry run python -m cli.main doctor run
 ```
 
 ## Docker Development

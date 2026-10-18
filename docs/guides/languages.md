@@ -19,7 +19,7 @@ OSINT-D2 supports 5 languages across the **entire stack**: CLI interface, web da
 === "CLI"
 
     ```bash
-    osint-d2 hunt -u johndoe --lang es
+    osint-d2 hunt -u johndoe --language es
     ```
 
 === "Environment"

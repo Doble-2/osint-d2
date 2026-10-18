@@ -126,7 +126,7 @@ The prompt changes per language. In Spanish, the agent receives instructions in 
 ### CLI
 
 ```bash
-osint-d2 agent -u johndoe --provider deepseek --max-steps 10
+osint-d2 agent johndoe --ai-provider deepseek --max-steps 10
 ```
 
 ### Web Dashboard

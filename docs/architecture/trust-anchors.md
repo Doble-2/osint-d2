@@ -14,7 +14,7 @@ OSINT-D2's Trust Anchor system solves a fundamental problem in OSINT: **false po
 Pass known-good identifiers with the `--trust` flag:
 
 ```bash
-osint-d2 agent -u torvalds --trust github:torvalds,email:torvalds@linux-foundation.org
+osint-d2 agent torvalds --trust github:torvalds --trust email:torvalds@linux-foundation.org
 ```
 
 Supported anchor types:
@@ -120,7 +120,7 @@ Trust anchors work in all modes:
 
 ```bash
 # Agent mode
-osint-d2 agent -u target --trust github:user,email:user@domain.com
+osint-d2 agent target --trust github:user --trust email:user@domain.com
 
 # Interactive CLI (prompted)
 osint-d2
