@@ -159,7 +159,7 @@ Pull the latest image from GitHub Container Registry:
 
 ```bash
 docker pull ghcr.io/doble-2/osint-d2:latest
-docker run -p 8000:8000 --env-file .env ghcr.io/doble-2/osint-d2
+docker run --name osint-d2 -p 8000:8000 --env-file .env ghcr.io/doble-2/osint-d2
 ```
 
 The image is built for `linux/amd64` via GitHub Actions on every push to `main`.
@@ -173,7 +173,7 @@ The image is built for `linux/amd64` via GitHub Actions on every push to `main`.
 
 The container runs as a non-root user (`osint`) by default. This provides defense-in-depth: even if Chromium has a sandbox escape vulnerability, the attacker lands in an unprivileged context.
 
-The web dashboard makes **zero external network requests** — all JavaScript and CSS dependencies are vendorized inside the image.
+The web dashboard makes **zero external network requests** — all JavaScript, CSS, and font dependencies are vendorized inside the image. Suitable for air-gapped environments.
 
 ---
 
@@ -202,7 +202,7 @@ docker compose up -d
 |-----------|---------|-------------|
 | RAM | 512 MB | 1 GB |
 | CPU | 1 core | 2 cores |
-| Disk | 500 MB (image) | 1 GB (image + reports) |
+| Disk | 2.5 GB (image) | 4 GB (image + reports) |
 | Ollama (optional) | 4 GB RAM | 8+ GB RAM, GPU |
 
 The main memory consumer is Playwright (used for PDF rendering). If you only use JSON exports, memory usage is much lower.
