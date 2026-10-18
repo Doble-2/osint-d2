@@ -45,15 +45,17 @@ jobs:
       # Windows note: WeasyPrint PDF may fail at runtime due to GTK/Cairo.
       # OSINT-D2 falls back to HTML if PDF export fails.
 
+      - name: Install Poetry
+        run: python -m pip install -U pip poetry
+
       - name: Install Python deps
         run: |
-          python -m pip install -U pip
-          python -m pip install -e .
-          python -m pip install "pyinstaller>=6.6"
+          poetry install --no-interaction
+          poetry run pip install "pyinstaller>=6.6"
 
       - name: Build with PyInstaller
         run: |
-          pyinstaller -y packaging/pyinstaller/osint-d2.spec
+          poetry run pyinstaller -y packaging/pyinstaller/osint-d2.spec
 
       - name: Smoke test (Linux/macOS)
         if: runner.os != 'Windows'
