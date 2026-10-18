@@ -4,7 +4,7 @@
 
 - **Python 3.11+** (tested on 3.11, 3.12, 3.13)
 - **Poetry** for dependency management
-- **Playwright** browsers (auto-installed during setup)
+- **Playwright Chromium** — required for graph PNG rendering (manual install: `playwright install chromium`)
 
 ---
 
@@ -163,17 +163,18 @@ OSINT-D2 requires an LLM provider for Agent Mode and AI analysis. Choose one:
 Run the built-in diagnostic tool:
 
 ```bash
-poetry run osint-d2 doctor
+poetry run osint-d2 doctor run
 ```
 
 This checks:
 
-- Python version compatibility
-- Required packages installed
-- Playwright browsers available
-- WeasyPrint rendering capability
-- AI provider connectivity
-- Environment variable configuration
+- AI provider configuration (key, base URL, model)
+- HTTP connectivity (outbound request to GitHub)
+- WeasyPrint PDF rendering capability
+- Proxy configuration (ScrapingAnt mode, key, country)
+
+!!! note "What `doctor run` does NOT check"
+    It does not verify Python version, installed packages, or Playwright browser availability. To verify Playwright, run `playwright install chromium` and check for errors.
 
 ---
 
@@ -188,12 +189,15 @@ All variables use the `OSINT_D2_` prefix. See the [Configuration reference](conf
 
 ---
 
-## Optional: Sherlock Integration
+## Sherlock (400+ Sites)
 
-For the `--sherlock` flag (400+ additional sites), install Sherlock separately:
+OSINT-D2 includes a **built-in async Sherlock engine** — no external packages required.
+
+When you pass `--sherlock` to the `hunt` command, OSINT-D2 automatically downloads the official Sherlock site manifest (`data.json`) from GitHub and runs checks across 400+ sites using its own concurrent runner.
 
 ```bash
-pip install sherlock-project
+osint-d2 hunt -u johndoe --sherlock
 ```
 
-OSINT-D2 will auto-detect and use it when available.
+!!! tip "No `pip install sherlock-project` needed"
+    Unlike earlier versions, OSINT-D2 v3.0 does not depend on the `sherlock-project` pip package. The manifest is fetched on demand and cached locally in `data/`.
