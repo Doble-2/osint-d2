@@ -4,9 +4,9 @@
 
 services:
   osint-d2:
-    build: .
-    # Uncomment to pull pre-built image from GHCR instead of building locally:
-    # image: ghcr.io/doble-2/osint-d2:latest
+    image: ghcr.io/doble-2/osint-d2:latest
+    # To build locally instead of pulling pre-built image, uncomment below:
+    # build: .
     container_name: osint-d2
     ports:
       - "${OSINT_PORT:-8000}:8000"
