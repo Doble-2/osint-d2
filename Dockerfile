@@ -9,7 +9,7 @@ FROM python:3.12-slim AS base
 
 # System dependencies for WeasyPrint (Cairo, Pango, GDK-Pixbuf).
 # Playwright's own deps (libatk, libnss3, libx11, etc.) are installed
-# later by `playwright install --with-deps chromium`.
+# later by `playwright install-deps chromium` (as root, before USER switch).
 # NOTE: libffi-dev and shared-mime-info are needed by WeasyPrint at runtime;
 # they are NOT pulled by Playwright, so they must be listed here.
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -42,22 +42,22 @@ COPY . .
 # ── Install the project package (now that source + README exist) ──
 RUN poetry install --no-interaction --no-ansi --only main
 
-# ── Install Playwright Chromium for PDF/graph generation ──
-# --with-deps installs Chromium's own native dependencies (libatk, libnss3,
-# libx11, etc.) which are separate from WeasyPrint's Cairo/Pango deps above.
-# After install, purge the download cache and link metadata to save ~400 MB.
-RUN playwright install --with-deps chromium \
-    && rm -rf /tmp/* \
-    && rm -rf /root/.cache/ms-playwright/.links \
-    && find /root/.cache/ms-playwright -name "*.zip" -delete 2>/dev/null || true
-
-# ── Non-root user (defense-in-depth: Chromium escape → no root) ──
+# ── Non-root user (created BEFORE Playwright browser download) ──
 RUN useradd -m -s /bin/bash osint \
-    && mkdir -p /app/reports /home/osint/.cache \
-    && cp -r /root/.cache/ms-playwright /home/osint/.cache/ms-playwright \
+    && mkdir -p /app/reports \
     && chown -R osint:osint /app /home/osint
+
+# ── Playwright: system deps as root, browser as osint ──
+# Phase 1 (root): install system libraries that Chromium needs (libatk, libnss3, etc.)
+# Phase 2 (osint): download the browser binary directly into osint's home.
+# This avoids a 294 MB cp -r duplication layer that existed when installing
+# everything as root and then copying to /home/osint/.cache/.
+RUN playwright install-deps chromium
 USER osint
 ENV PLAYWRIGHT_BROWSERS_PATH=/home/osint/.cache/ms-playwright
+RUN playwright install chromium \
+    && rm -rf /home/osint/.cache/ms-playwright/.links \
+    && find /home/osint/.cache/ms-playwright -name "*.zip" -delete 2>/dev/null || true
 
 # ── Expose dashboard port ──
 EXPOSE 8000
