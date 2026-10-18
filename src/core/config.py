@@ -102,7 +102,7 @@ class AppSettings(BaseSettings):
         description="Timeout por request (segundos).",
     )
     user_agent: str = Field(
-        default="osint-d2/0.1 (+https://local)",
+        default="osint-d2/3.0",
         min_length=1,
         description="User-Agent para peticiones OSINT.",
     )
