@@ -38,7 +38,6 @@ datas = [
     (str(ROOT / "src" / "adapters" / "templates"), "adapters/templates"),
     (str(ROOT / "src" / "adapters" / "templates" / "i18n"), "adapters/templates/i18n"),
     (str(ROOT / "src" / "adapters" / "templates" / "vendor"), "adapters/templates/vendor"),
-    (str(ROOT / "src" / "templates"), "templates"),
 ] + wp_datas + pydyf_datas
 
 binaries = wp_binaries + pydyf_binaries
