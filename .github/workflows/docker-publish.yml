@@ -23,6 +23,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up QEMU (multi-arch)
+        uses: docker/setup-qemu-action@v3
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -51,16 +54,18 @@ jobs:
         with:
           context: .
           push: ${{ github.event_name != 'pull_request' }}
+          platforms: linux/amd64,linux/arm64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          load: true
 
       - name: Smoke test container
+        if: github.event_name != 'pull_request'
         run: |
-          docker build -t osint-d2:smoke .
-          docker run -d --name smoke -p 8000:8000 osint-d2:smoke
+          IMAGE="$REGISTRY/${IMAGE_NAME,,}:sha-${GITHUB_SHA::7}"
+          docker pull "$IMAGE"
+          docker run -d --name smoke -p 8000:8000 "$IMAGE"
           echo "Waiting for container to start..."
           sleep 20
           curl -sf http://localhost:8000/ > /dev/null || (echo "::error::Dashboard not responding" && docker logs smoke && exit 1)

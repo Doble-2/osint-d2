@@ -1,19 +1,49 @@
+# === Version control ===
 .git
+.gitignore
+
+# === CI/CD & GitHub ===
 .github
+
+# === Dev tooling ===
 .venv
 .vscode
 .pytest_cache
+.mypy_cache
+.ruff_cache
 __pycache__
 *.pyc
 *.pyo
+
+# === Build artifacts ===
 dist/
 build/
+*.egg-info
+
+# === Packaging (PyInstaller — not needed in Docker) ===
+packaging/
+
+# === Tests (not needed in production image) ===
+tests/
+
+# === Runtime data (generated at runtime) ===
 reports/
 data/
+
+# === Documentation site (MkDocs output ~50MB) ===
+site/
+docs/
+mkdocs.yml
+
+# === Project assets (README screenshots ~50MB) ===
+assets/
+
+# === Environment & secrets ===
 .env
 .env.local
-*.egg-info
-.mypy_cache
-.ruff_cache
-packaging/
-tests/
+.env.*
+
+# === Docker files (prevent recursive context) ===
+Dockerfile
+docker-compose.yml
+.dockerignore

@@ -2322,4 +2322,4 @@ tls = ["tls-client"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.11"
-content-hash = "ee59fce4234cdb42ff93f6a3ceae8f33a03927a6facbec40a2bfa0e9200d4d06"
+content-hash = "092a42acc9b87347104c72423003f9ff80ab610c9a0ec0955ff2ac9a9cbaa6f9"
