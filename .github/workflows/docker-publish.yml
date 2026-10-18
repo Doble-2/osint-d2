@@ -63,7 +63,8 @@ jobs:
       - name: Smoke test container
         if: github.event_name != 'pull_request'
         run: |
-          IMAGE="$REGISTRY/${IMAGE_NAME,,}:sha-${GITHUB_SHA::7}"
+          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:main"
+          IMAGE="${IMAGE,,}"
           docker pull "$IMAGE"
           docker run -d --name smoke -p 8000:8000 "$IMAGE"
           echo "Waiting for container to start..."
