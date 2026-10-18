@@ -60,6 +60,10 @@ Most OSINT tools run a fixed checklist. OSINT-D2 **thinks**:
 | 🐳 | **Docker** | One-command deployment. Ollama sidecar for fully offline operation. |
 
 <p align="center">
+  <img src="assets/dashboard.gif" alt="OSINT-D2 Live Dashboard Demo" width="700" />
+</p>
+
+<p align="center">
   <img src="assets/pdf.png" alt="Classified-style PDF Dossier" width="350" />
   <img src="assets/ai_analysis.png" alt="6D Cognitive Profile" width="500" />
 </p>
@@ -81,16 +85,16 @@ poetry run osint-d2 serve      # Start the web dashboard
 
 ```bash
 # Quick scan across 18+ native scanners
-osint-d2 scan -u johndoe
+osint-d2 scan johndoe
 
 # Autonomous AI investigation (10 reasoning steps)
-osint-d2 agent -u johndoe --provider deepseek --max-steps 10
+osint-d2 agent johndoe --ai-provider deepseek --max-steps 10
 
 # Full pipeline: multiple targets + Sherlock (400+ sites) + breach check
-osint-d2 hunt -u johndoe,jdoe123 -e john@example.com --sherlock --breach --pdf
+osint-d2 hunt -u johndoe,jdoe123 -e john@example.com --sherlock --breach-check --export-pdf
 
 # Trust anchors to filter false positives
-osint-d2 agent -u johndoe --trust github:johndoe,email:john@example.com
+osint-d2 agent johndoe --trust github:johndoe --trust email:john@example.com
 ```
 
 ### AI Providers
@@ -149,7 +153,7 @@ src/
 │   ├── services/       #   Agent engine, trust anchors, identity pipeline, URL guard
 │   └── config.py       #   AppSettings (pydantic-settings, OSINT_D2_* prefix)
 ├── adapters/           # I/O layer
-│   ├── osint_sources/  #   20 platform-specific scanners
+│   ├── osint_sources/  #   21 platform-specific scanners
 │   ├── vector_store.py #   Pure-Python BM25 + stylometry engine
 │   ├── rate_limiter.py #   Per-domain throttle with jitter
 │   ├── web_server.py   #   FastAPI + WebSocket dashboard
