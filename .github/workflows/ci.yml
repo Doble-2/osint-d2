@@ -38,7 +38,13 @@ jobs:
         run: poetry run ruff check .
 
       - name: Run tests
-        run: poetry run pytest tests/ --tb=short
+        shell: bash # Adds pipefail, so tee doesn't hide a failure.
+        run: poetry run pytest tests/ --tb=short | tee pytest.log
+
+      # Shows failures on the pull request, without opening the log.
+      - name: Annotate failed tests
+        if: failure()
+        run: grep -E '^(FAILED|ERROR) |^E   ' pytest.log | head -n 20 | cut -c1-300 | sed 's/^/::error::/' || true
 
   # Installs like an end user, with the newest versions the metadata allows, so
   # a dependency release that breaks the CLI is caught here.

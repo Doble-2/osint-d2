@@ -18,12 +18,13 @@ if _meipass and (Path(str(_meipass)) / "adapters" / "templates").is_dir():
     _TEMPLATES_DIR = Path(str(_meipass)) / "adapters" / "templates"
 
 TEMPLATES_DIR = _TEMPLATES_DIR
-SUPPORTED_LANGUAGES = frozenset(language.value for language in Language)
+_TRANSLATION_FILES = {language.value: f"{language.value}.json" for language in Language}
+SUPPORTED_LANGUAGES = frozenset(_TRANSLATION_FILES)
 
 
 @lru_cache(maxsize=8)
 def load_translations(lang_code: str) -> dict[str, Any]:
     """Load one language's strings, falling back to English."""
-    # A fixed list: lang_code can come from a URL, and it becomes part of a path.
-    language = lang_code if lang_code in SUPPORTED_LANGUAGES else Language.default().value
-    return json.loads((TEMPLATES_DIR / "i18n" / f"{language}.json").read_text(encoding="utf-8"))
+    # File names come from a fixed table, because lang_code can come from a URL.
+    file_name = _TRANSLATION_FILES.get(lang_code, _TRANSLATION_FILES[Language.default().value])
+    return json.loads((TEMPLATES_DIR / "i18n" / file_name).read_text(encoding="utf-8"))
