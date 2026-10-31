@@ -8,6 +8,7 @@ from types import SimpleNamespace as NS
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from typer.main import get_command
 from typer.testing import CliRunner
 
 from adapters import ai_analyst
@@ -76,9 +77,11 @@ class TestSensitiveSections:
         assert "## 3." in result.summary
 
     def test_flag_is_available_on_every_ai_command(self):
+        # The command's options, not its help text: color codes can split words there.
+        commands = get_command(app).commands
         for command in ("agent", "scan", "scan-email", "hunt", "analyze"):
-            output = CliRunner().invoke(app, [command, "--help"], env={"COLUMNS": "200"}).output
-            assert "--sensitive-inferences" in output, command
+            options = [option for param in commands[command].params for option in param.opts]
+            assert "--sensitive-inferences" in options, command
 
 
 def _touch(folder, name, *, age_days=0):
