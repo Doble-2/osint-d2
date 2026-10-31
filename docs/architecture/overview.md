@@ -49,9 +49,6 @@ graph TB
     Scanners --> HTTP
     HTTP --> Rate
 
-    style Core fill:#0a1a14,stroke:#2dd4bf,color:#fff
-    style Adapters fill:#111b22,stroke:#1a9a87,color:#c9d1d9
-    style CLI fill:#0d1117,stroke:#8b949e,color:#c9d1d9
 ```
 
 ---
