@@ -20,9 +20,13 @@ from core.config import AppSettings
 from core.domain.language import Language
 from core.domain.models import AnalysisReport, PersonEntity, SocialProfile
 from adapters.vector_store import VectorStore
+from core.services.agent_prompts import PROMPTS, build_system_prompt
 from core.services.agent_tools import AGENT_TOOLS, execute_tool
 
 logger = logging.getLogger(__name__)
+
+# Kept for callers and tests that build the prompt through this module.
+_build_agent_system_prompt = build_system_prompt
 
 
 # ---------------------------------------------------------------------------
@@ -50,73 +54,18 @@ class AgentResult:
     finished_naturally: bool = False  # True if agent called generate_report
 
 
-# ---------------------------------------------------------------------------
-# System prompt builder
-# ---------------------------------------------------------------------------
+_MAX_SUMMARY_CHARS = 20_000
 
-def _build_agent_system_prompt(*, language: Language, max_steps: int) -> str:
-    if language == Language.SPANISH:
-        return (
-            "Eres un investigador OSINT experto y Perfilador Criminalista. "
-            "Tu objetivo es construir un perfil completo de la persona indicada.\n\n"
-            "MÉTODO:\n"
-            "1. Empieza con lo que sabes (username/email proporcionado)\n"
-            "2. Usa las herramientas para recopilar evidencia de múltiples fuentes\n"
-            "3. Analiza los resultados y decide qué investigar después\n"
-            "4. PIVOTEA: si encuentras emails, usernames, aliases o websites nuevos en los resultados, investígalos\n"
-            "5. Cuando tengas suficiente evidencia, llama generate_report con un análisis completo\n\n"
-            "REGLAS:\n"
-            f"- Máximo {max_steps} pasos. Prioriza las fuentes más ricas en datos.\n"
-            "- No inventes datos. Solo reporta lo que las herramientas confirmen.\n"
-            "- Si un scan falla o no encuentra nada, continúa con otras fuentes.\n"
-            "- Busca patrones: mismo avatar en varias redes, misma bio, emails cruzados.\n\n"
-            "INTERPRETACIÓN DE PUNTUACIONES (crítico, no las malinterprete):\n"
-            "- search_vector_memory devuelve 'score' con la métrica BM25. NO es un porcentaje: "
-            "rango típico 0-5, donde más alto = mejor coincidencia. Nunca lo reporte como %.\n"
-            "- correlate_stylometry devuelve 'stylometric_score' entre 0 y 1 (similitud coseno "
-            "de n-gramas). Interpretación: >0.70 muy probable mismo autor; 0.40-0.70 indicio "
-            "moderado; <0.15 sin relación. Solo es válido en textos de 40+ caracteres; si la "
-            "lista viene vacía es porque la muestra era demasiado corta, NO porque no haya match.\n"
-            "- compare_avatars devuelve 'similarity_percentage' (0-100%) y 'hamming_distance' "
-            "(bits distintos: 0 = idénticas, <=10 = probablemente la misma imagen).\n"
-            "- Un handle genérico marcado como 'falso positivo probable' es un homónimo: "
-            "no lo trates como identidad confirmada.\n"
-            "- El reporte final debe seguir las 6 dimensiones: Identidad, Geo-temporal, "
-            "Psicológico (OCEAN), Técnico/Profesional, Ideología, y Vectores de Ataque (OpSec).\n\n"
-            "IDIOMA DE RESPUESTA: Español neutro."
-        )
 
-    return (
-        "You are an expert OSINT investigator and Criminal Profiler. "
-        "Your objective is to build a comprehensive profile of the target person.\n\n"
-        "METHOD:\n"
-        "1. Start with what you know (provided username/email)\n"
-        "2. Use the tools to gather evidence from multiple sources\n"
-        "3. Analyze results and decide what to investigate next\n"
-        "4. PIVOT: if you find new emails, usernames, aliases, or websites in results, investigate them\n"
-        "5. When you have enough evidence, call generate_report with a comprehensive analysis\n\n"
-        "RULES:\n"
-        f"- Maximum {max_steps} steps. Prioritize data-rich sources.\n"
-        "- Do NOT fabricate data. Only report what the tools confirm.\n"
-        "- If a scan fails or returns nothing, move on to other sources.\n"
-        "- Look for patterns: same avatar across networks, same bio, cross-referenced emails.\n\n"
-        "SCORE INTERPRETATION (critical - do not misread these):\n"
-        "- search_vector_memory returns 'score' using BM25. It is NOT a percentage: "
-        "typical range 0-5, higher is a better match. Never report it as %.\n"
-        "- correlate_stylometry returns 'stylometric_score' between 0 and 1 (cosine "
-        "similarity of character n-grams). Interpretation: >0.70 very likely the same "
-        "author; 0.40-0.70 moderate signal; <0.15 unrelated. Only valid for 40+ "
-        "character samples; an empty list means the sample was too short, NOT that "
-        "there was no match.\n"
-        "- compare_avatars returns 'similarity_percentage' (0-100%) and 'hamming_distance' "
-        "(differing bits: 0 = identical, <=10 = probably the same image).\n"
-        "- A generic handle flagged as a probable false positive is a namesake: do not "
-        "treat it as a confirmed identity.\n"
-        "- The final report must cover 6 dimensions: Identity & Demographics, "
-        "Geo-temporal Analysis, Psychological Profile (OCEAN), Technical/Professional, "
-        "Ideology & Values, and Attack Surface (OpSec).\n\n"
-        "RESPONSE LANGUAGE: English."
-    )
+def _parse_confidence(value: Any) -> float:
+    """Clamp the LLM-supplied confidence to [0, 1]; models may return non-numbers."""
+    try:
+        confidence = float(value)
+    except (TypeError, ValueError):
+        return 0.5
+    if confidence != confidence:  # NaN
+        return 0.5
+    return min(1.0, max(0.0, confidence))
 
 
 # ---------------------------------------------------------------------------
@@ -137,6 +86,7 @@ class AgentEngine:
         self._enable_breach_check = enable_breach_check
         self._on_step = on_step
         self._collected_profiles: list[SocialProfile] = []
+        self._profile_index: dict[tuple[str, str], int] = {}
         self._vector_store = VectorStore()
         # Identificador real del objetivo, fijado por el llamador (web/CLI).
         self._explicit_target: str | None = None
@@ -177,15 +127,17 @@ class AgentEngine:
         client = AsyncOpenAI(
             api_key=api_key_str,
             base_url=self._settings.ai_base_url,
+            max_retries=self._settings.ai_max_retries,
         )
 
-        system_prompt = _build_agent_system_prompt(language=language, max_steps=max_steps)
+        system_prompt = build_system_prompt(language=language, max_steps=max_steps)
+        prompts = PROMPTS[language]
 
         # Filter tools: remove breach_check if not enabled.
         tools = [t for t in AGENT_TOOLS if self._enable_breach_check or t["function"]["name"] != "breach_check"]
 
         # Build the user message with trust anchor context.
-        user_content = f"Investigate: {objective}"
+        user_content = prompts.investigate.replace("{objective}", objective)
         if trust_anchors:
             anchor_lines = []
             for anchor_str in trust_anchors:
@@ -197,24 +149,7 @@ class AgentEngine:
                     else:
                         anchor_lines.append(f"- VERIFIED {net.upper()} account: @{user}")
 
-            if language == Language.SPANISH:
-                trust_block = (
-                    "\n\nFUENTES DE CONFIANZA (datos verificados por el usuario):\n"
-                    + "\n".join(anchor_lines)
-                    + "\n\nIMPORTANTE: Usa estas fuentes como verdad absoluta. "
-                    "Si un perfil en otra red tiene un nombre/apellido diferente "
-                    "al que se deduce de estas fuentes, ese perfil probablemente "
-                    "pertenece a OTRA PERSONA. No confundas identidades."
-                )
-            else:
-                trust_block = (
-                    "\n\nTRUSTED SOURCES (user-verified data):\n"
-                    + "\n".join(anchor_lines)
-                    + "\n\nIMPORTANT: Use these as ground truth. "
-                    "If a profile on another network has a different name/surname "
-                    "than what these sources suggest, that profile likely belongs "
-                    "to a DIFFERENT PERSON. Do NOT conflate identities."
-                )
+            trust_block = "\n\n" + prompts.trusted_header + "\n" + "\n".join(anchor_lines) + "\n\n" + prompts.trusted_rule
             user_content += trust_block
 
         messages: list[dict[str, Any]] = [
@@ -257,9 +192,11 @@ class AgentEngine:
                     tc_step.tool_name = tool_call.function.name
 
                     try:
-                        tc_step.tool_args = json.loads(tool_call.function.arguments)
+                        parsed_args = json.loads(tool_call.function.arguments)
                     except json.JSONDecodeError:
-                        tc_step.tool_args = {"raw": tool_call.function.arguments}
+                        parsed_args = None
+                    # Models can send valid JSON that isn't an object.
+                    tc_step.tool_args = parsed_args if isinstance(parsed_args, dict) else {"raw": tool_call.function.arguments}
 
                     # Check if agent is done.
                     if tool_call.function.name == "generate_report":
@@ -381,7 +318,7 @@ class AgentEngine:
             profiles=self._collected_profiles,
         )
 
-        if report_data:
+        if report_data and isinstance(report_data, dict):
             # Parse highlights: handle both list and JSON-encoded string.
             raw_highlights = report_data.get("highlights", [])
             if isinstance(raw_highlights, str):
@@ -391,9 +328,10 @@ class AgentEngine:
                     raw_highlights = [raw_highlights] if raw_highlights else []
 
             person.analysis = AnalysisReport(
-                summary=report_data.get("summary", "Agent completed investigation."),
-                highlights=raw_highlights if isinstance(raw_highlights, list) else [],
-                confidence=min(1.0, max(0.0, float(report_data.get("confidence", 0.5)))),
+                # Models can exceed the report's size limit; keep what fits.
+                summary=str(report_data.get("summary") or "Agent completed investigation.")[:_MAX_SUMMARY_CHARS],
+                highlights=[str(h) for h in raw_highlights] if isinstance(raw_highlights, list) else [],
+                confidence=_parse_confidence(report_data.get("confidence")),
                 model=self._settings.ai_model,
                 raw={"agent_steps": len(steps), "report_data": report_data},
             )
@@ -426,7 +364,17 @@ class AgentEngine:
                     bio=p.get("bio"),
                     image_url=p.get("avatar"),
                 )
-                self._collected_profiles.append(prof)
+                # Pivots rescan the same accounts: keep one entry per account.
+                key = (prof.network_name.lower(), prof.username.lower())
+                known = self._profile_index.get(key)
+                if known is not None:
+                    if prof.exists and not self._collected_profiles[known].exists:
+                        self._collected_profiles[known] = prof
+                    else:
+                        continue
+                else:
+                    self._profile_index[key] = len(self._collected_profiles)
+                    self._collected_profiles.append(prof)
 
                 # Index into vector store if exists and has text
                 if prof.exists:
@@ -441,5 +389,5 @@ class AgentEngine:
                             text=combined,
                             metadata={"url": prof.url, "username": prof.username},
                         )
-            except Exception:
-                continue
+            except Exception as exc:
+                logger.debug("Skipping malformed profile from tool result: %s", exc)
