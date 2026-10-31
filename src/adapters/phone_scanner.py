@@ -16,8 +16,7 @@ from dataclasses import dataclass, field
 
 import phonenumbers
 from phonenumbers import carrier, geocoder, timezone, PhoneNumberType
-import httpx
-
+from adapters.http_client import build_async_client
 from core.config import AppSettings
 
 
@@ -151,7 +150,7 @@ class PhoneScanner:
         whatsapp_active = None
         wa_url = footprints["whatsapp"]
         try:
-            async with httpx.AsyncClient(timeout=6.0, follow_redirects=True) as client:
+            async with build_async_client(settings) as client:
                 resp = await client.get(wa_url)
                 if resp.status_code == 200:
                     # Si wa.me devuelve botón para chatear, el número suele estar registrado
@@ -176,7 +175,7 @@ class PhoneScanner:
 
         try:
             search_url = f"https://html.duckduckgo.com/html/?q={query_parts}"
-            async with httpx.AsyncClient(timeout=10.0, follow_redirects=True, headers=headers) as client:
+            async with build_async_client(settings, extra_headers=headers) as client:
                 ddg_resp = await client.get(search_url)
                 if ddg_resp.status_code == 200:
                     html_text = ddg_resp.text

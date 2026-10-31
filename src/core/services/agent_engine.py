@@ -22,6 +22,7 @@ from core.domain.models import AnalysisReport, PersonEntity, SocialProfile
 from adapters.vector_store import VectorStore
 from core.services.agent_prompts import PROMPTS, build_system_prompt
 from core.services.agent_tools import AGENT_TOOLS, execute_tool
+from core.services.report_scope import strip_sensitive_sections
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +56,20 @@ class AgentResult:
 
 
 _MAX_SUMMARY_CHARS = 20_000
+# Tool results come from third parties: they must not fill the model's context.
+_MAX_TOOL_RESULT_CHARS = 30_000
+_MAX_TOOL_CONTEXT_CHARS = 200_000
+_UNTRUSTED_TAG = "untrusted_data"
+
+
+def _untrusted_message(result: str, budget: int) -> str:
+    """Wrap a tool result so a hostile page cannot close the tag and pose as instructions."""
+    if budget <= 0:
+        return '{"error": "Evidence budget used up: call generate_report now."}'
+    body = result[:min(_MAX_TOOL_RESULT_CHARS, budget)].replace(f"</{_UNTRUSTED_TAG}", f"<\\/{_UNTRUSTED_TAG}")
+    if len(result) > min(_MAX_TOOL_RESULT_CHARS, budget):
+        body += " [truncated]"
+    return f"<{_UNTRUSTED_TAG}>\n{body}\n</{_UNTRUSTED_TAG}>"
 
 
 def _parse_confidence(value: Any) -> float:
@@ -130,7 +145,10 @@ class AgentEngine:
             max_retries=self._settings.ai_max_retries,
         )
 
-        system_prompt = build_system_prompt(language=language, max_steps=max_steps)
+        sensitive_inferences = self._settings.sensitive_inferences
+        system_prompt = build_system_prompt(
+            language=language, max_steps=max_steps, sensitive_inferences=sensitive_inferences,
+        )
         prompts = PROMPTS[language]
 
         # Filter tools: remove breach_check if not enabled.
@@ -159,6 +177,7 @@ class AgentEngine:
 
         steps: list[AgentStep] = []
         report_data: dict[str, Any] | None = None
+        tool_budget = _MAX_TOOL_CONTEXT_CHARS
 
         for step_num in range(1, max_steps + 1):
             step = AgentStep(step_number=step_num)
@@ -238,8 +257,9 @@ class AgentEngine:
                     messages.append({
                         "role": "tool",
                         "tool_call_id": tool_call.id,
-                        "content": result_str,
+                        "content": _untrusted_message(result_str, tool_budget),
                     })
+                    tool_budget -= min(len(result_str), _MAX_TOOL_RESULT_CHARS)
 
                 if report_data is not None:
                     break
@@ -253,9 +273,10 @@ class AgentEngine:
                     self._on_step(step)
 
                 messages.append({"role": "assistant", "content": content})
+                # Repeating the same conversation would pay for the same answer.
+                messages.append({"role": "user", "content": "Continue: call a tool, or call generate_report if you are done."})
 
-                # If this is the last step and no report was generated,
-                # the agent ran out of steps.
+        finished_naturally = report_data is not None
 
         # If the agent ran out of steps without generating a report,
         # force one final LLM call to produce the report.
@@ -319,6 +340,10 @@ class AgentEngine:
         )
 
         if report_data and isinstance(report_data, dict):
+            # In place: the step history and analysis.raw hold this same dict.
+            if not sensitive_inferences and isinstance(report_data.get("summary"), str):
+                report_data["summary"] = strip_sensitive_sections(report_data["summary"])
+
             # Parse highlights: handle both list and JSON-encoded string.
             raw_highlights = report_data.get("highlights", [])
             if isinstance(raw_highlights, str):
@@ -340,7 +365,7 @@ class AgentEngine:
             person=person,
             steps=steps,
             total_steps=len(steps),
-            finished_naturally=report_data is not None,
+            finished_naturally=finished_naturally,
         )
 
     def _collect_profiles_from_result(self, result_json: str) -> None:

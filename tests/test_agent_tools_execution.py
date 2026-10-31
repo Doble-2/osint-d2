@@ -13,6 +13,7 @@ Covers:
 from __future__ import annotations
 
 import json
+from http_fakes import stream_of
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -178,7 +179,7 @@ class TestExecuteToolFetchUrl:
         @asynccontextmanager
         async def mock_client_cm(*args, **kwargs):
             client = AsyncMock()
-            client.get = AsyncMock(return_value=resp)
+            client.stream = stream_of(resp)
             yield client
 
         with patch("adapters.http_client.build_async_client", mock_client_cm):
@@ -206,7 +207,7 @@ class TestExecuteToolFetchUrl:
         @asynccontextmanager
         async def mock_client_cm(*args, **kwargs):
             client = AsyncMock()
-            client.get = AsyncMock(return_value=resp)
+            client.stream = stream_of(resp)
             yield client
 
         with patch("adapters.http_client.build_async_client", mock_client_cm):
@@ -241,7 +242,7 @@ class TestExecuteToolFetchUrl:
         @asynccontextmanager
         async def mock_client_cm(*args, **kwargs):
             client = AsyncMock()
-            client.get = AsyncMock(return_value=resp)
+            client.stream = stream_of(resp)
             yield client
 
         with patch("adapters.http_client.build_async_client", mock_client_cm):

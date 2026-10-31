@@ -21,6 +21,9 @@ except Exception:  # pragma: no cover
     BeautifulSoup = None  # type: ignore
 
 
+MAX_BODY_BYTES = 5_000_000
+
+
 # ---------------------------------------------------------------------------
 # ScrapingAnt Proxy
 # ---------------------------------------------------------------------------
@@ -117,6 +120,22 @@ def build_async_client(
     )
 
 
+async def get_limited(client: httpx.AsyncClient, url: str, **kwargs: Any) -> httpx.Response:
+    """GET *url* keeping at most ``MAX_BODY_BYTES`` of the decoded body.
+
+    For URLs chosen by third parties: ``client.get`` would load any size into memory.
+    """
+    body = bytearray()
+    async with client.stream("GET", url, **kwargs) as resp:
+        async for chunk in resp.aiter_bytes():
+            body += chunk
+            if len(body) >= MAX_BODY_BYTES:
+                break
+        # The body is already decoded, so these headers no longer describe it.
+        headers = {k: v for k, v in resp.headers.items() if k.lower() not in ("content-encoding", "content-length", "transfer-encoding")}
+        return httpx.Response(resp.status_code, headers=headers, content=bytes(body[:MAX_BODY_BYTES]), request=resp.request)
+
+
 # ---------------------------------------------------------------------------
 # HTML Metadata Extraction
 # ---------------------------------------------------------------------------
@@ -167,7 +186,8 @@ def extract_html_metadata(*, html: str, base_url: str | None = None) -> dict[str
         href = str(a["href"])
         if href.startswith("mailto:"):
             page_text += " " + href.replace("mailto:", "") + " "
-    email_pattern = _re.compile(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}")
+    # Bounded and anchored: an unbounded pattern takes quadratic time on hostile pages.
+    email_pattern = _re.compile(r"(?<![a-zA-Z0-9._%+\-])[a-zA-Z0-9._%+\-]{1,64}@[a-zA-Z0-9.\-]{1,255}\.[a-zA-Z]{2,24}")
     emails_found = sorted(set(email_pattern.findall(page_text)))
 
     # ── Extract social media links ──

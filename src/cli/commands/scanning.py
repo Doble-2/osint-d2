@@ -35,6 +35,7 @@ from core.services.identity_pipeline import (
 )
 from cli.app import app
 from cli.shared import (
+    SENSITIVE_INFERENCES_OPTION, apply_sensitive_inferences,
     AI_PROVIDER_HELP, OutputFormat, NsfwPolicy, apply_proxy_overrides, auto_output_format, configure_ai_for_run,
     dump_person_json, err_console, normalize_email, out_console, resolve_language, split_csv,
     validate_ai_options, validate_trust,
@@ -389,6 +390,7 @@ def scan(
         "--deep-analyze/--no-deep-analyze",
         help="Send the collected evidence to the configured AI provider for analysis.",
     ),
+    sensitive_inferences: bool = SENSITIVE_INFERENCES_OPTION,
     ai_provider: str | None = typer.Option(
         None,
         "--ai-provider",
@@ -459,6 +461,7 @@ def scan(
     ),
 ) -> None:
     trust_anchors = validate_trust(trust)
+    apply_sensitive_inferences(sensitive_inferences)
     validate_ai_options(analysis=deep_analyze, ai_provider=ai_provider, ai_key=ai_key)
     output_format = auto_output_format(output_format)
     language = resolve_language(language)
@@ -497,6 +500,7 @@ def scan_email(
         "--deep-analyze/--no-deep-analyze",
         help="Send the collected evidence to the configured AI provider for analysis.",
     ),
+    sensitive_inferences: bool = SENSITIVE_INFERENCES_OPTION,
     ai_provider: str | None = typer.Option(
         None,
         "--ai-provider",
@@ -566,6 +570,7 @@ def scan_email(
     ),
 ) -> None:
     normalized = normalize_email(email)
+    apply_sensitive_inferences(sensitive_inferences)
     validate_ai_options(analysis=deep_analyze, ai_provider=ai_provider, ai_key=ai_key)
     output_format = auto_output_format(output_format)
     language = resolve_language(language)
@@ -615,6 +620,7 @@ def hunt(
         "--ai/--noai",
         help="Send the collected evidence to the configured AI provider for analysis.",
     ),
+    sensitive_inferences: bool = SENSITIVE_INFERENCES_OPTION,
     ai_provider: str | None = typer.Option(
         None,
         "--ai-provider",
@@ -737,6 +743,7 @@ def hunt(
     ),
 ) -> None:
     trust_anchors = validate_trust(trust)
+    apply_sensitive_inferences(sensitive_inferences)
     validate_ai_options(analysis=ai, ai_provider=ai_provider, ai_key=ai_key)
     usernames = split_csv(usernames)
     normalized_emails = list(dict.fromkeys(normalize_email(e) for e in split_csv(emails)))
@@ -811,6 +818,7 @@ def analyze(
         "--json-raw/--no-json-raw",
         help="(--format json) Include analysis.raw with the raw AI provider payload.",
     ),
+    sensitive_inferences: bool = SENSITIVE_INFERENCES_OPTION,
     ai_provider: str | None = typer.Option(
         None,
         "--ai-provider",
@@ -829,6 +837,7 @@ def analyze(
         help="Persist provider configuration in the user config (.env) for next runs.",
     ),
 ) -> None:
+    apply_sensitive_inferences(sensitive_inferences)
     validate_ai_options(analysis=True, ai_provider=ai_provider, ai_key=ai_key)
     try:
         person = PersonEntity.model_validate_json(input_path.read_text(encoding="utf-8"))

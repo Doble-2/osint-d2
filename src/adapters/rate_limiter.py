@@ -106,7 +106,6 @@ class DomainRateLimiter:
             lambda: asyncio.Semaphore(self._per_domain_concurrency)
         )
         self._domain_last_request: dict[str, float] = defaultdict(float)
-        self._lock = asyncio.Lock()
 
     def _compute_delay(self) -> float:
         """Calcula el delay con jitter aleatorio."""
@@ -122,19 +121,13 @@ class DomainRateLimiter:
         await self._domain_sems[domain].acquire()
 
         # Aplicar delay temporal
-        delay = self._compute_delay()
-        if delay > 0:
-            async with self._lock:
-                now = time.monotonic()
-                last = self._domain_last_request.get(domain, 0.0)
-                elapsed = now - last
-                wait = delay - elapsed
-                if wait > 0:
-                    await asyncio.sleep(wait)
-                self._domain_last_request[domain] = time.monotonic()
-        else:
-            async with self._lock:
-                self._domain_last_request[domain] = time.monotonic()
+        # Sin await entre leer y reservar, así que no hace falta lock; dormir con
+        # un lock global detendría también a los demás dominios.
+        now = time.monotonic()
+        start = max(now, self._domain_last_request[domain] + self._compute_delay())
+        self._domain_last_request[domain] = start
+        if start > now:
+            await asyncio.sleep(start - now)
 
     def _release_slot(self, domain: str) -> None:
         """Libera el slot de concurrencia del dominio."""

@@ -38,6 +38,7 @@ from core.domain.language import Language
 from core.domain.models import PersonEntity
 from core.services.agent_engine import AgentEngine, AgentResult, AgentStep
 from core.services.agent_prompts import build_objective
+from core.services.identity_pipeline import sanitize_target_for_filename
 from core.services.url_guard import SSRFBlockedError, validate_url
 from adapters.chain_builder import ChainBuilder
 from adapters.i18n import TEMPLATES_DIR, load_translations
@@ -45,6 +46,7 @@ from adapters.graph_exporter import GraphExporter
 from adapters.phone_scanner import PhoneScanner
 from adapters.radial_graph_renderer import RadialGraphRenderer
 from adapters.report_exporter import export_person_html, render_markdown
+from adapters.report_store import purge_expired
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +97,7 @@ class InvestigationRequest(BaseModel):
     language: str = Field(default="es", description="Language code: es, en, pt, ar, ru.")
     max_steps: int = Field(default=6, ge=1, le=30, description="Max agent reasoning steps.")
     enable_breach_check: bool = Field(default=False, description="Check data breaches.")
+    sensitive_inferences: bool = Field(default=False, description="Include personality, ideology and attack-surface inferences.")
 
     @field_validator("target")
     @classmethod
@@ -235,11 +238,6 @@ def _evict_finished_sessions() -> None:
     finished = [k for k, v in active_sessions.items() if v.status != "running"]
     for inv_id in finished[:excess]:
         del active_sessions[inv_id]
-
-
-def _safe_filename(value: str) -> str:
-    """Reduce un identificador libre a un nombre de archivo seguro."""
-    return re.sub(r"[^\w.-]+", "_", value).strip("._")[:80] or "target"
 
 
 def _settings_for_provider(provider: str | None) -> AppSettings:
@@ -401,7 +399,7 @@ async def download_artefact(inv_id: str, file_type: str):
     if not session:
         raise HTTPException(status_code=404, detail="Session not found.")
 
-    safe_name = _safe_filename(session.request.target)
+    safe_name = sanitize_target_for_filename(session.request.target)
 
     # Solo se sirven archivos de esta sesión: derivar la ruta del nombre del
     # objetivo daría acceso a informes de investigaciones ajenas.
@@ -442,6 +440,7 @@ def _raise_if_cancelled(session: InvestigationSession) -> None:
 async def _execute_investigation(session: InvestigationSession) -> None:
     req = session.request
     settings = _settings_for_provider(req.ai_provider)
+    settings.sensitive_inferences = settings.sensitive_inferences or req.sensitive_inferences
 
     await session.broadcast("log", session.t("log_init", target=req.target, mode=req.mode.upper()))
     await _seed_graph(session, settings)
@@ -697,14 +696,11 @@ async def _export_artifacts(session: InvestigationSession, result: AgentResult, 
     target = session.request.target
     person = result.person
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+    purge_expired(AppSettings().report_retention_days, reports_dir=REPORTS_DIR)
     # El id evita que dos investigaciones del mismo objetivo se sobrescriban.
-    stem = f"{_safe_filename(target)}_{session.inv_id[:8]}"
+    stem = f"{sanitize_target_for_filename(target)}_{session.inv_id[:8]}"
 
-    canvas_path = REPORTS_DIR / f"{stem}.canvas"
-    GraphExporter.export_canvas(GraphExporter.build_graph(person), canvas_path)
-    session.canvas_path = str(canvas_path)
-    await session.broadcast("artifact", "canvas")
-
+    # Primero el informe: ya está pagado y no debe depender de que se guarden archivos.
     if person.analysis:
         await session.broadcast("report_done", {
             "summary": person.analysis.summary,
@@ -713,6 +709,16 @@ async def _export_artifacts(session: InvestigationSession, result: AgentResult, 
             "confidence": person.analysis.confidence,
         })
 
+    canvas_path = REPORTS_DIR / f"{stem}.canvas"
+    try:
+        await asyncio.to_thread(GraphExporter.export_canvas, GraphExporter.build_graph(person), canvas_path)
+        session.canvas_path = str(canvas_path)
+        await session.broadcast("artifact", "canvas")
+    except Exception as canvas_err:
+        logger.warning("Fallo al exportar el canvas: %s", canvas_err)
+        session.partial = True
+        await session.broadcast("log", session.t("log_tool_failed", tool="canvas", error=canvas_err))
+
     try:
         await _publish_graph(session, person, stem, lang)
     except Exception as chain_err:
@@ -720,25 +726,28 @@ async def _export_artifacts(session: InvestigationSession, result: AgentResult, 
     _raise_if_cancelled(session)
 
     html_path = REPORTS_DIR / f"{stem}.html"
-    export_person_html(person=person, output_path=html_path, language=lang)
-
-    if session.graph_png_path and Path(session.graph_png_path).exists():
-        png_b64 = base64.b64encode(Path(session.graph_png_path).read_bytes()).decode("utf-8")
-        _inject_graph_page_into_html(
-            html_path, png_b64, target,
-            heading=session.t("pdf_graph_heading"),
-            caption=session.t("pdf_graph_caption"),
-        )
-    else:
-        await session.broadcast("log", session.t("log_pdf_no_graph"))
-    _raise_if_cancelled(session)
-
     pdf_path = REPORTS_DIR / f"{stem}_dossier.pdf"
     try:
+        await asyncio.to_thread(export_person_html, person=person, output_path=html_path, language=lang)
+
+        if session.graph_png_path and Path(session.graph_png_path).exists():
+            png_b64 = base64.b64encode(Path(session.graph_png_path).read_bytes()).decode("utf-8")
+            await asyncio.to_thread(
+                _inject_graph_page_into_html,
+                html_path, png_b64, target,
+                heading=session.t("pdf_graph_heading"),
+                caption=session.t("pdf_graph_caption"),
+            )
+        else:
+            await session.broadcast("log", session.t("log_pdf_no_graph"))
+        _raise_if_cancelled(session)
+
         await _render_pdf(html_path, pdf_path)
         session.pdf_path = str(pdf_path)
         await session.broadcast("artifact", "pdf")
         await session.broadcast("log", session.t("log_pdf_ok"))
+    except _InvestigationCancelled:
+        raise
     except Exception as pdf_err:
         logger.warning("Fallo al generar PDF con Playwright: %s", pdf_err)
         session.partial = True

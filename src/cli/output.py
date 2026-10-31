@@ -7,6 +7,8 @@ from pathlib import Path
 from rich.console import Console
 from rich.prompt import Confirm, Prompt
 
+from adapters.report_store import purge_expired
+from core.config import AppSettings
 from adapters.json_exporter import export_person_json
 from adapters.report_exporter import export_person_html, export_person_pdf
 from cli.ui_components import build_breaches_table, build_profiles_table
@@ -141,6 +143,7 @@ def handle_exports(
     if not export_pdf and not export_json and not export_canvas and not export_html:
         return
 
+    purge_expired(AppSettings().report_retention_days)
     safe_name = sanitize_target_for_filename(person.target)
     reports_dir = Path("reports")
     reports_dir.mkdir(parents=True, exist_ok=True)

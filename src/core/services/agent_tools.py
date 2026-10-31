@@ -14,6 +14,7 @@ from urllib.parse import urljoin
 
 import httpx
 
+from adapters.http_client import get_limited
 from adapters.breach_check import enrich_profiles_with_breach_data
 from core.config import AppSettings
 from core.domain.models import SocialProfile
@@ -234,9 +235,8 @@ AGENT_TOOLS: list[dict[str, Any]] = [
                     "summary": {
                         "type": "string",
                         "description": (
-                            "Detailed Markdown report with the 6 analysis "
-                            "sections (Identity, Geo-temporal, Psychological, "
-                            "Technical, Ideology, Attack Surface)."
+                            "Detailed Markdown report with the sections the "
+                            "system prompt requires."
                         ),
                     },
                     "highlights": {
@@ -320,7 +320,7 @@ async def _guarded_get(client: httpx.AsyncClient, url: str) -> httpx.Response:
     """
     for _ in range(_MAX_REDIRECTS + 1):
         await asyncio.to_thread(validate_url, url)
-        resp = await client.get(url, follow_redirects=False)
+        resp = await get_limited(client, url, follow_redirects=False)
         location = resp.headers.get("location") if resp.status_code in _REDIRECT_STATUSES else None
         if not location:
             return resp
@@ -406,7 +406,7 @@ async def execute_tool(
                     "error": f"HTTP {resp.status_code}",
                 })
             html = (resp.text or "")[:_MAX_HTML_CHARS]
-            meta = extract_html_metadata(html=html, base_url=str(resp.url))
+            meta = await asyncio.to_thread(extract_html_metadata, html=html, base_url=str(resp.url))
             return json.dumps({
                 "url": str(resp.url),
                 "status_code": resp.status_code,
@@ -432,7 +432,7 @@ async def execute_tool(
                     return json.dumps({
                         "error": f"Failed fetching avatars: img1={resp1.status_code}, img2={resp2.status_code}"
                     })
-                comp = AvatarAnalyzer.compare_avatars(resp1.content, resp2.content)
+                comp = await asyncio.to_thread(AvatarAnalyzer.compare_avatars, resp1.content, resp2.content)
                 return json.dumps(comp, ensure_ascii=False)
         except (SSRFBlockedError, ValueError) as exc:
             return json.dumps({"error": f"SSRF blocked: {exc}"})

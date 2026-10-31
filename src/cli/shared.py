@@ -21,6 +21,19 @@ PROXY_MODES = ("residential", "datacenter")
 AI_PROVIDER_HELP = f"AI provider preset: {', '.join(AI_PROVIDER_PRESETS)}."
 
 
+SENSITIVE_INFERENCES_OPTION = typer.Option(
+    False,
+    "--sensitive-inferences",
+    help="Include personality, ideology and attack-surface inferences in the AI report. Off by default.",
+)
+
+
+def apply_sensitive_inferences(enabled: bool) -> None:
+    """Pass the flag through settings, like the proxy overrides."""
+    if enabled:
+        os.environ["OSINT_D2_SENSITIVE_INFERENCES"] = "true"
+
+
 def split_csv(values: list[str] | None) -> list[str]:
     """Flatten repeated, comma-separated option values, keeping the order."""
     items = (item.strip() for value in values or [] for item in value.split(","))

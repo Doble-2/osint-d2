@@ -76,21 +76,21 @@ def write_user_env_vars(values: dict[str, str]) -> Path:
     env_path = get_user_env_file()
     env_path.parent.mkdir(parents=True, exist_ok=True)
 
+    # Si no se puede leer, el error sube: reescribir borraría las demás claves.
     existing: dict[str, str] = {}
     if env_path.exists():
-        try:
-            existing = _parse_env_lines(env_path.read_text(encoding="utf-8"))
-        except Exception:
-            existing = {}
+        existing = _parse_env_lines(env_path.read_text(encoding="utf-8"))
 
     existing.update({k: v for k, v in values.items() if v is not None})
 
     lines = ["# OSINT-D2 user config (.env)"]
     for key in sorted(existing.keys()):
         lines.append(f"{key}={existing[key]}")
-    env_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    # Contiene API keys: solo legible por el propietario.
-    env_path.chmod(0o600)
+    # Contiene API keys: solo legible por el propietario, también durante la escritura.
+    fd = os.open(env_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as env_file:
+        env_path.chmod(0o600)
+        env_file.write("\n".join(lines) + "\n")
     return env_path
 
 
@@ -106,8 +106,8 @@ class AppSettings(BaseSettings):
         env_prefix="OSINT_D2_",
         extra="ignore",
         case_sensitive=False,
-        # Orden: proyecto primero (dev), luego config global de usuario (PyInstaller).
-        env_file=(".env", str(get_user_env_file())),
+        # Gana el último: el .env del proyecto (dev) prevalece sobre el global (PyInstaller).
+        env_file=(str(get_user_env_file()), ".env"),
         env_file_encoding="utf-8",
     )
 
@@ -260,6 +260,16 @@ class AppSettings(BaseSettings):
         if self.proxy_api_key:
             return "residential"  # default when key is set
         return None
+
+    sensitive_inferences: bool = Field(
+        default=False,
+        description="Include personality, ideology and attack-surface inferences in AI reports.",
+    )
+    report_retention_days: int | None = Field(
+        default=None,
+        ge=1,
+        description="Delete saved reports older than this many days. Unset keeps them.",
+    )
 
     # ── Agent Mode ───────────────────────────────────────────────────
     agent_max_steps: int = Field(

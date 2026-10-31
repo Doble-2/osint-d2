@@ -12,6 +12,7 @@ Covers:
 from __future__ import annotations
 
 import json
+from http_fakes import stream_of
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -244,7 +245,7 @@ class TestFetchUrlSSRFIntegration:
         @asynccontextmanager
         async def mock_client_cm(*args, **kwargs):
             client = AsyncMock()
-            client.get = AsyncMock(return_value=resp)
+            client.stream = stream_of(resp)
             yield client
 
         # Patch DNS to return a public IP so the guard passes

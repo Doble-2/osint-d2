@@ -15,6 +15,7 @@ from core.config import AppSettings
 from core.domain.language import Language
 from cli.app import app
 from cli.shared import (
+    SENSITIVE_INFERENCES_OPTION, apply_sensitive_inferences,
     AI_PROVIDER_HELP, apply_proxy_overrides, configure_ai_for_run,
     err_console, out_console, resolve_language, validate_ai_options, validate_trust,
 )
@@ -27,6 +28,7 @@ def agent(
         ...,
         help="Investigation target or free-form objective (e.g. 'johndoe', 'user@example.com').",
     ),
+    sensitive_inferences: bool = SENSITIVE_INFERENCES_OPTION,
     ai_provider: str | None = typer.Option(
         None,
         "--ai-provider",
@@ -107,6 +109,7 @@ def agent(
     ),
 ) -> None:
     trust_anchors = validate_trust(trust)
+    apply_sensitive_inferences(sensitive_inferences)
     validate_ai_options(analysis=True, ai_provider=ai_provider, ai_key=ai_key)
     language = resolve_language(language)
     settings = apply_proxy_overrides(
@@ -260,6 +263,11 @@ async def agent_async(
         console.print(
             f"  [bold green]✓[/bold green] Agent concluded in "
             f"[bold]{result.total_steps}[/bold] steps.\n"
+        )
+    elif result.person.analysis:
+        console.print(
+            f"  [bold yellow]⚠[/bold yellow] Agent ran out of steps; the report covers "
+            f"what it found in {result.total_steps} step(s).\n"
         )
     else:
         console.print(

@@ -38,7 +38,7 @@ class TestAgentPrompts:
         assert language in PROMPTS
 
     def test_system_prompt_keeps_the_rules(self, language):
-        prompt = build_system_prompt(language=language, max_steps=7)
+        prompt = build_system_prompt(language=language, max_steps=7, sensitive_inferences=True)
         assert "{max_steps}" not in prompt
         assert "7" in prompt
         for token in ("generate_report", "BM25", "stylometric_score", "hamming_distance", "similarity_percentage", "OCEAN", "OpSec", "0.70"):

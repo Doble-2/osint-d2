@@ -19,7 +19,7 @@ from rich.markup import escape
 from typer import rich_utils
 
 from cli.app import app
-from cli.commands import agent, phone, scanning, serve  # noqa: F401  (registers the commands)
+from cli.commands import agent, phone, purge, scanning, serve  # noqa: F401  (registers the commands)
 from cli.commands.wizard import wizard
 from cli.doctor import app as doctor_app
 from cli.shared import err_console

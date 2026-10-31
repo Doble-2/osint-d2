@@ -134,6 +134,9 @@ _EMAIL_SCANNERS = (
     UbuntuKeyserverScanner,
 )
 
+# Discovered identifiers come from third-party pages: they must not grow the scan forever.
+_MAX_PIVOTS = 25
+
 _STRICT_SHERLOCK_DENYLIST: set[str] = {
     "avizo",
     "fanpop",
@@ -167,7 +170,7 @@ def sanitize_target_for_filename(value: str) -> str:
             out.append("_")
         else:
             out.append("-")
-    cleaned = "".join(out).strip("-_")
+    cleaned = "".join(out)[:80].strip("-_.")
     return cleaned or "target"
 
 
@@ -235,6 +238,7 @@ async def hunt(
     all_emails = set(emails)
     scanned_usernames: set[str] = set()
     scanned_emails: set[str] = set()
+    pivot_limit_hit = False
 
     async def safe_scan(
         scanner: object,
@@ -261,6 +265,7 @@ async def hunt(
             if network == "x":
                 fallback_url = f"https://x.com/{value}"
             metadata: dict[str, object] = {"error": str(exc), "scanner": name}
+            value = value[:128]  # SocialProfile's limit; the failure must not abort the scan.
             if derived_from:
                 metadata["derived_from"] = derived_from
             return [
@@ -290,14 +295,6 @@ async def hunt(
                     extra_usernames.add(val)
                 elif isinstance(val, list):
                     extra_usernames.update([v for v in val if isinstance(v, str)])
-            for key in ("other_websites", "websites", "website"):
-                val = metadata.get(key)
-                if isinstance(val, str) and not val.startswith("http"):
-                    extra_usernames.add(val)
-                elif isinstance(val, list):
-                    for v in val:
-                        if isinstance(v, str) and not v.startswith("http"):
-                            extra_usernames.add(v)
         cleaned_emails = {e.strip().lower() for e in extra_emails if e and "@" in e}
         cleaned_usernames = {u.strip() for u in extra_usernames if u.strip()}
         return cleaned_usernames, cleaned_emails
@@ -341,10 +338,20 @@ async def hunt(
                 for result in local_results:
                     profiles.extend(result)
                 all_usernames.update(localparts)
+                scanned_usernames.update(localparts)
 
         extra_usernames, extra_emails = extract_extras(profiles)
-        all_usernames.update(extra_usernames)
-        all_emails.update(extra_emails)
+        new_extras = (extra_usernames - all_usernames, extra_emails - all_emails)
+        for found, known in zip(new_extras, (all_usernames, all_emails)):
+            room = max(0, _MAX_PIVOTS - len(known))
+            pivot_limit_hit = pivot_limit_hit or len(found) > room
+            known.update(sorted(found)[:room])
+
+    if pivot_limit_hit:
+        message = f"Pivot limit reached ({_MAX_PIVOTS}): some discovered identifiers were not scanned."
+        warnings.append(message)
+        if hooks.warning:
+            hooks.warning(message)
 
     usernames = sorted(all_usernames)
     emails = sorted(all_emails)
@@ -463,7 +470,8 @@ async def hunt(
         target_parts.append("/".join(usernames))
     if emails:
         target_parts.append("/".join(emails))
-    target_label = "/".join(target_parts) or "target"
+    # PersonEntity.target allows 256 characters; pages can list any number of emails.
+    target_label = "/".join(target_parts)[:256] or "target"
 
     person = PersonEntity(target=target_label, profiles=profiles)
 

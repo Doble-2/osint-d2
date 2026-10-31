@@ -10,6 +10,7 @@ Covers:
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from http_fakes import stream_of
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -31,7 +32,7 @@ def _mock_response(*, status_code: int = 200, text: str = "", url: str = "https:
 @asynccontextmanager
 async def _mock_client_cm(response: MagicMock):
     client = AsyncMock()
-    client.get = AsyncMock(return_value=response)
+    client.stream = stream_of(response)
     yield client
 
 
@@ -146,7 +147,7 @@ class TestEnrichProfilesFromHTML:
         @asynccontextmanager
         async def failing_client(*args, **kwargs):
             client = AsyncMock()
-            client.get = AsyncMock(side_effect=ConnectionError("simulated"))
+            client.stream = stream_of(ConnectionError("simulated"))
             yield client
 
         with patch("adapters.profile_enricher.build_async_client", return_value=failing_client()):

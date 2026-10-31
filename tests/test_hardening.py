@@ -22,11 +22,12 @@ from adapters.web_server import (
     _build_objective,
     _inject_graph_page_into_html,
     _run_investigation,
-    _safe_filename,
     active_sessions,
     app,
 )
 from core.config import AppSettings, write_user_env_vars
+from core.services.identity_pipeline import sanitize_target_for_filename
+from http_fakes import stream_of
 from core.domain.language import Language
 from core.domain.models import AnalysisReport, PersonEntity
 from core.services.agent_engine import AgentEngine, AgentResult, AgentStep, _parse_confidence
@@ -56,7 +57,7 @@ def _response(status: int, url: str, *, location: str | None = None, body: str =
 
 def _client_returning(*responses: MagicMock):
     http_client = AsyncMock()
-    http_client.get = AsyncMock(side_effect=list(responses))
+    http_client.stream = stream_of(*responses)
 
     @asynccontextmanager
     async def factory(*args, **kwargs):
@@ -95,7 +96,7 @@ class TestGuardedFetch:
             result = json.loads(await execute_tool("fetch_url", {"url": "https://evil.example/"}, settings=AppSettings()))
 
         assert "SSRF blocked" in result["error"]
-        assert http_client.get.await_count == 1
+        assert http_client.stream.calls == 1
 
     @pytest.mark.asyncio
     async def test_fetch_url_follows_public_relative_redirect(self):
@@ -132,7 +133,7 @@ class TestGuardedFetch:
             ))
 
         assert "SSRF blocked" in result["error"]
-        http_client.get.assert_not_awaited()
+        assert http_client.stream.calls == 0
 
 
 class TestDossierMarkdown:
@@ -350,7 +351,7 @@ class TestDownloads:
 class TestFilesAndMarkup:
     @pytest.mark.parametrize("value", ["../../etc/passwd", "..\\..\\win", "a/b c@d", "...", ""])
     def test_safe_filename_cannot_escape_directory(self, value):
-        name = _safe_filename(value)
+        name = sanitize_target_for_filename(value)
         assert name
         assert "/" not in name and "\\" not in name
         assert not name.startswith(".")

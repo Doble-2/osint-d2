@@ -352,6 +352,10 @@
               <input type="checkbox" id="breach-check-input">
               <span>{{ t.label_breach }}<small>{{ t.hint_breach }}</small></span>
             </label>
+            <label class="check-row">
+              <input type="checkbox" id="sensitive-inferences-input">
+              <span>{{ t.label_sensitive }}<small>{{ t.hint_sensitive }}</small></span>
+            </label>
           </div>
         </div>
       </div>
@@ -563,7 +567,7 @@
       try {
         const resp = await fetch('/api/investigate', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ target, usernames, emails, phones, trust_anchors: anchors, mode, ai_provider: aiProvider, language: lang, max_steps: maxSteps, enable_breach_check: enableBreachCheck })
+          body: JSON.stringify({ target, usernames, emails, phones, trust_anchors: anchors, mode, ai_provider: aiProvider, language: lang, max_steps: maxSteps, enable_breach_check: enableBreachCheck, sensitive_inferences: document.getElementById('sensitive-inferences-input').checked })
         });
         const data = await resp.json();
         if (!resp.ok) throw new Error(typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail));
@@ -677,6 +681,7 @@
     function saveForm() {
       const data = Object.fromEntries(FORM_FIELDS.map(id => [id, document.getElementById(id).value]));
       data['breach-check-input'] = document.getElementById('breach-check-input').checked;
+      data['sensitive-inferences-input'] = document.getElementById('sensitive-inferences-input').checked;
       storeSession('osint-d2-form', JSON.stringify(data));
     }
     function restoreForm() {
@@ -687,6 +692,7 @@
         if (data[id] != null) document.getElementById(id).value = data[id];
       });
       document.getElementById('breach-check-input').checked = Boolean(data['breach-check-input']);
+      document.getElementById('sensitive-inferences-input').checked = Boolean(data['sensitive-inferences-input']);
     }
 
     // Reconnect after a reload: the server replays every event of the run.
@@ -798,7 +804,7 @@
     function updateModeUI() {
       const isAgent = document.getElementById('mode-select').value === 'agent';
       const provider = document.getElementById('ai-provider-select');
-      ['ai-provider-select', 'max-steps-input', 'breach-check-input'].forEach(id => { document.getElementById(id).disabled = !isAgent; });
+      ['ai-provider-select', 'max-steps-input', 'breach-check-input', 'sensitive-inferences-input'].forEach(id => { document.getElementById(id).disabled = !isAgent; });
       updateFormSummary();
       document.getElementById('api-key-notice').style.display = isAgent && provider.value !== 'ollama' && !(AI_KEY_CONFIGURED && provider.value === CONFIGURED_PROVIDER) ? 'flex' : 'none';
     }
