@@ -32,9 +32,9 @@ from core.services.trust_anchor import (
 
 class TestTrustAnchorParse:
     def test_instagram(self):
-        a = TrustAnchor.parse("instagram:xkissmely")
+        a = TrustAnchor.parse("instagram:xjanelle")
         assert a.network == "instagram"
-        assert a.username == "xkissmely"
+        assert a.username == "xjanelle"
         assert a.is_email is False
 
     def test_email(self):
@@ -112,8 +112,8 @@ class TestHashImageUrl:
 
 class TestExtractNameFromEmail:
     def test_dot_separated(self):
-        parts = _extract_name_from_email("kissmely.marcano@gmail.com")
-        assert parts == ["kissmely", "marcano"]
+        parts = _extract_name_from_email("janelle.rivera@gmail.com")
+        assert parts == ["janelle", "rivera"]
 
     def test_underscore_separated(self):
         parts = _extract_name_from_email("john_doe@gmail.com")
@@ -125,11 +125,11 @@ class TestExtractNameFromEmail:
 
     def test_concatenated_with_hint(self):
         parts = _extract_name_from_email(
-            "kissmelymarcano@gmail.com",
-            known_usernames=["xkissmely"],
+            "janellerivera@gmail.com",
+            known_usernames=["xjanelle"],
         )
-        assert "kissmely" in parts
-        assert "marcano" in parts
+        assert "janelle" in parts
+        assert "rivera" in parts
 
     def test_single_short_word(self):
         parts = _extract_name_from_email("joe@gmail.com")
@@ -171,22 +171,22 @@ class TestBuildReference:
         return SocialProfile(**defaults)
 
     def test_builds_from_email_anchor(self):
-        anchors = [TrustAnchor.parse("email:kissmelymarcano@gmail.com")]
+        anchors = [TrustAnchor.parse("email:janellerivera@gmail.com")]
         ref = build_reference_from_profiles([], anchors)
-        assert "kissmelymarcano@gmail.com" in ref.emails
+        assert "janellerivera@gmail.com" in ref.emails
         assert len(ref.names) > 0  # Should extract name from email
 
     def test_builds_from_network_anchor(self):
         profile = self._make_profile(
             network_name="instagram",
-            username="xkissmely",
-            metadata={"name": "Kissmely Marcano"},
+            username="xjanelle",
+            metadata={"name": "Janelle Rivera"},
             bio="Photographer and designer",
         )
-        anchors = [TrustAnchor.parse("instagram:xkissmely")]
+        anchors = [TrustAnchor.parse("instagram:xjanelle")]
         ref = build_reference_from_profiles([profile], anchors)
         assert "instagram" in ref.trusted_networks
-        assert any("kissmely" in n for n in ref.names)
+        assert any("janelle" in n for n in ref.names)
         assert len(ref.bio_keywords) > 0
 
     def test_ignores_non_matching_profiles(self):
@@ -195,18 +195,18 @@ class TestBuildReference:
             username="someoneelse",
             metadata={"name": "Other Person"},
         )
-        anchors = [TrustAnchor.parse("instagram:xkissmely")]
+        anchors = [TrustAnchor.parse("instagram:xjanelle")]
         ref = build_reference_from_profiles([profile], anchors)
         assert ref.is_empty()
 
     def test_extracts_avatar_hash(self):
         profile = self._make_profile(
             network_name="instagram",
-            username="xkissmely",
-            metadata={"name": "Kissmely"},
+            username="xjanelle",
+            metadata={"name": "Janelle"},
             image_url="https://cdn.instagram.com/avatar.jpg",
         )
-        anchors = [TrustAnchor.parse("instagram:xkissmely")]
+        anchors = [TrustAnchor.parse("instagram:xjanelle")]
         ref = build_reference_from_profiles([profile], anchors)
         assert len(ref.avatar_hashes) == 1
 
@@ -245,33 +245,33 @@ class TestVerifyProfile:
 
     def test_trusted_profile_always_verified(self):
         ref = self._make_ref(
-            names={"kissmely marcano"},
-            trusted_networks={"instagram": "xkissmely"},
+            names={"janelle rivera"},
+            trusted_networks={"instagram": "xjanelle"},
         )
         profile = self._make_profile(
             network_name="instagram",
-            username="xkissmely",
+            username="xjanelle",
         )
         result = verify_profile(profile, ref)
         assert result.verified is True
         assert result.confidence == 1.0
 
     def test_matching_name_high_confidence(self):
-        ref = self._make_ref(names={"kissmely marcano"})
+        ref = self._make_ref(names={"janelle rivera"})
         profile = self._make_profile(
-            metadata={"name": "Kissmely Marcano"},
+            metadata={"name": "Janelle Rivera"},
         )
         result = verify_profile(profile, ref)
         assert result.verified is True
         assert result.confidence >= 0.8
 
     def test_contradicting_name_low_confidence(self):
-        ref = self._make_ref(names={"kissmely marcano"})
+        ref = self._make_ref(names={"janelle rivera"})
         profile = self._make_profile(
-            metadata={"name": "Kissmely Almonte"},
+            metadata={"name": "Janelle Castro"},
         )
         result = verify_profile(profile, ref)
-        # "almonte" contradicts "marcano" — should flag
+        # "castro" contradicts "rivera" — should flag
         assert result.confidence < 0.5
 
     def test_no_name_data_neutral(self):
@@ -306,12 +306,12 @@ class TestFilterProfilesByTrust:
         assert result[0].exists is True
 
     def test_non_verified_marked_false_when_remove(self):
-        ref = ReferenceIdentity(names={"kissmely marcano"})
+        ref = ReferenceIdentity(names={"janelle rivera"})
         profiles = [
             self._make_profile(
                 network_name="pinterest",
-                username="kissmely_almonte",
-                metadata={"name": "Kissmely Almonte"},
+                username="janelle_castro",
+                metadata={"name": "Janelle Castro"},
             ),
         ]
         result = filter_profiles_by_trust(profiles, ref, remove=True)
@@ -320,10 +320,10 @@ class TestFilterProfilesByTrust:
         assert result[0].metadata.get("trust_discarded") is True
 
     def test_annotates_without_removing_by_default(self):
-        ref = ReferenceIdentity(names={"kissmely marcano"})
+        ref = ReferenceIdentity(names={"janelle rivera"})
         profiles = [
             self._make_profile(
-                metadata={"name": "Kissmely Almonte"},
+                metadata={"name": "Janelle Castro"},
             ),
         ]
         result = filter_profiles_by_trust(profiles, ref, remove=False)

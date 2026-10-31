@@ -1,7 +1,7 @@
 """Trust-anchor identity verification.
 
 "Ground truth" anchors let the user declare which profiles are *known*
-to belong to the target (e.g. ``--trust instagram:xkissmely``).
+to belong to the target (e.g. ``--trust instagram:xjanelle``).
 
 Workflow:
 1.  **Build reference** — scan trusted sources first to collect identity
@@ -41,9 +41,9 @@ class TrustAnchor:
 
         Examples::
 
-            TrustAnchor.parse("instagram:xkissmely")
+            TrustAnchor.parse("instagram:xjanelle")
             TrustAnchor.parse("github:doble-2")
-            TrustAnchor.parse("email:kissmelymarcano@gmail.com")
+            TrustAnchor.parse("email:janellerivera@gmail.com")
         """
         if ":" not in raw:
             raise ValueError(
@@ -115,13 +115,13 @@ def _extract_name_from_email(
 
     If ``known_usernames`` is provided, the function tries to use them
     as a hint for splitting concatenated names.  E.g. knowing the
-    username "xkissmely" helps split "kissmelymarcano" into
-    "kissmely" + "marcano".
+    username "xjanelle" helps split "janellerivera" into
+    "janelle" + "rivera".
 
     Examples::
 
-        kissmelymarcano@gmail.com  → ["kissmely", "marcano"]  (with hint)
-        kissmely.marcano@gmail.com → ["kissmely", "marcano"]
+        janellerivera@gmail.com  → ["janelle", "rivera"]  (with hint)
+        janelle.rivera@gmail.com → ["janelle", "rivera"]
         john_doe@gmail.com        → ["john", "doe"]
     """
     local_part = email.split("@")[0].lower()
@@ -180,9 +180,9 @@ def build_reference_from_profiles(
     """Build a reference identity from trusted profiles and anchors.
 
     Supports two anchor types:
-    - **Network anchors** (``instagram:xkissmely``): match against
+    - **Network anchors** (``instagram:xjanelle``): match against
       scanned profiles to extract identity signals.
-    - **Email anchors** (``email:kissmelymarcano@gmail.com``): extract
+    - **Email anchors** (``email:janellerivera@gmail.com``): extract
       name parts directly from the email address.
     """
     ref = ReferenceIdentity()
@@ -329,8 +329,8 @@ def verify_profile(
                 # Check for NAME CONTRADICTION: if the profile has a
                 # last name / word that does NOT appear in ANY reference
                 # name, it's likely a different person.
-                # e.g. reference="kissmely marcano", profile="kissmely almonte"
-                #      → "almonte" contradicts → penalize heavily
+                # e.g. reference="janelle rivera", profile="janelle castro"
+                #      → "castro" contradicts → penalize heavily
                 if overlap and contradiction:
                     # Has some matching words but also contradicting ones
                     # Check if contradicting words look like a different surname

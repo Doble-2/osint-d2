@@ -228,10 +228,10 @@ class TestTelegramScanner:
             <meta property="og:image" content="https://cdn.telegram.org/avatar.jpg">
         </body></html>"""
 
-        resp = _mock_response(status_code=200, text=html, url="https://t.me/chadfowler")
+        resp = _mock_response(status_code=200, text=html, url="https://t.me/johndoe")
         with patch("adapters.osint_sources.telegram.build_async_client", return_value=_mock_client(resp)):
             scanner = TelegramScanner()
-            profile = await scanner.scan("chadfowler")
+            profile = await scanner.scan("johndoe")
 
         assert profile.exists is True
         assert profile.network_name == "telegram"

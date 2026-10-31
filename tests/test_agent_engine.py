@@ -64,7 +64,7 @@ class TestTrustAnchorMessage:
 
     def test_trust_anchors_format_instagram(self):
         """Trust anchors should be formatted in the user content."""
-        anchors = ["instagram:xkissmely", "email:test@test.com"]
+        anchors = ["instagram:xjanelle", "email:test@test.com"]
         anchor_lines = []
         for anchor_str in anchors:
             parts = anchor_str.split(":", 1)
@@ -75,7 +75,7 @@ class TestTrustAnchorMessage:
                 else:
                     anchor_lines.append(f"- VERIFIED {net.upper()} account: @{user}")
 
-        assert "VERIFIED INSTAGRAM account: @xkissmely" in anchor_lines[0]
+        assert "VERIFIED INSTAGRAM account: @xjanelle" in anchor_lines[0]
         assert "VERIFIED EMAIL: test@test.com" in anchor_lines[1]
 
 
