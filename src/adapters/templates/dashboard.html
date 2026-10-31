@@ -98,6 +98,9 @@
     .check-row { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; color: var(--text); cursor: pointer; line-height: 1.4; }
     .check-row input { accent-color: var(--accent); margin-top: 2px; }
     .check-row small { display: block; font-size: 12px; color: var(--text-3); }
+    .notice-body { display: flex; flex-direction: column; gap: 8px; flex: 1; min-width: 0; }
+    .key-form { display: flex; gap: 6px; }
+    .key-form input { flex: 1; min-width: 0; }
     .notice { display: flex; gap: 8px; align-items: flex-start; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--orange-bg); color: var(--orange); font-size: 12px; line-height: 1.5; }
     .sidebar-footer { padding: 12px 16px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px; }
     .btn-launch { width: 100%; padding: 10px 16px; font-size: 13px; }
@@ -254,7 +257,14 @@
       <div id="vector-form" class="sidebar-form">
         <div id="api-key-notice" class="notice" role="note" style="display:none">
           <i class="fa-solid fa-triangle-exclamation" aria-hidden="true" style="margin-top:2px"></i>
-          <span>{{ t.warn_no_api_key }}</span>
+          <div class="notice-body">
+            <span>{{ t.warn_no_api_key }}</span>
+            <form id="api-key-form" class="key-form" onsubmit="saveApiKey(event)" autocomplete="off">
+              <input type="password" id="api-key-input" class="form-input" aria-label="{{ t.label_api_key }}" placeholder="{{ t.label_api_key }}" autocomplete="off" required maxlength="512">
+              <button type="submit" class="btn">{{ t.btn_save_key }}</button>
+            </form>
+            <span id="api-key-status" role="status"></span>
+          </div>
         </div>
 
         <!-- Subject -->
@@ -677,6 +687,28 @@
     function readSession(key) {
       try { return sessionStorage.getItem(key); } catch (e) { return null; }
     }
+    // The key is never kept in the page: the form state below doesn't include it.
+    async function saveApiKey(event) {
+      event.preventDefault();
+      const input = document.getElementById('api-key-input');
+      const status = document.getElementById('api-key-status');
+      status.textContent = '';
+      try {
+        const res = await fetch('/api/ai-key', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ provider: document.getElementById('ai-provider-select').value, api_key: input.value }),
+        });
+        if (!res.ok) throw new Error(String(res.status));
+        const result = await res.json();
+        input.value = '';
+        if (result.active) { saveForm(); location.reload(); return; }
+        status.textContent = T.key_saved_overridden;
+      } catch (e) {
+        status.textContent = T.key_save_failed;
+      }
+    }
+
     const FORM_FIELDS = ['target-input', 'usernames-input', 'emails-input', 'phones-input', 'anchors-input', 'mode-select', 'ai-provider-select', 'lang-select', 'max-steps-input'];
     function saveForm() {
       const data = Object.fromEntries(FORM_FIELDS.map(id => [id, document.getElementById(id).value]));

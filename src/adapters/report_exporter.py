@@ -12,12 +12,16 @@ from pathlib import Path
 from urllib.parse import urlparse
 from urllib.request import url2pathname
 import re
+import contextlib
+import io
 import sys
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 try:
-    from weasyprint import HTML
+    # When libraries are missing, WeasyPrint prints a banner to stdout, which carries JSON output.
+    with contextlib.redirect_stdout(io.StringIO()):
+        from weasyprint import HTML
 except (ImportError, OSError):
     # Missing system libraries (cairo, pango, gdk-pixbuf) cause OSError.
     HTML = None

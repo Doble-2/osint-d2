@@ -10,6 +10,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from adapters.browser import can_install_chromium, chromium_path, install_chromium
 from adapters.http_client import build_async_client
 from adapters.report_exporter import export_person_pdf
 from core.config import AI_PROVIDER_PRESETS, AppSettings, write_user_env_vars
@@ -19,6 +20,7 @@ from core.domain.models import PersonEntity
 app = typer.Typer(no_args_is_help=True, help="Environment diagnostics and configuration checks.")
 
 _console = Console()
+_CHROMIUM_FIX = "run `osint-d2 doctor install-browser`."
 
 
 async def _check_http(url: str) -> tuple[bool, str]:
@@ -45,14 +47,8 @@ def _check_pdf() -> tuple[bool, str]:
 def _check_chromium() -> tuple[bool, str]:
     """Check that Playwright's browser, used for dashboard PDFs and graphs, exists."""
 
-    async def probe() -> str:
-        from playwright.async_api import async_playwright
-
-        async with async_playwright() as playwright:
-            return playwright.chromium.executable_path
-
     try:
-        path = asyncio.run(probe())
+        path = chromium_path()
     except Exception as exc:
         return False, str(exc)
     return Path(path).exists(), path
@@ -97,20 +93,18 @@ def run() -> None:
 
     # PDF
     ok_pdf, detail_pdf = _check_pdf()
-    table.add_row("WeasyPrint PDF", "OK" if ok_pdf else "[red]FAIL[/red]", detail_pdf)
+    table.add_row("CLI PDFs (optional)", "OK" if ok_pdf else "[yellow]NOT INSTALLED[/yellow]", detail_pdf)
     if not ok_pdf:
-        failed = True
         fixes.append(
-            "PDF: install Cairo, Pango, and GDK-Pixbuf (see the installation guide). "
-            "Until then, --export-pdf falls back to HTML."
+            "Optional, for --export-pdf: install Pango (see the installation guide). "
+            "Scans work without it, and --export-pdf falls back to HTML."
         )
 
     # Chromium
     ok_chromium, detail_chromium = _check_chromium()
-    table.add_row("Chromium", "OK" if ok_chromium else "[red]FAIL[/red]", detail_chromium)
+    table.add_row("Chromium (optional)", "OK" if ok_chromium else "[yellow]NOT INSTALLED[/yellow]", detail_chromium)
     if not ok_chromium:
-        failed = True
-        fixes.append("Chromium: run `playwright install chromium`. Dashboard PDFs and graphs need it.")
+        fixes.append(f"Optional, for dashboard PDFs and graph images: {_CHROMIUM_FIX}")
 
     # Proxy (ScrapingAnt)
     proxy_mode = settings.effective_proxy_mode
@@ -133,6 +127,19 @@ def run() -> None:
 
     if failed:
         raise typer.Exit(code=1)
+
+
+@app.command(name="install-browser")
+def install_browser() -> None:
+    """Download Chromium, used for dashboard PDFs and graph images."""
+
+    if not can_install_chromium():
+        _console.print("This build can't install Chromium itself. See the installation guide.")
+        raise typer.Exit(code=1)
+    if not install_chromium():
+        _console.print("[red]Chromium could not be installed.[/red] Check your connection and try again.")
+        raise typer.Exit(code=1)
+    _console.print("[green]Chromium is installed.[/green]")
 
 
 @app.command(name="setup-ai")

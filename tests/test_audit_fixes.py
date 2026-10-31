@@ -11,7 +11,7 @@ import pytest
 
 from adapters.http_client import MAX_BODY_BYTES, extract_html_metadata, get_limited
 from adapters.rate_limiter import DomainRateLimiter
-from core.config import AppSettings, write_user_env_vars
+from core.config import ENV_FILES, AppSettings, write_user_env_vars
 from core.domain.models import SocialProfile
 from core.services import identity_pipeline
 from core.services.agent_engine import AgentEngine
@@ -113,7 +113,7 @@ class TestPipeline:
 class TestSettings:
     def test_project_env_wins_over_user_env(self):
         # pydantic-settings gives priority to the last file.
-        assert AppSettings.model_config["env_file"][-1] == ".env"
+        assert ENV_FILES[-1] == ".env"
 
     def test_unreadable_user_env_keeps_its_content(self, tmp_path, monkeypatch):
         monkeypatch.setattr("core.config.get_user_env_file", lambda: tmp_path / ".env")

@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 
-import typer
+import sys
 
+import typer
+from rich.console import Console
+
+from adapters.browser import can_install_chromium, chromium_installed, install_chromium
 from adapters.report_store import purge_expired
 from core.config import AppSettings
 from cli.ui_components import print_banner
@@ -12,6 +16,18 @@ from cli.app import app
 from cli.shared import (
     out_console,
 )
+
+
+def _offer_chromium(console: Console) -> None:
+    """Dashboard PDFs need Chromium; ask here because the server can't ask later."""
+    if chromium_installed() or not can_install_chromium():
+        return
+    if not (sys.stdin.isatty() and sys.stdout.isatty()):
+        console.print("[yellow]Chromium is missing, so dashboard PDFs are off.[/yellow] Run: osint-d2 doctor install-browser")
+        return
+    if typer.confirm("Dashboard PDFs need Chromium, a large download. Install it now?", default=True):
+        if not install_chromium():
+            console.print("[yellow]Chromium could not be installed, so dashboard PDFs are off.[/yellow]")
 
 
 @app.command(name="serve", help="Launch the real-time web dashboard (FastAPI + WebSockets).")
@@ -28,6 +44,7 @@ def serve(
     purged = purge_expired(AppSettings().report_retention_days)
     if purged:
         console.print(f"[dim]Deleted {purged} report file(s) past the retention period.[/dim]")
+    _offer_chromium(console)
     console.print(f"[bold cyan]Starting Live Intelligence Dashboard at:[/bold cyan] [underline green]http://{host}:{port}[/underline green]")
     if host not in ("127.0.0.1", "localhost", "::1"):
         console.print(

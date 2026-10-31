@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 
 from pydantic import Field, SecretStr, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, DotEnvSettingsSource, SettingsConfigDict
 
 from core.domain.language import Language
 
@@ -94,6 +94,10 @@ def write_user_env_vars(values: dict[str, str]) -> Path:
     return env_path
 
 
+# Gana el último: el .env del proyecto (dev) prevalece sobre el global (PyInstaller).
+ENV_FILES = (str(get_user_env_file()), ".env")
+
+
 class AppSettings(BaseSettings):
     """Configuración central de la aplicación.
 
@@ -106,8 +110,7 @@ class AppSettings(BaseSettings):
         env_prefix="OSINT_D2_",
         extra="ignore",
         case_sensitive=False,
-        # Gana el último: el .env del proyecto (dev) prevalece sobre el global (PyInstaller).
-        env_file=(str(get_user_env_file()), ".env"),
+        env_file=ENV_FILES,
         env_file_encoding="utf-8",
     )
 
@@ -232,6 +235,15 @@ class AppSettings(BaseSettings):
         default="",
         description="2-letter country code for geo-targeted proxies (e.g. 'us').",
     )
+
+    @classmethod
+    def settings_customise_sources(
+        cls, settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings,
+    ):
+        # `cp .env.example .env` leaves blank keys, which must not hide the saved ones.
+        # Only in files: a blank environment variable still clears a setting on purpose.
+        dotenv = DotEnvSettingsSource(settings_cls, env_file=dotenv_settings.env_file, env_ignore_empty=True)
+        return init_settings, env_settings, dotenv, file_secret_settings
 
     @model_validator(mode="after")
     def _apply_provider_preset(self) -> "AppSettings":

@@ -30,16 +30,17 @@ from fastapi.staticfiles import StaticFiles
 from jinja2 import Environment, FileSystemLoader
 from markupsafe import Markup
 from playwright.async_api import Error as PlaywrightError
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, SecretStr, field_validator
 
 from core import __version__
-from core.config import AI_PROVIDER_PRESETS, AppSettings
+from core.config import AI_PROVIDER_PRESETS, AppSettings, write_user_env_vars
 from core.domain.language import Language
 from core.domain.models import PersonEntity
 from core.services.agent_engine import AgentEngine, AgentResult, AgentStep
 from core.services.agent_prompts import build_objective
 from core.services.identity_pipeline import sanitize_target_for_filename
 from core.services.url_guard import SSRFBlockedError, validate_url
+from adapters.browser import chromium_installed
 from adapters.chain_builder import ChainBuilder
 from adapters.i18n import TEMPLATES_DIR, load_translations
 from adapters.graph_exporter import GraphExporter
@@ -118,6 +119,18 @@ class InvestigationRequest(BaseModel):
     @classmethod
     def _language_supported(cls, value: str) -> str:
         Language.from_str(value)
+        return value
+
+
+class AiKeyRequest(BaseModel):
+    provider: str
+    api_key: SecretStr
+
+    @field_validator("provider")
+    @classmethod
+    def _provider_known(cls, value: str) -> str:
+        if value not in AI_PROVIDER_PRESETS:
+            raise ValueError(f"unknown provider; choose one of: {', '.join(AI_PROVIDER_PRESETS)}")
         return value
 
 
@@ -327,6 +340,30 @@ async def get_dashboard(request: Request, lang: str | None = None):
         ai_provider=settings.ai_provider.lower(),
         ai_key_configured=bool(settings.ai_api_key),
     ))
+
+
+@app.post("/api/ai-key")
+async def save_ai_key(req: AiKeyRequest):
+    """Store the key in the user config, like `doctor setup-ai`, for people who don't use a terminal."""
+    # Checked here because validation errors repeat their input, and this input is a secret.
+    # Printable characters only: a line break could add other settings to the file.
+    if not re.fullmatch(r"[\x21-\x7e]{1,512}", req.api_key.get_secret_value()):
+        raise HTTPException(status_code=422, detail="The key is empty, too long, or has invalid characters.")
+    preset = AI_PROVIDER_PRESETS[req.provider]
+    try:
+        await asyncio.to_thread(write_user_env_vars, {
+            "OSINT_D2_AI_PROVIDER": req.provider,
+            "OSINT_D2_AI_BASE_URL": preset["base_url"],
+            "OSINT_D2_AI_MODEL": preset["model"],
+            "OSINT_D2_AI_API_KEY": req.api_key.get_secret_value(),
+        })
+    except (OSError, UnicodeError) as exc:
+        logger.warning("Could not save the AI key: %s", type(exc).__name__)
+        raise HTTPException(status_code=500, detail="Could not save the settings file.") from None
+    # Environment variables and a project .env take priority over the saved file.
+    settings = AppSettings()
+    active = settings.ai_provider.lower() == req.provider and settings.ai_api_key == req.api_key
+    return {"saved": True, "active": active}
 
 
 @app.post("/api/investigate")
@@ -741,6 +778,11 @@ async def _export_artifacts(session: InvestigationSession, result: AgentResult, 
         else:
             await session.broadcast("log", session.t("log_pdf_no_graph"))
         _raise_if_cancelled(session)
+
+        if not await asyncio.to_thread(chromium_installed):
+            session.partial = True
+            await session.broadcast("log", session.t("log_browser_missing"))
+            return
 
         await _render_pdf(html_path, pdf_path)
         session.pdf_path = str(pdf_path)
