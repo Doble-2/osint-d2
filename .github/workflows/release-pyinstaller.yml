@@ -20,10 +20,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.11"
           cache: "pip"
@@ -33,14 +33,13 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            libcairo2 libpango-1.0-0 libpangoft2-1.0-0 \
-            libgdk-pixbuf2.0-0 libffi-dev shared-mime-info
+            libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0 shared-mime-info
 
       - name: Install macOS deps (WeasyPrint)
         if: runner.os == 'macOS'
         run: |
           brew update
-          brew install cairo pango gdk-pixbuf libffi shared-mime-info
+          brew install pango shared-mime-info
 
       # Windows note: WeasyPrint PDF may fail at runtime due to GTK/Cairo.
       # OSINT-D2 falls back to HTML if PDF export fails.
@@ -60,8 +59,10 @@ jobs:
       - name: Smoke test (Linux/macOS)
         if: runner.os != 'Windows'
         run: |
+          ./dist/osint-d2/osint-d2 --version
           ./dist/osint-d2/osint-d2 --help
-          ./dist/osint-d2/osint-d2 doctor run
+          # Informational: exits with 1 here because the runner has no Chromium.
+          ./dist/osint-d2/osint-d2 doctor run || true
 
       - name: Smoke test (Windows)
         if: runner.os == 'Windows'
@@ -71,8 +72,11 @@ jobs:
           PYTHONIOENCODING: utf-8
         run: |
           chcp 65001
+          .\dist\osint-d2\osint-d2.exe --version
           .\dist\osint-d2\osint-d2.exe --help
+          # Informational: Chromium and the PDF libraries are not installed here.
           .\dist\osint-d2\osint-d2.exe doctor run
+          exit 0
 
       - name: Archive artifact (Linux/macOS)
         if: runner.os != 'Windows'
@@ -87,7 +91,7 @@ jobs:
           Compress-Archive -Path dist\osint-d2\* -DestinationPath "dist\osint-d2-Windows.zip" -Force
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: osint-d2-${{ runner.os }}
           path: |
@@ -102,7 +106,7 @@ jobs:
 
     steps:
       - name: Download artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           path: artifacts
 
@@ -111,7 +115,7 @@ jobs:
           ls -R artifacts
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           files: |
             artifacts/**/osint-d2-*.tar.gz
