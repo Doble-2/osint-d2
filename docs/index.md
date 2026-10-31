@@ -11,8 +11,7 @@ hide:
 # OSINT-D2
 
 <p class="os-hero__subtitle">
-Turn a username into a <strong>structured identity dossier</strong>.<br>
-Not a Sherlock wrapper — an <strong>autonomous AI agent</strong> that reasons, pivots, and cross-correlates across 30+ platforms.
+Investigate public identity data with an <strong>AI agent</strong> that follows leads and documents its evidence, or run <strong>direct scans</strong> with no AI at all.
 </p>
 
 <div class="os-hero__actions" markdown>
@@ -24,8 +23,8 @@ Not a Sherlock wrapper — an <strong>autonomous AI agent</strong> that reasons,
 
 <div class="os-stats">
 <div class="os-stat">
-<span class="os-stat__value">30+</span>
-<span class="os-stat__label">Platform Scanners</span>
+<span class="os-stat__value">24</span>
+<span class="os-stat__label">Native Scanners</span>
 </div>
 <div class="os-stat">
 <span class="os-stat__value">9</span>
@@ -33,7 +32,7 @@ Not a Sherlock wrapper — an <strong>autonomous AI agent</strong> that reasons,
 </div>
 <div class="os-stat">
 <span class="os-stat__value">6D</span>
-<span class="os-stat__label">Cognitive Profile</span>
+<span class="os-stat__label">Report Areas</span>
 </div>
 <div class="os-stat">
 <span class="os-stat__value">5</span>
@@ -45,13 +44,12 @@ Not a Sherlock wrapper — an <strong>autonomous AI agent</strong> that reasons,
 
 ---
 
-## Why OSINT-D2?
+## What it is
 
-Most OSINT tools run a **fixed checklist**: scan this list of sites, check this API, generate a report. OSINT-D2 is different — it **thinks**.
+OSINT-D2 is a command-line tool and local dashboard for investigating public identity data. Run direct scans without any AI, or let an agent use function calling to choose its next step: it scans what you give it, reads the results, and follows new leads such as emails and websites.
 
-The core of the platform is an **agentic AI** that uses LLM function calling to autonomously investigate identities. It starts with what you give it (a username, an email), scans it, analyzes the results, and **pivots** — discovering new leads and investigating them without being told to.
-
-**A real investigation**: the agent scanned `torvalds`, found the GitHub profile, extracted two email addresses, scanned both as separate identities, fetched the GitHub and Keybase pages for social links, and identified that multiple people share the handle across platforms — producing a report that distinguishes the real Linus Torvalds from impersonators.
+!!! warning "Use it responsibly"
+    Use OSINT-D2 only for lawful, authorized investigations. Results can be wrong, and scan results go to your AI provider unless you use Ollama. Read [Security & Responsible Use](guides/security.md).
 
 ---
 
@@ -80,7 +78,7 @@ Cross-correlates usernames, emails, bios, avatars, and writing style across plat
 
 ### 6D Cognitive Profiling
 
-Every investigation produces a structured analysis across 6 dimensions: Identity, Geo-temporal, OCEAN Psychology, Tech Stack, Ideology, and OpSec/Attack Surface.
+Agent reports cover 6 areas: Identity, Geo-temporal, OCEAN Psychology, Tech Stack, Ideology, and OpSec/Attack Surface. The personality and ideology sections are speculative inferences.
 </div>
 
 <div class="os-feature" markdown>
@@ -94,9 +92,9 @@ Declare known-good sources (`--trust github:user`). The system builds a referenc
 <div class="os-feature" markdown>
 <span class="os-feature__icon">📊</span>
 
-### Classified-Style PDF Dossiers
+### PDF Dossiers
 
-Generate intelligence briefs with identity cards, OCEAN profiles, risk matrices, and entity graphs. CSS-rendered via WeasyPrint with Playwright fallback.
+Generate reports with identity cards, profile analysis, risk matrices, and entity graphs. The CLI renders them with WeasyPrint, and the dashboard with Chromium.
 </div>
 
 <div class="os-feature" markdown>
@@ -104,7 +102,7 @@ Generate intelligence briefs with identity cards, OCEAN profiles, risk matrices,
 
 ### 5 Languages, Full Stack
 
-English, Spanish, Portuguese, Arabic, Russian — across CLI, web dashboard, AI prompts, and PDF reports. Not just translated labels; the AI system prompt changes per language.
+English, Spanish, Portuguese, Arabic, Russian in the CLI, web dashboard, profiler, and PDF reports. <a href="guides/languages/">See coverage</a>.
 </div>
 
 </div>
@@ -114,18 +112,13 @@ English, Spanish, Portuguese, Arabic, Russian — across CLI, web dashboard, AI 
 ## See It In Action
 
 <div class="os-screenshot">
-<img src="assets/demo.png" alt="OSINT-D2 Agent Investigation">
-<div class="os-screenshot__caption">Agent Mode — autonomous investigation with real-time reasoning</div>
+<img src="assets/dashboard-report.png" alt="Dashboard showing a finished investigation with demo data">
+<div class="os-screenshot__caption">Finished agent investigation in the dashboard (demo data)</div>
 </div>
 
 <div class="os-screenshot">
-<img src="assets/trust_anchors.png" alt="Trust Anchor Verification">
-<div class="os-screenshot__caption">Trust anchors verified 1 source and discarded 2 false positives</div>
-</div>
-
-<div class="os-screenshot">
-<img src="assets/ai_analysis.png" alt="6D Cognitive Profile">
-<div class="os-screenshot__caption">6D cognitive profile — identity, geo-temporal, psychological analysis</div>
+<img src="assets/dashboard-graph.png" alt="Investigation graph with demo data">
+<div class="os-screenshot__caption">Investigation graph: each band is a line of inquiry (demo data)</div>
 </div>
 
 ---
@@ -134,21 +127,22 @@ English, Spanish, Portuguese, Arabic, Russian — across CLI, web dashboard, AI 
 
 ```bash
 git clone https://github.com/Doble-2/osint-d2.git && cd osint-d2
-cp .env.example .env          # Add your API keys
+cp .env.example .env          # Add your AI key
+mkdir -p reports
 docker compose up -d           # Dashboard at http://localhost:8000
 ```
 
 Or investigate from the command line:
 
 ```bash
-# Quick scan across 18+ platforms
+# Quick scan with 20 native scanners, no AI
 osint-d2 scan johndoe
 
 # Autonomous AI agent with 10 reasoning steps
 osint-d2 agent johndoe --ai-provider deepseek --max-steps 10
 
-# Full pipeline with Sherlock (400+ sites) + breach check
-osint-d2 hunt -u johndoe,jdoe123 -e john@example.com --sherlock --breach-check
+# Several targets with Sherlock (about 470 sites)
+osint-d2 hunt -u johndoe,jdoe123 -e john@example.com --sherlock
 ```
 
 [:material-arrow-right: Full Installation Guide](getting-started/installation.md){ .md-button .md-button--primary }

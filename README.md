@@ -1,179 +1,173 @@
 <p align="center">
-  <img src="assets/demo.png" alt="OSINT-D2 — Autonomous Identity Investigation" width="700" />
+  <img src="docs/assets/dashboard-report.png" alt="OSINT-D2 dashboard showing a finished investigation with demo data" width="800" />
 </p>
 
 <h1 align="center">OSINT-D2</h1>
 
 <p align="center">
-  <strong>Agentic OSINT • Identity Intelligence • Cognitive Profiling</strong>
+  <strong>Investigate public identity data with an AI agent that follows leads and documents its evidence.</strong>
 </p>
 
 <p align="center">
+  <a href="https://github.com/Doble-2/osint-d2/actions/workflows/ci.yml"><img src="https://github.com/Doble-2/osint-d2/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <a href="https://github.com/Doble-2/osint-d2/releases"><img src="https://img.shields.io/github/v/release/Doble-2/osint-d2" alt="Latest release" /></a>
   <a href="https://osint-d2.angelcalderon.dev"><img src="https://img.shields.io/badge/Docs-osint--d2.angelcalderon.dev-2dd4bf?logo=readthedocs&logoColor=white" alt="Docs" /></a>
-  <a href="#quick-start"><img src="https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white" alt="Python" /></a>
-  <a href="#quick-start"><img src="https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker&logoColor=white" alt="Docker" /></a>
-  <a href="#quick-start"><img src="https://img.shields.io/badge/AI-DeepSeek%20%7C%20OpenAI%20%7C%20Ollama-111827?logo=openai&logoColor=white" alt="AI" /></a>
-  <a href="https://scrapingant.com/?ref=odeymdu"><img src="https://img.shields.io/badge/Proxies-ScrapingAnt-FF6B35" alt="ScrapingAnt" /></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-success" alt="License" /></a>
+  <img src="https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white" alt="Python 3.11+" />
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-success" alt="MIT license" /></a>
 </p>
 
----
+> [!IMPORTANT]
+> **Use OSINT-D2 only for lawful, authorized investigations.** It collects and infers information about people. Privacy law can apply even to public data, results can be wrong, and scan results are sent to your AI provider unless you use Ollama. Read [Security & Responsible Use](https://osint-d2.angelcalderon.dev/guides/security/) first.
 
-Turn a username into a **structured identity dossier**. Not a Sherlock wrapper — an **autonomous AI agent** that reasons, pivots, and cross-correlates across 30+ platforms.
+OSINT-D2 is a command-line tool and local web dashboard for security researchers, journalists, and OSINT analysts. Give it a username, email, or phone number, and it checks public sources, separates likely matches from namesakes, and produces a report you can verify.
 
-## What Makes OSINT-D2 Different
+## What it does
 
-Most OSINT tools run a fixed checklist. OSINT-D2 **thinks**:
+| | |
+|---|---|
+| **Agent investigations** | An LLM chooses which tools to run, follows new leads such as emails and websites, and writes a report. |
+| **Direct scans** | 20 username scanners and 4 email scanners, with optional [Sherlock](https://github.com/sherlock-project/sherlock) (about 470 sites) and site lists. No AI needed. |
+| **False-positive filtering** | Declare accounts you already trust (`--trust github:johndoe`). Other profiles are scored on name, bio, avatar, and location, and contradictions are discarded. |
+| **Identity correlation** | Compares avatars with perceptual hashing and writing style with character n-grams. |
+| **Reports** | PDF dossiers, JSON, and graphs for Obsidian Canvas and HTML. |
+| **Choice of AI provider** | DeepSeek, OpenAI, or any OpenAI-compatible API. Use Ollama to keep inference on your machine. |
 
-1. You give it a username or email
-2. The AI agent scans it across platforms
-3. It discovers new leads (emails, aliases, websites) in the results
-4. It **pivots** — investigating those leads autonomously
-5. It produces a **6-dimension cognitive profile** grounded in evidence
+An agent run looks like this (illustrative, with fictitious data):
 
-```
-🎯 Username: torvalds
-   ↓
-🔍 scan_username → GitHub (Linus Torvalds), 11 confirmed / 19 scanned
-   ↓
-🌐 fetch_url → github.com/torvalds → found emails, social links
-   ↓
-📧 scan_email → torvalds@linux-foundation.org → 13 confirmed / 23 scanned
-   ↓
-📧 scan_email → torvalds@kernel.org → 12 confirmed
-   ↓
-🌐 fetch_url → x.com/torvalds, keybase.io/torvalds
-   ↓
-🧠 generate_report → 6D cognitive profile distinguishing real Torvalds from impersonators
+```text
+Target: johndoe
+  scan_username  johndoe            3 confirmed of 20 scanned
+  fetch_url      example.com/johndoe  found john@example.com
+  scan_email     john@example.com   2 confirmed
+  generate_report                   confidence 82% (model estimate)
 ```
 
-## Core Capabilities
-
-| | Feature | How it works |
-|---|---|---|
-| 🤖 | **Agentic AI** | ReAct reasoning loop — the LLM decides which tools to invoke, interprets results, and pivots. Forced-report fallback when steps are exhausted. |
-| 🔗 | **Identity Triangulation** | Cross-correlates usernames, emails, bios, avatars (perceptual dHash), and writing style (character n-gram stylometry). |
-| 🧠 | **6D Cognitive Profiling** | Identity, Geo-temporal, OCEAN Psychology, Tech Stack, Ideology, OpSec/Attack Surface. |
-| 🛡️ | **Trust Anchors** | Declare known-good sources (`--trust github:user`). 4-signal weighted scoring (name 40%, bio 30%, avatar 20%, location 10%) filters false positives. |
-| 📊 | **PDF Dossiers** | Classified-style intelligence briefs with identity cards, risk matrices, and entity graphs. WeasyPrint + Playwright rendering. |
-| 🌍 | **5 Languages** | EN, ES, PT, AR, RU — across CLI, dashboard, AI prompts (the system prompt changes per language), and PDF reports. |
-| 🐳 | **Docker** | One-command deployment. Ollama sidecar for fully offline operation. |
-
 <p align="center">
-  <img src="assets/dashboard.gif" alt="OSINT-D2 Live Dashboard Demo" width="700" />
+  <img src="docs/assets/dashboard-timeline.png" alt="Timeline listing each tool call the agent made, with demo data" width="700" />
 </p>
 
-<p align="center">
-  <img src="assets/pdf.png" alt="Classified-style PDF Dossier" width="350" />
-  <img src="assets/ai_analysis.png" alt="6D Cognitive Profile" width="500" />
-</p>
+## Quick start
 
-## Quick Start
+Direct scans need no API key. Agent runs and AI analysis need one, unless you use Ollama.
+
+### Docker
 
 ```bash
-# Docker (recommended)
 git clone https://github.com/Doble-2/osint-d2.git && cd osint-d2
-cp .env.example .env          # Configure: OSINT_D2_AI_API_KEY, OSINT_D2_AI_PROVIDER
-docker compose up -d           # Dashboard at http://localhost:8000
-
-# Or with Poetry
-poetry install && poetry run playwright install chromium
-poetry run osint-d2 serve      # Start the web dashboard
+cp .env.example .env     # Add your AI key
+mkdir -p reports         # Keeps reports writable by the container
+docker compose up -d
 ```
 
-### CLI Commands
+Open <http://localhost:8000>. To use the CLI, prefix commands with `docker compose exec osint-d2`:
 
 ```bash
-# Quick scan across 18+ native scanners
+docker compose exec osint-d2 osint-d2 scan johndoe
+```
+
+### Poetry
+
+Requires Python 3.11+, [Poetry](https://python-poetry.org/), and the [Pango libraries](https://osint-d2.angelcalderon.dev/getting-started/installation/#system-dependencies) for PDFs.
+
+```bash
+git clone https://github.com/Doble-2/osint-d2.git && cd osint-d2
+poetry install
+poetry run playwright install chromium
+cp .env.example .env     # Add your AI key
+poetry run osint-d2 doctor run
+poetry run osint-d2 serve
+```
+
+### Prebuilt binaries
+
+Download them from [Releases](https://github.com/Doble-2/osint-d2/releases). The [installation guide](https://osint-d2.angelcalderon.dev/getting-started/installation/) lists what they need on your system.
+
+> [!WARNING]
+> OSINT-D2 is a local tool: for ethical and legal reasons, the project doesn't operate a hosted version. The dashboard has no authentication by design and listens on localhost. Don't expose it to other people or to the internet.
+
+## Usage
+
+```bash
+# Scan a username (no AI)
 osint-d2 scan johndoe
 
-# Autonomous AI investigation (10 reasoning steps)
-osint-d2 agent johndoe --ai-provider deepseek --max-steps 10
+# Several targets, with Sherlock
+osint-d2 hunt -u johndoe,jdoe123 -e john@example.com --sherlock
 
-# Full pipeline: multiple targets + Sherlock (400+ sites) + breach check
-osint-d2 hunt -u johndoe,jdoe123 -e john@example.com --sherlock --breach-check --export-pdf
+# Add AI analysis and a PDF
+osint-d2 hunt -u johndoe --ai --export-pdf
 
-# Trust anchors to filter false positives
-osint-d2 agent johndoe --trust github:johndoe --trust email:john@example.com
+# Agent investigation, starting from a trusted account
+osint-d2 agent johndoe --trust github:johndoe --max-steps 10
+
+# Machine-readable output (the default when piping)
+osint-d2 scan johndoe --format json | jq '.profiles[] | select(.exists)'
 ```
 
-### AI Providers
+See the [CLI reference](https://osint-d2.angelcalderon.dev/guides/cli-reference/) for every option.
+
+## Configuration
+
+Set a provider and key in `.env`. The endpoint and model come from the provider unless you override them.
 
 ```env
-# DeepSeek (default, cheapest)
+# DeepSeek (default)
 OSINT_D2_AI_PROVIDER=deepseek
 OSINT_D2_AI_API_KEY=sk-xxxxxxxx
-OSINT_D2_AI_BASE_URL=https://api.deepseek.com
 
 # OpenAI
 OSINT_D2_AI_PROVIDER=openai
 OSINT_D2_AI_API_KEY=sk-xxxxxxxx
-OSINT_D2_AI_MODEL=gpt-4o-mini
 
-# Ollama (fully offline, no API key needed)
+# Ollama (no key needed)
 OSINT_D2_AI_PROVIDER=ollama
-OSINT_D2_AI_BASE_URL=http://localhost:11434/v1
 OSINT_D2_AI_MODEL=llama3.1
 ```
 
-## The 9-Tool Arsenal
+Inside Docker, Ollama also needs its [container address](https://osint-d2.angelcalderon.dev/guides/docker/#ollama-fully-offline).
 
-The agent has access to 9 tools during investigation:
+Optional services:
+
+- **Breach checks:** set `OSINT_D2_HIBP_API_KEY` to use the official [Have I Been Pwned API](https://haveibeenpwned.com/API/Key), a paid service. It receives the full email address.
+- **Proxy:** OSINT-D2 can route scans through ScrapingAnt, a third-party service, using `OSINT_D2_PROXY_API_KEY`.
+
+## Agent tools
 
 | Tool | Purpose |
 |------|---------|
-| `scan_username` | Scan 18+ platforms (GitHub, X, Instagram, Reddit, Telegram, etc.) |
-| `scan_email` | Gravatar, PGP keyservers + optional local-part pivot |
-| `breach_check` | HaveIBeenPwned k-anonymity check |
-| `fetch_url` | Extract intelligence from any URL (SSRF-protected) |
-| `compare_avatars` | Perceptual dHash image comparison |
-| `scan_phone` | E.164 validation, carrier, country, WhatsApp status |
-| `search_vector_memory` | BM25 semantic search across collected evidence |
-| `correlate_stylometry` | Character n-gram writing style comparison |
-| `generate_report` | Finalize investigation with 6D cognitive profile |
+| `scan_username` | Check a username across the 20 native scanners |
+| `scan_email` | Gravatar and PGP keyservers, with an optional username pivot |
+| `breach_check` | Query the official Have I Been Pwned API (optional) |
+| `fetch_url` | Extract emails and social links from a page, with SSRF protection |
+| `compare_avatars` | Compare images with a perceptual hash (dHash) |
+| `scan_phone` | Carrier, country, line type, and WhatsApp status |
+| `search_vector_memory` | BM25 keyword search across collected evidence |
+| `correlate_stylometry` | Compare writing style with character n-grams |
+| `generate_report` | Finish with a report covering six areas |
+
+The report covers identity, geo-temporal signals, personality (OCEAN), technical profile, ideology and values, and attack surface. The personality and ideology sections are speculative inferences, and the confidence score is the model's own estimate. Verify them before relying on them.
 
 ## Documentation
 
-📖 **[osint-d2.angelcalderon.dev](https://osint-d2.angelcalderon.dev)**
-
-- [Installation](https://osint-d2.angelcalderon.dev/getting-started/installation/) — Setup for all platforms
-- [Agent Mode](https://osint-d2.angelcalderon.dev/guides/agent-mode/) — Deep dive into the autonomous AI
-- [Trust Anchors](https://osint-d2.angelcalderon.dev/architecture/trust-anchors/) — How false positive filtering works
-- [Docker Deployment](https://osint-d2.angelcalderon.dev/guides/docker/) — Production setup with Ollama
-- [Architecture](https://osint-d2.angelcalderon.dev/architecture/overview/) — Clean Architecture, vector store, rate limiter
-- [CLI Reference](https://osint-d2.angelcalderon.dev/guides/cli-reference/) — All commands and flags
-- [API Reference](https://osint-d2.angelcalderon.dev/api/endpoints/) — REST + WebSocket endpoints
-
-## Architecture
-
-```
-src/
-├── core/               # Domain logic (zero I/O)
-│   ├── domain/         #   Pydantic models: PersonEntity, SocialProfile, AnalysisReport
-│   ├── services/       #   Agent engine, trust anchors, identity pipeline, URL guard
-│   └── config.py       #   AppSettings (pydantic-settings, OSINT_D2_* prefix)
-├── adapters/           # I/O layer
-│   ├── osint_sources/  #   21 platform-specific scanners
-│   ├── vector_store.py #   Pure-Python BM25 + stylometry engine
-│   ├── rate_limiter.py #   Per-domain throttle with jitter
-│   ├── web_server.py   #   FastAPI + WebSocket dashboard
-│   └── report_*.py     #   PDF/HTML dossier generation
-└── cli/                # Typer + Rich CLI interface
-```
+- [Installation](https://osint-d2.angelcalderon.dev/getting-started/installation/) and [Quick Start](https://osint-d2.angelcalderon.dev/getting-started/quickstart/)
+- [Web Dashboard](https://osint-d2.angelcalderon.dev/guides/web-dashboard/) and [Agent Mode](https://osint-d2.angelcalderon.dev/guides/agent-mode/)
+- [Trust Anchors](https://osint-d2.angelcalderon.dev/architecture/trust-anchors/) and [Architecture](https://osint-d2.angelcalderon.dev/architecture/overview/)
+- [REST and WebSocket API](https://osint-d2.angelcalderon.dev/api/endpoints/)
+- [Security & Responsible Use](https://osint-d2.angelcalderon.dev/guides/security/)
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+See [CONTRIBUTING.md](CONTRIBUTING.md) and the guide to [adding a scanner](https://osint-d2.angelcalderon.dev/contributing/adding-scanners/).
 
 ```bash
-poetry install --with dev
+poetry install
 poetry run pytest
 poetry run ruff check .
 ```
 
 ## Disclaimer
 
-This tool is designed for **authorized security research**, **journalism**, and **OSINT investigations** only. Users are responsible for complying with all applicable laws and regulations. The authors assume no liability for misuse.
+OSINT-D2 is intended for authorized security research, journalism, and OSINT investigations. You are responsible for complying with the laws that apply to you. The authors assume no liability for misuse.
 
 ## License
 

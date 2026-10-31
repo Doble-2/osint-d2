@@ -1,6 +1,6 @@
 # Architecture Overview
 
-OSINT-D2 follows **Clean Architecture** with strict separation between domain logic and I/O adapters. The codebase is organized into three layers.
+OSINT-D2 is inspired by Clean Architecture, separating domain logic from I/O adapters. The codebase is organized into three layers.
 
 ```mermaid
 graph TB
@@ -58,7 +58,7 @@ graph TB
 
 ## Core
 
-The core contains **zero I/O** — no HTTP calls, no filesystem access, no database queries. All I/O is delegated to adapters.
+The core holds the domain models and orchestration. Most I/O lives in adapters, but the separation isn't strict yet: `core/services` imports adapters directly, and `agent_tools.py` and `resources_loader.py` make HTTP requests.
 
 ### Domain Models (`core/domain/models.py`)
 
@@ -155,7 +155,7 @@ Generates classified-style PDF dossiers with:
 - Risk/confidence matrix
 - Full evidence appendix
 
-Rendering pipeline: **Jinja2 HTML template → WeasyPrint CSS rendering → PDF**. Falls back to **Playwright** (headless Chromium) if WeasyPrint fails.
+The CLI renders **Jinja2 HTML → WeasyPrint → PDF**, and saves the HTML if WeasyPrint fails. The dashboard renders the same HTML with **Playwright** (headless Chromium), adding the graph page.
 
 ### Avatar Analyzer (`adapters/avatar_analyzer.py`)
 
@@ -180,6 +180,6 @@ Centralized `httpx.AsyncClient` factory with:
 
 All configuration via `pydantic-settings` with the `OSINT_D2_` prefix:
 
-- **Resolution order**: env vars → project `.env` → user `~/.config/osint-d2/.env`
+- **Resolution order**: env vars → user `~/.config/osint-d2/.env` → project `.env`
 - **Cross-platform**: Windows (`%APPDATA%`), macOS (`~/Library/Application Support`), Linux (`~/.config`)
 - **Typed validation**: Pydantic enforces types, ranges, and constraints at startup

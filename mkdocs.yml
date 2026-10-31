@@ -93,6 +93,7 @@ nav:
     - Agent Mode: guides/agent-mode.md
     - Docker Deployment: guides/docker.md
     - Languages: guides/languages.md
+    - Security & Responsible Use: guides/security.md
   - API Reference:
     - REST Endpoints: api/endpoints.md
     - WebSocket Protocol: api/websocket.md

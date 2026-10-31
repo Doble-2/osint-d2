@@ -1,6 +1,6 @@
 # WebSocket Protocol
 
-OSINT-D2 streams investigation results in real-time via WebSocket.
+The WebSocket streams an investigation's progress as it runs.
 
 ## Connection
 
@@ -8,71 +8,119 @@ OSINT-D2 streams investigation results in real-time via WebSocket.
 ws://localhost:8000/ws/{investigation_id}
 ```
 
-Connect after receiving the `investigation_id` from `POST /api/investigate`.
+Connect after `POST /api/investigate` returns the ID. You can connect at any time: earlier events are replayed in order, so nothing is lost if the run started or finished first.
 
-## Message Format
+Browser connections must come from the same origin or one listed in `OSINT_D2_CORS_ORIGINS`. Others are closed with code `1008`.
 
-All messages are JSON with a `type` field and a `data` field:
-
-```json
-{
-  "type": "<message_type>",
-  "data": "<payload>"
-}
-```
-
-## Message Types
-
-### `log` — Agent Console Output
-
-Text log entries from the agent's reasoning process.
+An unknown ID receives one event and the connection closes:
 
 ```json
-{
-  "type": "log",
-  "data": "[STEP 1/6] Scanning username johndoe across GitHub, X, Instagram..."
-}
+{ "type": "error", "data": "Investigation not found." }
 ```
 
-### `node_add` — Graph Node
+## Message format
 
-A new entity discovered. Vis.js-compatible node object.
+Every message is JSON with a `type` and a `data` field. Graph events can repeat a node ID, so ignore nodes you already have.
+
+| Type | Sent when | Modes |
+|------|-----------|-------|
+| [`log`](#log) | Human-readable activity | All |
+| [`progress`](#progress) | A step finishes | Agent |
+| [`node_add`](#node_add) | An entity is found | All |
+| [`edge_add`](#edge_add) | A relationship is found | All |
+| [`phone_data`](#phone_data) | A phone lookup finishes | All |
+| [`report_done`](#report_done) | The AI report is ready | Agent |
+| [`graph_svg`](#graph_svg) | The final graph is ready | Agent |
+| [`timeline`](#timeline) | The step list is ready | Agent |
+| [`artifact`](#artifact) | A file can be downloaded | Agent |
+| [`status`](#status) | The investigation ends | All |
+
+## Events
+
+### `log`
+
+Text in the investigation's language, for display only. Don't parse it, because its wording can change.
+
+```json
+{ "type": "log", "data": "[STEP 1] scan_username(username=johndoe)" }
+```
+
+### `progress`
+
+`step` can stay the same across several events, because one step can call several tools. The run may finish before reaching `max_steps`.
+
+```json
+{ "type": "progress", "data": { "step": 2, "max_steps": 6 } }
+```
+
+### `node_add`
+
+A [vis-network](https://visjs.github.io/vis-network/docs/network/nodes.html) node. Groups in use: `target`, `email`, `phone`, `identity`, `platform`, and `noise` (a probable false positive).
 
 ```json
 {
   "type": "node_add",
-  "data": {
-    "id": "platform:github",
-    "label": "GITHUB @johndoe\ncorrelation 85%",
-    "group": "platform"
-  }
+  "data": { "id": "user:johndoe", "label": "@johndoe", "group": "platform" }
 }
 ```
 
-### `edge_add` — Graph Edge
+### `edge_add`
 
-A new relationship between entities.
+Links a node to the root, whose ID is always `target:root`. Labels in use: `PHONE_NUM`, `USES_EMAIL`, and `TRUST_ANCHOR`.
 
 ```json
 {
   "type": "edge_add",
+  "data": { "from": "target:root", "to": "email:john@example.com", "label": "USES_EMAIL" }
+}
+```
+
+### `phone_data`
+
+```json
+{
+  "type": "phone_data",
   "data": {
-    "from": "target:root",
-    "to": "platform:github",
-    "label": "HAS_PROFILE"
+    "e164": "+15551234567",
+    "carrier": "Example Telecom",
+    "country": "United States",
+    "line_type": "mobile",
+    "whatsapp": true,
+    "timezones": ["America/New_York"]
   }
 }
 ```
 
-### `graph` — Full SVG Graph
+### `report_done`
 
-The complete investigation graph rendered as SVG.
+Not sent if the model produced no report. `summary` is Markdown, and `summary_html` is its server-rendered version.
 
 ```json
 {
-  "type": "graph",
+  "type": "report_done",
   "data": {
-    "svg": "<svg xmlns=\"http://www.w3.org/2000/svg\"...",
+    "summary": "# Identity\n\nSame handle on **three** platforms.",
+    "summary_html": "<h1>Identity</h1>\n<p>Same handle on <strong>three</strong> platforms.</p>",
+    "highlights": ["Same handle on 3 platforms"],
+    "confidence": 0.82
+  }
+}
+```
+
+!!! warning "Treat this content as untrusted"
+    All of it derives from third-party pages. Sanitize `summary_html` before inserting it into a page, as the dashboard does with DOMPurify, and render `highlights` as plain text. The same applies to `svg` in `graph_svg`.
+
+### `graph_svg`
+
+Not sent if the graph could not be built. `confidence` is `null` when there is no report.
+
+```json
+{
+  "type": "graph_svg",
+  "data": {
+    "target": "John Doe",
+    "confidence": 0.82,
+    "svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" ...>",
     "nodes": 12,
     "edges": 15,
     "vectors": 4
@@ -80,94 +128,61 @@ The complete investigation graph rendered as SVG.
 }
 ```
 
-### `graph_reset` — Clear Graph
+### `timeline`
 
-Instructs the client to clear and rebuild the graph.
-
-```json
-{
-  "type": "graph_reset",
-  "data": null
-}
-```
-
-### `timeline` — Investigation Timeline
-
-The complete pivot chain as structured data.
+`kind` is one of `Platform`, `Email`, `Phone`, `Breach`, `Identity`, or `Finding`. `evidence` is cut to 500 characters, and `correlation` is currently always `null`.
 
 ```json
 {
   "type": "timeline",
   "data": {
-    "html": "<div class=\"step\">..."
-  }
-}
-```
-
-### `phone_data` — Telecom Results
-
-Phone number intelligence results.
-
-```json
-{
-  "type": "phone_data",
-  "data": {
-    "carrier": "Verizon",
-    "country": "US",
-    "whatsapp": true
-  }
-}
-```
-
-### `report_done` — Final Report
-
-The AI analysis is complete.
-
-```json
-{
-  "type": "report_done",
-  "data": {
     "confidence": 0.82,
-    "summary": "High-confidence identity correlation...",
-    "highlights": [
-      "Confirmed identity across 8 platforms",
-      "Active developer with 2.3k GitHub followers"
+    "steps": [
+      {
+        "kind": "Platform",
+        "label": "scan_username(username=johndoe)",
+        "evidence": "{\"target\": \"johndoe\", ...}",
+        "correlation": null
+      }
     ]
   }
 }
 ```
 
-### `status` — Investigation Status Change
+### `artifact`
+
+The named file can now be [downloaded](endpoints.md#get-apidownloadinvestigation_idfile_type-download-a-file). Values: `canvas`, `pdf`.
 
 ```json
-{
-  "type": "status",
-  "data": "completed"
-}
+{ "type": "artifact", "data": "pdf" }
 ```
 
-Values: `running`, `completed`, `cancelled`, `error`.
+### `status`
 
-## Example Client
+Marks the end of the investigation. Values: `completed`, `partial` (finished, but a tool or file failed), `cancelled`, `failed`. With `failed`, the preceding `log` event starting with `[ERROR]` holds the reason.
+
+```json
+{ "type": "status", "data": "completed" }
+```
+
+## Example client
 
 ```javascript
 const ws = new WebSocket(`ws://localhost:8000/ws/${investigationId}`);
 
 ws.onmessage = (event) => {
-  const msg = JSON.parse(event.data);
+  const { type, data } = JSON.parse(event.data);
 
-  switch (msg.type) {
+  switch (type) {
     case 'log':
-      console.log(msg.data);
+      console.log(data);
       break;
-    case 'node_add':
-      graph.addNode(msg.data);
-      break;
-    case 'report_done':
-      showReport(msg.data);
+    case 'artifact':
+      console.log(`Ready: /api/download/${investigationId}/${data}`);
       break;
     case 'status':
-      if (msg.data === 'completed') ws.close();
+      console.log(`Finished: ${data}`);
+      ws.close();
       break;
   }
 };

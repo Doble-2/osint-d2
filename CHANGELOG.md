@@ -5,7 +5,67 @@ All notable changes to OSINT-D2 will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.0] — 2026-10-17
+## [Unreleased]
+
+### Security
+- Selecting another provider no longer sends the configured API key to it
+- SSRF guard now validates every redirect hop, covers `compare_avatars`, and blocks IPv4-embedded IPv6, multicast and reserved ranges
+- Dossier Markdown no longer passes through raw HTML or unsafe link schemes; PDFs render with JavaScript disabled and internal network requests blocked
+- Downloads only serve the session's own files; session IDs use the full UUID; the WebSocket rejects foreign origins
+- Docker Compose publishes the dashboard on loopback by default (`OSINT_BIND` to change it)
+- The user `.env` file is written with `0600` permissions
+
+### Removed
+- `tls-client` extra and browser-impersonating breach requests
+- `requirements.txt`, which was out of sync with `poetry.lock`
+- `phone --language`, which had no effect
+- Screenshots and examples that showed real people's data
+
+### Changed
+- CLI split into `cli/commands/`, with one module per command
+- Groq and Hugging Face presets updated to current models and endpoints
+- GitHub Actions pinned to commit SHAs
+- **Breaking:** breach checks use the official Have I Been Pwned API and require `OSINT_D2_HIBP_API_KEY`
+- **Breaking:** `hunt` and `scan-email` no longer send evidence to the AI provider unless you pass `--ai` or `--deep-analyze`
+- **Breaking:** `--ai-save` is off by default
+- `--ai-provider` no longer reuses a key configured for another provider
+- `OSINT_D2_AI_PROVIDER` sets the default endpoint and model
+- WeasyPrint upgraded from 60.1 to 70; all dependencies updated
+- Docker image is multi-stage, without Poetry, and is tested before publishing
+- CI installs from the lockfile, tests the built wheel, audits dependencies, and covers Python 3.14
+
+### Added
+- Agent prompts and the investigation graph in all 5 languages
+- Visible labels for every dashboard field
+- CLI: `--version`, `phone --format`, exit codes `0/1/2/130`, one-line errors without tracebacks
+- `doctor run`: Chromium and HIBP checks, fixes for each problem, exit code 1 on failure
+- Dashboard: graph zoom and pan, recoverable sessions, `partial` status, confidence levels, immediate cancel, ARIA tabs
+- Dashboard: breach check option, report button, step counter and progress bar, form validation, missing API key notice
+- Dashboard: all 5 report languages, translated server logs, right-to-left layout for Arabic
+- Dashboard accessibility: control labels, keyboard focus, AA contrast, reduced-motion support
+- WebSocket events `progress` and `artifact`; `summary_html` in `report_done`
+- Documentation: Security & Responsible Use guide
+
+### Fixed
+- CLI no longer prints API keys in tracebacks, emits JSON twice, or ignores commas in `--emails`
+- `pip install` no longer pulls a Click version that breaks `--help`
+- Live graph counter, hidden graph clipping, and dates shown as phone numbers in the dashboard
+- Oversized AI reports are truncated instead of discarding the investigation
+- Dashboard no longer hangs when an investigation fails (e.g. missing API key) or runs in phone mode
+- Events emitted before the WebSocket connects are replayed instead of lost
+- Agent objective contained a literal `{target}`; graph edges pointed to a nonexistent root node
+- The report drawer now opens: the server never sent `report_done`
+- Non-numeric LLM confidence no longer aborts a finished investigation; duplicate profiles are merged
+- `ai_max_retries` is honored by the agent; the dashboard no longer overrides the configured provider or model
+- Report panel no longer covers the sidebar; its placeholder `87%` confidence is gone
+- Download buttons only appear for files that exist
+- REST and WebSocket documentation described endpoints and events that do not exist
+
+### Changed
+- `/api/investigate` validates its input and returns 429 above 5 concurrent investigations; `/api/cancel` returns 404 for unknown sessions
+- Added an `openai` provider preset
+
+## [3.0.0] — 2026-10-17
 
 ### Added
 - **Agentic AI mode** — autonomous investigation with function-calling LLMs (DeepSeek, OpenAI, Ollama)

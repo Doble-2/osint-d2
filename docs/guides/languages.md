@@ -1,16 +1,21 @@
 # Language Support
 
-OSINT-D2 supports 5 languages across the **entire stack**: CLI interface, web dashboard, AI system prompts, and PDF reports. This is not superficial label translation — the AI agent's reasoning instructions change per language.
+OSINT-D2 supports 5 languages across the CLI options, dashboard, graph, AI prompts, and PDF reports.
 
 ## Supported Languages
 
-| Code | Language | CLI | Dashboard | AI Prompts | PDF Reports |
-|------|----------|-----|-----------|------------|-------------|
-| `en` | English | ✅ | ✅ | ✅ | ✅ |
-| `es` | Spanish | ✅ | ✅ | ✅ | ✅ |
-| `pt` | Portuguese | ✅ | ✅ | ✅ | ✅ |
-| `ar` | Arabic | ✅ | ✅ | ✅ | ✅ |
-| `ru` | Russian | ✅ | ✅ | ✅ | ✅ |
+| Code | Language | Notes |
+|------|----------|-------|
+| `en` | English | Reference language |
+| `es` | Spanish | Neutral Spanish |
+| `pt` | Portuguese | |
+| `ar` | Arabic | Right-to-left dashboard |
+| `ru` | Russian | |
+
+!!! note "Help us improve the translations"
+    The Portuguese, Arabic, and Russian strings haven't been reviewed by native speakers. If something reads wrong, please open an issue or a pull request.
+
+The CLI's own messages are in English. `--language` sets the language of the AI analysis and reports.
 
 ---
 
@@ -42,7 +47,7 @@ OSINT-D2 supports 5 languages across the **entire stack**: CLI interface, web da
 
 ### AI System Prompts
 
-The agent's system prompt is **dynamically constructed** based on the investigation language. This isn't just translation — the methodology, rules, and score interpretation guides are all written natively for each language.
+The agent's prompts live in `src/core/services/agent_prompts.py`, with one entry per language. A test checks that every language keeps the same rules and score guidance.
 
 === "English"
 
@@ -112,20 +117,15 @@ To add a new language:
 1. Copy `src/adapters/templates/i18n/en.json` to `<code>.json`
 2. Translate all values — **keys must remain identical**
 3. Add the language to the `Language` enum in `src/core/domain/language.py`
-4. Add the system prompt translation in `src/core/services/agent_engine.py`
-5. Add the option to the dashboard `<select>` in `dashboard.html`
-6. Run the consistency test:
+4. Add the system prompts in `src/adapters/ai_analyst.py` and `src/core/services/agent_prompts.py`
+5. Add the option to both language selectors in `dashboard.html`
+6. Add the code to `test_i18n_files_share_the_same_keys`, then run the tests:
 
 ```bash
-python3 -c "
-import json, glob
-files = glob.glob('src/adapters/templates/i18n/*.json')
-counts = {f.split('/')[-1]: len(json.load(open(f))) for f in files}
-print(counts)
-assert len(set(counts.values())) == 1, 'Key count mismatch!'
-print('All languages consistent ✓')
-"
+poetry run pytest tests/test_web_server.py
 ```
+
+The tests check that every language has the same keys and that the dashboard uses only keys that exist. Keep placeholders such as `{target}` unchanged in `log_*` and `graph` strings.
 
 !!! tip
     The Spanish system prompt uses "español neutro" (neutral Spanish) — avoiding regional slang to maximize clarity for all Spanish-speaking users.

@@ -1,163 +1,109 @@
 # Adding a Scanner
 
-Step-by-step guide to adding a new OSINT data source to OSINT-D2.
+This guide adds a username source. The example works in the real pipeline, and `tests/test_scanner_contract.py` checks it against every registered scanner.
 
-## Overview
+A scanner is a class in `src/adapters/osint_sources/` that implements the `OSINTScanner` protocol from `src/core/interfaces/scanner.py`:
 
-OSINT-D2 scanners follow Clean Architecture: each scanner is an **adapter** that implements the `OSINTScanner` protocol. The core pipeline discovers and invokes scanners automatically.
+```python
+class OSINTScanner(Protocol):
+    async def scan(self, username: str) -> SocialProfile: ...
+```
 
-## Step 1: Create the Scanner
+Email sources use the same method, and receive the email address as the argument.
 
-Create a new file in `src/adapters/osint_sources/`:
+## 1. Create the scanner
 
 ```python
 # src/adapters/osint_sources/newplatform.py
-"""NewPlatform scanner — discovers user profiles via their public API."""
+"""Scanner for NewPlatform public profiles."""
 
 from __future__ import annotations
 
-import httpx
-
+from adapters.http_client import build_async_client
+from core.config import AppSettings
 from core.domain.models import SocialProfile
 from core.interfaces.scanner import OSINTScanner
 
 
 class NewPlatformScanner(OSINTScanner):
-    """Scans NewPlatform for a username."""
+    _base_url = "https://newplatform.example"
 
-    PLATFORM = "newplatform"
+    def __init__(self, settings: AppSettings | None = None) -> None:
+        self._settings = settings or AppSettings()
 
-    async def scan_username(
-        self,
-        username: str,
-        client: httpx.AsyncClient,
-    ) -> SocialProfile | None:
-        """Check if the username exists on NewPlatform."""
-        url = f"https://api.newplatform.com/users/{username}"
+    async def scan(self, username: str) -> SocialProfile:
+        url = f"{self._base_url}/{username}"
 
-        try:
-            resp = await client.get(url)
-            if resp.status_code == 404:
-                return SocialProfile(
-                    url=url,
-                    username=username,
-                    network_name=self.PLATFORM,
-                    exists=False,
-                )
+        async with build_async_client(self._settings) as client:
+            response = await client.get(url)
 
-            data = resp.json()
-            return SocialProfile(
-                url=f"https://newplatform.com/{username}",
-                username=username,
-                network_name=self.PLATFORM,
-                exists=True,
-                bio=data.get("bio"),
-                image_url=data.get("avatar_url"),
-                metadata={
-                    "source": "newplatform_api",
-                    "followers": data.get("followers_count"),
-                    "created_at": data.get("created_at"),
-                },
-            )
-        except Exception:
-            return None
+        return SocialProfile(
+            url=str(response.url),
+            username=username,
+            network_name="newplatform",
+            exists=response.status_code == 200,
+            metadata={"status_code": response.status_code},
+        )
 ```
 
-## Step 2: Implement the Protocol
+Rules:
 
-Your scanner must match the `OSINTScanner` protocol defined in `src/core/interfaces/scanner.py`:
+- **Always return a `SocialProfile`.** Use `exists=False` when the profile does not exist.
+- **Use `build_async_client`,** so timeouts and proxy settings apply.
+- **Let network exceptions propagate.** The pipeline records them as an error on that source, so one failure doesn't stop the scan.
+- **Keep the constructor callable with no arguments.** The pipeline creates each scanner with `scanner()`.
 
-```python
-class OSINTScanner(Protocol):
-    PLATFORM: str
+## 2. Register it
 
-    async def scan_username(
-        self,
-        username: str,
-        client: httpx.AsyncClient,
-    ) -> SocialProfile | None: ...
-```
-
-Key rules:
-
-- Return `SocialProfile(exists=True, ...)` when the profile is found
-- Return `SocialProfile(exists=False, ...)` when confirmed not found
-- Return `None` on network errors (the pipeline handles retries)
-- Never raise exceptions — catch and return `None`
-
-## Step 3: Register in the Pipeline
-
-Add your scanner to `src/core/services/identity_pipeline.py`:
+Add the class to `_USERNAME_SCANNERS` in `src/core/services/identity_pipeline.py`, or `_EMAIL_SCANNERS` for an email source:
 
 ```python
 from adapters.osint_sources.newplatform import NewPlatformScanner
 
 _USERNAME_SCANNERS = (
-    # ... existing scanners ...
+    # ...existing scanners...
     NewPlatformScanner,
 )
 ```
 
-## Step 4: Add a Test
-
-Create `tests/test_newplatform_scanner.py`:
+## 3. Add a test
 
 ```python
+# tests/test_newplatform_scanner.py
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock
 
 from adapters.osint_sources.newplatform import NewPlatformScanner
 
 
-class TestNewPlatformScanner:
-    @pytest.mark.asyncio
-    async def test_found_profile(self):
-        scanner = NewPlatformScanner()
-        mock_resp = MagicMock()
-        mock_resp.status_code = 200
-        mock_resp.json.return_value = {
-            "bio": "Developer",
-            "followers_count": 100,
-        }
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("status", "exists"), [(200, True), (404, False)])
+async def test_scan(status, exists):
+    response = MagicMock(status_code=status, url="https://newplatform.example/demo")
+    client = AsyncMock()
+    client.get.return_value = response
+    context = MagicMock()
+    context.__aenter__ = AsyncMock(return_value=client)
+    context.__aexit__ = AsyncMock(return_value=False)
 
-        client = AsyncMock()
-        client.get.return_value = mock_resp
+    with patch("adapters.osint_sources.newplatform.build_async_client", return_value=context):
+        profile = await NewPlatformScanner().scan("demo")
 
-        result = await scanner.scan_username("testuser", client)
-        assert result is not None
-        assert result.exists is True
-        assert result.network_name == "newplatform"
-
-    @pytest.mark.asyncio
-    async def test_not_found(self):
-        scanner = NewPlatformScanner()
-        mock_resp = MagicMock()
-        mock_resp.status_code = 404
-
-        client = AsyncMock()
-        client.get.return_value = mock_resp
-
-        result = await scanner.scan_username("nonexistent", client)
-        assert result is not None
-        assert result.exists is False
+    assert profile.exists is exists
+    assert profile.network_name == "newplatform"
 ```
 
-## Step 5: Verify
+## 4. Verify
 
 ```bash
-# Run your test
-poetry run pytest tests/test_newplatform_scanner.py -v
-
-# Run the full suite
-poetry run pytest tests/ -v
-
-# Lint
-poetry run ruff check src/adapters/osint_sources/newplatform.py
+poetry run pytest tests/test_newplatform_scanner.py tests/test_scanner_contract.py
+poetry run pytest
+poetry run ruff check .
 ```
 
 ## Tips
 
-- **Use the `metadata` dict** for platform-specific data (followers, repos, karma, etc.)
-- **Populate `bio`** when available — the AI uses it for cognitive profiling
-- **Set `image_url`** for the PDF dossier identity card
-- **Check `HIGH_SIGNAL_PLATFORMS`** in `graph_exporter.py` — add your platform if it provides meaningful intelligence signals
+- Put platform-specific data in `metadata`. The keys `name`, `location`, `company`, `email`, and `followers` reach the agent; see `_compact_profiles` in `agent_tools.py`.
+- Fill in `bio` and `image_url` when available. They are used for correlation and the dossier.
+- Respect the platform's terms of service and rate limits.
