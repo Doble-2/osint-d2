@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="{{ ui_lang }}">
+<html lang="{{ ui_lang }}" dir="{{ text_dir }}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -18,7 +18,7 @@
     :root {
       --bg: #0c0f12; --surface: #141820; --surface-2: #1a1f28;
       --surface-3: #222832; --border: rgba(255,255,255,0.08); --border-2: rgba(255,255,255,0.14);
-      --text: #e8ecf0; --text-2: #8a95a5; --text-3: #5c6777;
+      --text: #e8ecf0; --text-2: #a3adbb; --text-3: #8591a2;
       --accent: #2dd4bf; --accent-dim: #0d9488; --accent-bg: rgba(45,212,191,0.08);
       --green: #34d399; --green-bg: rgba(52,211,153,0.1);
       --red: #f87171; --orange: #fbbf24;
@@ -37,24 +37,34 @@
     .app { display: flex; flex-direction: column; height: 100%; }
     .topbar { height: 52px; border-bottom: 1px solid var(--border); background: var(--surface); display: flex; align-items: center; justify-content: space-between; padding: 0 18px; flex-shrink: 0; }
     .workspace { flex: 1; display: flex; min-height: 0; }
-    .sidebar { width: 420px; flex-shrink: 0; border-right: 1px solid var(--border); background: var(--surface); display: flex; flex-direction: column; overflow: hidden; }
-    .main-area { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--bg); overflow: hidden; }
+    .sidebar { width: 420px; flex-shrink: 0; border-inline-end: 1px solid var(--border); background: var(--surface); display: flex; flex-direction: column; overflow: hidden; }
+    .main-area { position: relative; flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--bg); overflow: hidden; }
 
     /* Topbar */
     .logo { display: flex; align-items: center; gap: 10px; }
-    .logo-mark { width: 30px; height: 30px; border-radius: 7px; background: linear-gradient(135deg, var(--accent-dim), var(--accent)); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 11px; color: #fff; letter-spacing: 0.08em; text-shadow: 0 1px 2px rgba(0,0,0,0.3); }
+    .logo-mark { width: 30px; height: 30px; border-radius: 7px; background: linear-gradient(135deg, var(--accent-dim), var(--accent)); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 12px; color: #fff; letter-spacing: 0.08em; text-shadow: 0 1px 2px rgba(0,0,0,0.3); }
     .logo-text { font-size: 13px; font-weight: 700; color: var(--text); letter-spacing: 0.06em; font-family: var(--mono); }
-    .logo-sub { font-size: 10px; color: var(--text-3); margin-top: 0; letter-spacing: 0.02em; }
+    .logo-sub { font-size: 12px; color: var(--text-3); margin-top: 0; letter-spacing: 0.02em; }
     .topbar-actions { display: flex; align-items: center; gap: 8px; }
-    .badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 99px; font-size: 10px; font-weight: 600; font-family: var(--mono); letter-spacing: 0.03em; }
+    .badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 99px; font-size: 12px; font-weight: 600; font-family: var(--mono); letter-spacing: 0.03em; }
     .badge-ok { background: var(--green-bg); color: var(--green); border: 1px solid rgba(52,211,153,0.15); }
     .badge-active { background: var(--accent-bg); color: var(--accent); border: 1px solid rgba(45,212,191,0.15); }
+    .badge-warn { background: rgba(251,191,36,0.08); color: var(--orange); border: 1px solid rgba(251,191,36,0.15); }
+    .badge-error { background: rgba(248,113,113,0.08); color: var(--red); border: 1px solid rgba(248,113,113,0.2); }
+    .badge-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+    .badge-active .badge-dot { animation: pulse 1.5s infinite; }
+    .progress { height: 2px; background: transparent; flex-shrink: 0; overflow: hidden; }
+    .progress-bar { height: 100%; width: 0; background: var(--accent); transition: width 300ms ease; }
+    .lang-select { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 4px 8px; font-size: 12px; font-family: var(--mono); cursor: pointer; }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .input-box input:focus-visible, .input-box select:focus-visible { outline: none; }
 
     /* Buttons */
-    .btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: var(--radius-sm); font-size: 11px; font-weight: 500; border: 1px solid var(--border); background: var(--surface-2); color: var(--text-2); cursor: pointer; transition: all 150ms; font-family: var(--font); }
+    .btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: var(--radius-sm); font-size: 12px; font-weight: 500; border: 1px solid var(--border); background: var(--surface-2); color: var(--text-2); cursor: pointer; transition: all 150ms; font-family: var(--font); }
     .btn:hover { background: var(--surface-3); color: var(--text); border-color: var(--border-2); }
-    .btn-primary { background: linear-gradient(135deg, var(--accent-dim), var(--accent)); color: #fff; border: none; font-weight: 600; box-shadow: 0 2px 8px rgba(45,212,191,0.2); }
-    .btn-primary:hover { filter: brightness(1.1); box-shadow: 0 4px 16px rgba(45,212,191,0.25); }
+    .btn-primary { background: var(--accent); color: #042f2e; border: none; font-weight: 600; box-shadow: 0 2px 8px rgba(45,212,191,0.2); }
+    .btn-primary:hover { background: var(--accent); color: #042f2e; filter: brightness(1.1); box-shadow: 0 4px 16px rgba(45,212,191,0.25); }
     .btn-danger { background: rgba(248,113,113,0.08); color: var(--red); border-color: rgba(248,113,113,0.2); }
 
     /* Sidebar */
@@ -62,54 +72,75 @@
     .sidebar-title { font-size: 13px; font-weight: 600; color: var(--text); }
     .sidebar-form { flex: 1; overflow-y: auto; padding: 16px 18px; }
     .form-section { margin-bottom: 20px; }
-    .form-section-label { font-size: 10px; font-weight: 600; color: var(--accent-dim); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
-    .form-section-label i { font-size: 10px; opacity: 0.7; }
+    .form-section-label { font-size: 12px; font-weight: 600; color: var(--accent-dim); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+    .form-section-label i { font-size: 12px; opacity: 0.7; }
     .field { margin-bottom: 14px; }
-    .field-label { display: flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 600; color: var(--text-2); margin-bottom: 6px; letter-spacing: 0.02em; text-transform: uppercase; }
-    .field-hint { font-size: 10px; color: var(--text-3); margin-top: 5px; padding-left: 10px; border-left: 2px solid rgba(45,212,191,0.15); line-height: 1.5; }
+    .field-label { display: flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; color: var(--text-2); margin-bottom: 6px; letter-spacing: 0.02em; text-transform: uppercase; }
+    .field-hint { font-size: 12px; color: var(--text-3); margin-top: 5px; padding-inline-start: 10px; border-inline-start: 2px solid rgba(45,212,191,0.15); line-height: 1.5; }
 
     /* Distinctive input container */
     .input-box { position: relative; display: flex; align-items: center; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--bg); transition: all 200ms; overflow: hidden; }
     .input-box:hover { border-color: var(--border-2); background: rgba(255,255,255,0.015); }
     .input-box:focus-within { border-color: rgba(45,212,191,0.4); box-shadow: 0 0 0 3px rgba(45,212,191,0.06), inset 3px 0 0 var(--accent); background: rgba(45,212,191,0.025); }
-    .input-box .ix { display: flex; align-items: center; justify-content: center; width: 36px; min-height: 38px; flex-shrink: 0; color: var(--text-3); font-size: 12px; transition: color 200ms; border-right: 1px solid var(--border); background: rgba(255,255,255,0.02); }
-    .input-box:focus-within .ix { color: var(--accent); border-right-color: rgba(45,212,191,0.2); background: rgba(45,212,191,0.05); }
-    .input-box input, .input-box select { border: none; background: transparent; padding: 9px 10px; flex: 1; min-width: 0; font-size: 12px; font-family: var(--mono); color: var(--text); outline: none; }
+    .input-box .ix { display: flex; align-items: center; justify-content: center; width: 36px; min-height: 38px; flex-shrink: 0; color: var(--text-3); font-size: 13px; transition: color 200ms; border-inline-end: 1px solid var(--border); background: rgba(255,255,255,0.02); }
+    .input-box:focus-within .ix { color: var(--accent); border-inline-end-color: rgba(45,212,191,0.2); background: rgba(45,212,191,0.05); }
+    .input-box input, .input-box select { border: none; background: transparent; padding: 9px 10px; flex: 1; min-width: 0; font-size: 13px; font-family: var(--mono); color: var(--text); outline: none; }
     .input-box input:focus, .input-box select:focus { box-shadow: none; }
-    .input-box input::placeholder { color: var(--text-3); font-style: normal; font-size: 11px; }
-    .input-box .vec-count { display: flex; align-items: center; gap: 4px; padding: 3px 8px; margin-right: 6px; border-radius: 99px; background: var(--accent-bg); color: var(--accent); font-size: 9px; font-weight: 700; font-family: var(--mono); white-space: nowrap; flex-shrink: 0; border: 1px solid rgba(45,212,191,0.15); }
+    .input-box input::placeholder { color: var(--text-3); font-style: normal; font-size: 12px; }
+    .input-box .vec-count { display: flex; align-items: center; gap: 4px; padding: 3px 8px; margin-inline-end: 6px; border-radius: 99px; background: var(--accent-bg); color: var(--accent); font-size: 12px; font-weight: 700; font-family: var(--mono); white-space: nowrap; flex-shrink: 0; border: 1px solid rgba(45,212,191,0.15); }
     .input-box select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%235c6777' d='M6 9L1 4h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; padding-right: 28px; cursor: pointer; }
 
     /* Grouped fields */
     .field-group { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; background: var(--bg); }
+    .field-group > .field-label { margin: 0; padding: 8px 10px 4px; border-top: 1px solid var(--border); }
+    .field-group > .field-label:first-child { border-top: none; }
     .field-group .input-box { border: none; border-radius: 0; }
-    .field-group .input-box + .input-box { border-top: 1px solid var(--border); }
     .field-group:hover { border-color: var(--border-2); }
     .field-group:focus-within { border-color: rgba(45,212,191,0.4); box-shadow: 0 0 0 3px rgba(45,212,191,0.06); }
     .field-group:focus-within .input-box { border-top-color: rgba(45,212,191,0.15); }
     .field-group .input-box:focus-within { background: rgba(45,212,191,0.025); }
 
-    .req { color: var(--accent); font-weight: 700; font-size: 12px; line-height: 1; }
-    .optional-badge { font-size: 9px; font-weight: 600; padding: 2px 7px; border-radius: 99px; background: rgba(251,191,36,0.08); color: var(--orange); border: 1px solid rgba(251,191,36,0.15); margin-left: auto; letter-spacing: 0.04em; font-family: var(--mono); }
+    .req { color: var(--accent); font-weight: 700; font-size: 13px; line-height: 1; }
+    .optional-badge { font-size: 12px; font-weight: 600; padding: 2px 7px; border-radius: 99px; background: rgba(251,191,36,0.08); color: var(--orange); border: 1px solid rgba(251,191,36,0.15); margin-inline-start: auto; letter-spacing: 0.04em; font-family: var(--mono); }
     .sidebar-footer { padding: 14px 18px; border-top: 1px solid var(--border); }
     .btn-launch { width: 100%; justify-content: center; padding: 10px 16px; font-size: 13px; border-radius: var(--radius); }
     .btn-launch.is-loading { pointer-events: none; opacity: 0.7; }
-    .btn-launch .spinner { display: none; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin 0.7s linear infinite; }
+    .btn-launch .spinner { display: none; width: 14px; height: 14px; border: 2px solid rgba(4,47,46,0.3); border-top-color: #042f2e; border-radius: 50%; animation: spin 0.7s linear infinite; }
     .btn-launch.is-loading .spinner { display: block; }
     .btn-launch.is-loading .btn-label { display: none; }
     @keyframes spin { to { transform: rotate(360deg); } }
-    .form-summary { text-align: center; font-size: 11px; color: var(--text-3); margin-top: 8px; }
-    .advanced-toggle { width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: transparent; color: var(--text-3); font-size: 11px; font-weight: 500; cursor: pointer; font-family: var(--font); transition: all 150ms; }
+    .form-summary { text-align: center; font-size: 12px; color: var(--text-3); margin-top: 8px; }
+    .form-legal { text-align: center; font-size: 12px; color: var(--text-3); margin-top: 4px; }
+    .form-error { display: none; font-size: 12px; color: var(--red); margin-bottom: 10px; text-align: center; }
+    .form-error.is-visible { display: block; }
+    .notice { display: flex; gap: 8px; align-items: flex-start; padding: 10px 12px; margin-bottom: 16px; border-radius: var(--radius-sm); background: rgba(251,191,36,0.06); border: 1px solid rgba(251,191,36,0.18); color: var(--orange); font-size: 12px; line-height: 1.5; }
+    .check-row { display: flex; align-items: flex-start; gap: 8px; font-size: 12px; color: var(--text-2); cursor: pointer; line-height: 1.5; }
+    .check-row input { accent-color: var(--accent); margin-top: 2px; }
+    .check-row small { display: block; font-size: 12px; color: var(--text-3); }
+    .run-error { display: none; gap: 8px; padding: 10px 16px; background: rgba(248,113,113,0.08); border-bottom: 1px solid rgba(248,113,113,0.2); color: var(--red); font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+    .run-error.is-visible { display: flex; }
+    .run-error small { display: block; color: var(--text-2); font-size: 12px; }
+    .conf-high { background: var(--green-bg); color: var(--green); }
+    .conf-medium { background: rgba(251,191,36,0.1); color: var(--orange); }
+    .conf-low { background: rgba(248,113,113,0.1); color: var(--red); }
+    .svg-stage { flex: 1; position: relative; overflow: hidden; cursor: grab; touch-action: none; min-height: 0; }
+    .svg-stage.is-panning { cursor: grabbing; }
+    #graph-svg-holder { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
+    #graph-svg-holder svg { display: block; }
+    .svg-controls { position: absolute; top: 12px; inset-inline-end: 12px; z-index: 5; display: flex; gap: 4px; }
+    .svg-controls .btn { padding: 6px 10px; min-width: 34px; justify-content: center; }
+    .panel-empty { color: var(--text-3); font-size: 13px; text-align: center; padding: 48px 16px; }
+    .advanced-toggle { width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: transparent; color: var(--text-3); font-size: 12px; font-weight: 500; cursor: pointer; font-family: var(--font); transition: all 150ms; }
     .advanced-toggle:hover { background: var(--surface-2); color: var(--text-2); }
-    .advanced-toggle i { font-size: 10px; transition: transform 200ms; }
+    .advanced-toggle i { font-size: 12px; transition: transform 200ms; }
     .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 
     /* Tabs */
     .view-tabs { display: flex; gap: 0; padding: 0 16px; border-bottom: 1px solid var(--border); background: var(--surface); flex-shrink: 0; }
-    .view-tab { display: flex; align-items: center; gap: 6px; padding: 11px 14px; font-size: 11px; font-weight: 500; color: var(--text-3); border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; transition: all 150ms; font-family: var(--mono); margin-bottom: -1px; letter-spacing: 0.02em; }
+    .view-tab { display: flex; align-items: center; gap: 6px; padding: 11px 14px; font-size: 12px; font-weight: 500; color: var(--text-3); border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; transition: all 150ms; font-family: var(--mono); margin-bottom: -1px; letter-spacing: 0.02em; }
     .view-tab:hover { color: var(--text-2); }
     .view-tab.is-active { color: var(--accent); border-bottom-color: var(--accent); }
-    .view-tab i { font-size: 10px; }
+    .view-tab i { font-size: 12px; }
 
     /* Empty state */
     .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; padding: 40px; text-align: center; gap: 16px; position: relative; }
@@ -117,18 +148,18 @@
     .empty-state svg.bg-pattern { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0.035; pointer-events: none; }
     .empty-icon { width: 60px; height: 60px; border-radius: 50%; background: linear-gradient(135deg, rgba(45,212,191,0.1), rgba(45,212,191,0.03)); border: 1px solid rgba(45,212,191,0.2); display: flex; align-items: center; justify-content: center; font-size: 22px; color: var(--accent); position: relative; z-index: 1; }
     .empty-title { font-size: 15px; font-weight: 600; color: var(--text); position: relative; z-index: 1; letter-spacing: -0.01em; }
-    .empty-desc { font-size: 12px; color: var(--text-3); max-width: 380px; line-height: 1.65; position: relative; z-index: 1; }
+    .empty-desc { font-size: 13px; color: var(--text-3); max-width: 380px; line-height: 1.65; position: relative; z-index: 1; }
     .empty-steps { display: flex; gap: 24px; margin-top: 4px; position: relative; z-index: 1; }
-    .empty-step { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-3); font-family: var(--mono); }
-    .step-dot { width: 20px; height: 20px; border-radius: 50%; background: rgba(45,212,191,0.1); border: 1px solid rgba(45,212,191,0.25); display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; color: var(--accent); }
+    .empty-step { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-3); font-family: var(--mono); }
+    .step-dot { width: 20px; height: 20px; border-radius: 50%; background: rgba(45,212,191,0.1); border: 1px solid rgba(45,212,191,0.25); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: var(--accent); }
 
     /* Console */
     .console-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; }
-    .console-label { font-size: 11px; font-weight: 600; color: var(--text-3); display: flex; align-items: center; gap: 6px; }
-    #terminal-logs { flex: 1; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); margin: 0 16px 16px; padding: 14px; overflow-y: auto; font-family: var(--mono); font-size: 11px; line-height: 1.7; color: var(--text-2); }
+    .console-label { font-size: 12px; font-weight: 600; color: var(--text-3); display: flex; align-items: center; gap: 6px; }
+    #terminal-logs { flex: 1; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); margin: 0 16px 16px; padding: 14px; overflow-y: auto; font-family: var(--mono); font-size: 12px; line-height: 1.7; color: var(--text-2); }
 
     /* Graph counter */
-    .graph-stats { position: absolute; top: 12px; left: 12px; z-index: 10; background: rgba(12,15,18,0.85); border: 1px solid var(--border); backdrop-filter: blur(12px); padding: 5px 12px; border-radius: 99px; font-size: 10px; font-family: var(--mono); color: var(--text-3); pointer-events: none; letter-spacing: 0.03em; }
+    .graph-stats { position: absolute; top: 56px; inset-inline-start: 12px; z-index: 10; background: rgba(12,15,18,0.85); border: 1px solid var(--border); backdrop-filter: blur(12px); padding: 5px 12px; border-radius: 99px; font-size: 12px; font-family: var(--mono); color: var(--text-3); pointer-events: none; letter-spacing: 0.03em; }
     .graph-stats .val { color: var(--accent); font-weight: 700; }
 
     /* Report drawer */
@@ -136,19 +167,39 @@
     .report-drawer.open { transform: translateY(0); }
     .report-header { display: flex; align-items: center; justify-content: space-between; padding-bottom: 12px; margin-bottom: 14px; border-bottom: 1px solid var(--border); }
     .report-title { font-size: 13px; font-weight: 600; color: var(--text); }
-    .report-conf { font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 99px; background: var(--green-bg); color: var(--green); }
-    #report-highlights > * { padding: 10px 14px; margin-bottom: 6px; background: var(--surface-2); border-left: 3px solid var(--accent); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; font-size: 12px; color: var(--text-2); line-height: 1.55; }
-    #report-summary { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 14px; font-family: var(--mono); font-size: 12px; color: var(--text-2); line-height: 1.65; white-space: pre-wrap; }
-
-    /* Override injected theme */
-    #osint-d2-brand-theme ~ * { all: revert; }
+    .report-conf { font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 99px; background: var(--green-bg); color: var(--green); }
+    #report-highlights > * { padding: 10px 14px; margin-bottom: 6px; background: var(--surface-2); border-inline-start: 3px solid var(--accent); border-start-end-radius: var(--radius-sm); border-end-end-radius: var(--radius-sm); font-size: 13px; color: var(--text-2); line-height: 1.55; }
+    #report-summary { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 14px; font-size: 13px; color: var(--text-2); line-height: 1.65; overflow-wrap: anywhere; }
+    #report-summary h1, #report-summary h2, #report-summary h3 { color: var(--text); font-size: 13px; font-weight: 600; margin: 14px 0 6px; }
+    #report-summary h1:first-child, #report-summary h2:first-child, #report-summary h3:first-child { margin-top: 0; }
+    #report-summary p, #report-summary ul, #report-summary ol, #report-summary pre, #report-summary table { margin-bottom: 8px; }
+    #report-summary ul, #report-summary ol { padding-inline-start: 18px; }
+    #report-summary a { color: var(--accent); }
+    #report-summary code, #report-summary pre { font-family: var(--mono); font-size: 13px; }
+    #report-summary pre { overflow-x: auto; }
 
     /* Responsive */
     @media (max-width: 1024px) {
-      .sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--border); max-height: 50vh; }
+      /* One view at a time: the form, or the results with the form collapsed. */
+      .sidebar { width: 100%; flex: 1; border-inline-end: none; border-bottom: 1px solid var(--border); }
+      .sidebar.is-collapsed { flex: 0 0 auto; }
+      .sidebar.is-collapsed .sidebar-form, .sidebar.is-collapsed .sidebar-footer { display: none; }
+      .sidebar.is-collapsed .sidebar-header { padding-block: 6px; }
+      .sidebar:not(.is-collapsed) ~ .main-area { display: none; }
       .workspace { flex-direction: column; }
-      .main-area { min-height: 50vh; }
-      input, select { min-height: 44px; }
+      #form-toggle-btn { display: inline-flex !important; }
+      input:not([type="checkbox"]), select { min-height: 44px; }
+      .btn { min-height: 36px; }
+      .logo-sub, .logo-text { display: none; }
+      .topbar { padding: 0 12px; }
+      .topbar-actions { gap: 6px; }
+      .topbar-actions .btn-text { display: none; }
+      .report-drawer { max-height: 70%; }
+    }
+    /* letter-spacing breaks the joining of Arabic letters */
+    [dir="rtl"] * { letter-spacing: 0 !important; }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
     }
   </style>
 </head>
@@ -160,24 +211,25 @@
     <div class="logo">
       <div class="logo-mark">D2</div>
       <div>
-        <div class="logo-text">OSINT-D2</div>
-        <div class="logo-sub">Identity Intelligence Platform</div>
+        <h1 class="logo-text">OSINT-D2</h1>
+        <div class="logo-sub">{{ t.app_subtitle }}</div>
       </div>
     </div>
     <div class="topbar-actions">
-      <span id="badge-status" class="badge badge-ok">
-        <span style="width:6px;height:6px;border-radius:50%;background:var(--green)"></span> {{ t.empty_title }}
-      </span>
-      <button id="btn-cancel" onclick="cancelInvestigation()" class="btn btn-danger" style="display:none">
-        <i class="fa-solid fa-stop"></i> {{ t.btn_cancel }}
+      <span id="badge-status" class="badge badge-ok" role="status" aria-live="polite"><span class="badge-dot"></span> {{ t.status_ready }}</span>
+      <button id="btn-cancel" onclick="cancelInvestigation()" class="btn btn-danger" style="display:none" aria-label="{{ t.btn_cancel }}">
+        <i class="fa-solid fa-stop" aria-hidden="true"></i> <span class="btn-text">{{ t.btn_cancel }}</span>
       </button>
-      <button id="btn-download-pdf" onclick="downloadArtefact('pdf')" class="btn" style="display:none">
-        <i class="fa-solid fa-file-pdf"></i> PDF
+      <button id="btn-report" onclick="toggleReportDrawer()" class="btn" style="display:none" aria-label="{{ t.btn_report }}">
+        <i class="fa-solid fa-file-lines" aria-hidden="true"></i> <span class="btn-text">{{ t.btn_report }}</span>
       </button>
-      <button id="btn-download-canvas" onclick="downloadArtefact('canvas')" class="btn" style="display:none">
-        <i class="fa-solid fa-diagram-project"></i> Canvas
+      <button id="btn-download-pdf" onclick="downloadArtefact('pdf')" class="btn" style="display:none" aria-label="PDF">
+        <i class="fa-solid fa-file-pdf" aria-hidden="true"></i> <span class="btn-text">PDF</span>
       </button>
-      <select id="ui-lang-select" onchange="window.location.href='/?lang='+this.value" style="background:var(--surface-2);color:var(--text);border:1px solid var(--border);border-radius:var(--radius-sm);padding:4px 8px;font-size:11px;font-family:var(--mono);cursor:pointer">
+      <button id="btn-download-canvas" onclick="downloadArtefact('canvas')" class="btn" style="display:none" aria-label="Canvas">
+        <i class="fa-solid fa-diagram-project" aria-hidden="true"></i> <span class="btn-text">Canvas</span>
+      </button>
+      <select id="ui-lang-select" class="lang-select" aria-label="{{ t.label_ui_lang }}" onchange="window.location.href='/?lang='+this.value">
         <option value="en" {% if ui_lang == 'en' %}selected{% endif %}>EN</option>
         <option value="es" {% if ui_lang == 'es' %}selected{% endif %}>ES</option>
         <option value="pt" {% if ui_lang == 'pt' %}selected{% endif %}>PT</option>
@@ -186,6 +238,7 @@
       </select>
     </div>
   </header>
+  <div class="progress"><div id="progress-bar" class="progress-bar"></div></div>
 
   <!-- WORKSPACE -->
   <div class="workspace">
@@ -194,24 +247,29 @@
     <aside id="control-panel" class="sidebar">
       <div class="sidebar-header">
         <span class="sidebar-title">{{ t.section_config }}</span>
-        <button onclick="toggleForm()" class="btn" style="padding:4px 8px;font-size:11px;display:none" id="form-toggle-btn"><i id="form-chevron" class="fa-solid fa-chevron-up" style="font-size:9px"></i></button>
+        <button onclick="toggleForm()" class="btn" style="padding:4px 8px;font-size: 12px;display:none" id="form-toggle-btn" aria-label="{{ t.aria_toggle_form }}" aria-expanded="true" aria-controls="vector-form"><i id="form-chevron" class="fa-solid fa-chevron-up" style="font-size: 12px"></i></button>
       </div>
       <div id="vector-form" class="sidebar-form">
+        <div id="api-key-notice" class="notice" role="note" style="display:none">
+          <i class="fa-solid fa-triangle-exclamation" aria-hidden="true" style="margin-top:2px"></i>
+          <span>{{ t.warn_no_api_key }}</span>
+        </div>
 
         <!-- Subject -->
         <div class="form-section">
           <div class="form-section-label"><i class="fa-solid fa-crosshairs"></i> {{ t.section_identity }}</div>
           <div class="field">
-            <div class="field-label">{{ t.label_primary_identity }} <span class="req">*</span></div>
             <div class="field-group">
+              <label class="field-label" for="target-input">{{ t.label_target }} <span class="req" aria-hidden="true">*</span></label>
               <div class="input-box">
-                <span class="ix"><i class="fa-solid fa-id-card"></i></span>
-                <input type="text" id="target-input" value="" placeholder="{{ t.label_target_hint }}">
+                <span class="ix"><i class="fa-solid fa-id-card" aria-hidden="true"></i></span>
+                <input type="text" id="target-input" aria-required="true" aria-describedby="form-error" maxlength="200" value="" placeholder="{{ t.label_target_hint }}">
               </div>
+              <label class="field-label" for="usernames-input">{{ t.label_usernames }}</label>
               <div class="input-box">
-                <span class="ix"><i class="fa-solid fa-at"></i></span>
-                <input type="text" id="usernames-input" value="" placeholder="username1, username2, ..." oninput="updateVecCounts()">
-                <span class="vec-count" id="vc-users">0 {{ t.vec_handles }}</span>
+                <span class="ix"><i class="fa-solid fa-at" aria-hidden="true"></i></span>
+                <input type="text" id="usernames-input" dir="ltr" value="" placeholder="username1, username2, ..." oninput="updateVecCounts()">
+                <span class="vec-count" id="vc-users" aria-hidden="true">0</span>
               </div>
             </div>
             <div class="field-hint">{{ t.label_usernames_hint }}</div>
@@ -222,17 +280,18 @@
         <div class="form-section">
           <div class="form-section-label"><i class="fa-solid fa-tower-broadcast"></i> {{ t.section_contact }}</div>
           <div class="field">
-            <div class="field-label">{{ t.label_channels }}</div>
             <div class="field-group">
+              <label class="field-label" for="emails-input">{{ t.label_emails }}</label>
               <div class="input-box">
-                <span class="ix"><i class="fa-regular fa-envelope"></i></span>
-                <input type="text" id="emails-input" value="" placeholder="{{ t.placeholder_email }}" oninput="updateVecCounts()">
-                <span class="vec-count" id="vc-emails">0 {{ t.vec_emails }}</span>
+                <span class="ix"><i class="fa-regular fa-envelope" aria-hidden="true"></i></span>
+                <input type="text" id="emails-input" dir="ltr" value="" placeholder="{{ t.placeholder_email }}" oninput="updateVecCounts()">
+                <span class="vec-count" id="vc-emails" aria-hidden="true">0</span>
               </div>
+              <label class="field-label" for="phones-input">{{ t.label_phones }}</label>
               <div class="input-box">
-                <span class="ix"><i class="fa-solid fa-mobile-screen"></i></span>
-                <input type="text" id="phones-input" value="" placeholder="{{ t.placeholder_phone }}" oninput="updateVecCounts()">
-                <span class="vec-count" id="vc-phones">0 {{ t.vec_phones }}</span>
+                <span class="ix"><i class="fa-solid fa-mobile-screen" aria-hidden="true"></i></span>
+                <input type="text" id="phones-input" dir="ltr" value="" placeholder="{{ t.placeholder_phone }}" oninput="updateVecCounts()">
+                <span class="vec-count" id="vc-phones" aria-hidden="true">0</span>
               </div>
             </div>
           </div>
@@ -242,10 +301,11 @@
         <div class="form-section">
           <div class="form-section-label"><i class="fa-solid fa-shield-halved"></i> {{ t.section_anchors }} <span class="optional-badge">{{ t.optional }}</span></div>
           <div class="field">
+            <label class="field-label" for="anchors-input">{{ t.label_anchors }}</label>
             <div class="input-box">
-              <span class="ix"><i class="fa-solid fa-fingerprint"></i></span>
-              <input type="text" id="anchors-input" value="" placeholder="github:user, web:https://..." oninput="updateVecCounts()">
-              <span class="vec-count" id="vc-anchors">0 {{ t.vec_anchors }}</span>
+              <span class="ix"><i class="fa-solid fa-fingerprint" aria-hidden="true"></i></span>
+              <input type="text" id="anchors-input" dir="ltr" value="" placeholder="github:user, web:https://..." oninput="updateVecCounts()">
+              <span class="vec-count" id="vc-anchors" aria-hidden="true">0</span>
             </div>
             <div class="field-hint">{{ t.anchors_hint }}</div>
           </div>
@@ -253,92 +313,111 @@
 
         <!-- Engine config -->
         <div class="form-section" style="margin-bottom:0">
-          <button type="button" onclick="toggleAdvanced()" class="advanced-toggle" aria-expanded="false" aria-controls="advanced-options">
-            <span><i class="fa-solid fa-sliders" style="margin-right:5px"></i> Motor de búsqueda</span>
+          <button type="button" onclick="toggleAdvanced()" class="advanced-toggle" aria-expanded="false" aria-controls="advanced-options" id="adv-toggle">
+            <span><i class="fa-solid fa-sliders" style="margin-inline-end:5px" aria-hidden="true"></i> {{ t.section_engine }}</span>
             <i id="adv-chevron" class="fa-solid fa-chevron-down"></i>
           </button>
           <div id="advanced-options" style="display:none;padding-top:12px">
             <div class="form-row">
               <div class="field">
-                <div class="field-label">{{ t.label_mode }}</div>
+                <label class="field-label" for="mode-select">{{ t.label_mode }}</label>
                 <div class="input-box">
-                  <span class="ix"><i class="fa-solid fa-robot"></i></span>
-                  <select id="mode-select"><option value="agent">{{ t.mode_agent }}</option><option value="phone">{{ t.mode_telecom }}</option></select>
+                  <span class="ix"><i class="fa-solid fa-robot" aria-hidden="true"></i></span>
+                  <select id="mode-select" onchange="updateModeUI()"><option value="agent">{{ t.mode_agent }}</option><option value="phone">{{ t.mode_telecom }}</option></select>
                 </div>
               </div>
               <div class="field">
-                <div class="field-label">{{ t.label_provider }}</div>
+                <label class="field-label" for="ai-provider-select">{{ t.label_provider }}</label>
                 <div class="input-box">
-                  <span class="ix"><i class="fa-solid fa-microchip"></i></span>
-                  <select id="ai-provider-select"><option value="deepseek">DeepSeek</option><option value="ollama">Ollama</option><option value="openai">OpenAI</option></select>
+                  <span class="ix"><i class="fa-solid fa-microchip" aria-hidden="true"></i></span>
+                  <select id="ai-provider-select" onchange="updateModeUI()">
+                    {% for value, label in [('deepseek', 'DeepSeek'), ('openai', 'OpenAI'), ('ollama', 'Ollama')] %}<option value="{{ value }}" {% if ai_provider == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+                    {% if ai_provider not in ['deepseek', 'openai', 'ollama'] %}<option value="{{ ai_provider }}" selected>{{ ai_provider }}</option>{% endif %}
+                  </select>
                 </div>
               </div>
             </div>
             <div class="form-row">
               <div class="field">
-                <div class="field-label">{{ t.label_lang }}</div>
+                <label class="field-label" for="lang-select">{{ t.label_lang }}</label>
                 <div class="input-box">
-                  <span class="ix"><i class="fa-solid fa-language"></i></span>
-                  <select id="lang-select"><option value="es">Español</option><option value="en">English</option><option value="pt">Português</option></select>
+                  <span class="ix"><i class="fa-solid fa-language" aria-hidden="true"></i></span>
+                  <select id="lang-select">
+                    {% for value, label in [('en', 'English'), ('es', 'Español'), ('pt', 'Português'), ('ar', 'العربية'), ('ru', 'Русский')] %}<option value="{{ value }}" {% if ui_lang == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+                  </select>
                 </div>
               </div>
               <div class="field">
-                <div class="field-label">{{ t.label_steps }}</div>
+                <label class="field-label" for="max-steps-input">{{ t.label_steps }}</label>
                 <div class="input-box">
-                  <span class="ix"><i class="fa-solid fa-shoe-prints"></i></span>
+                  <span class="ix"><i class="fa-solid fa-shoe-prints" aria-hidden="true"></i></span>
                   <input type="number" id="max-steps-input" value="6" min="3" max="15">
                 </div>
               </div>
             </div>
+            <label class="check-row">
+              <input type="checkbox" id="breach-check-input">
+              <span>{{ t.label_breach }}<small>{{ t.hint_breach }}</small></span>
+            </label>
           </div>
         </div>
       </div>
 
       <div class="sidebar-footer">
+        <p id="form-error" class="form-error" role="alert"></p>
         <button id="btn-start" onclick="launchInvestigation()" class="btn btn-primary btn-launch">
-          <span class="btn-label"><i class="fa-solid fa-play"></i> {{ t.btn_start }}</span>
+          <span class="btn-label"><i class="fa-solid fa-play" aria-hidden="true"></i> {{ t.btn_start }}</span>
           <span class="spinner"></span>
         </button>
         <p class="form-summary" id="form-summary">{{ t.form_summary_default }}</p>
+        <p class="form-legal">{{ t.authorized_use }}</p>
       </div>
     </aside>
 
     <!-- MAIN PANEL -->
     <main class="main-area">
-      <nav class="view-tabs" role="tablist">
-        <button class="view-tab is-active" data-view="graph" role="tab" aria-selected="true"><i class="fa-solid fa-diagram-project"></i> {{ t.tab_graph }}</button>
-        <button class="view-tab" data-view="timeline" role="tab" aria-selected="false"><i class="fa-solid fa-timeline"></i> {{ t.tab_timeline }}</button>
-        <button class="view-tab" data-view="console" role="tab" aria-selected="false"><i class="fa-solid fa-terminal"></i> {{ t.tab_console }}</button>
+      <div id="run-error" class="run-error" role="alert"></div>
+      <div id="graph-counter" class="graph-stats" style="display:none">
+        {{ t.graph_nodes }}: <span id="node-count" class="val">0</span> · {{ t.graph_edges }}: <span id="edge-count" class="val">0</span>
+      </div>
+      <nav class="view-tabs" role="tablist" aria-label="{{ t.aria_views }}">
+        <button class="view-tab is-active" id="tab-graph" data-view="graph" role="tab" aria-selected="true" aria-controls="graph-container"><i class="fa-solid fa-diagram-project"></i> {{ t.tab_graph }}</button>
+        <button class="view-tab" id="tab-timeline" data-view="timeline" role="tab" aria-selected="false" aria-controls="timeline-container" tabindex="-1"><i class="fa-solid fa-timeline"></i> {{ t.tab_timeline }}</button>
+        <button class="view-tab" id="tab-console" data-view="console" role="tab" aria-selected="false" aria-controls="view-console" tabindex="-1"><i class="fa-solid fa-terminal"></i> {{ t.tab_console }}</button>
       </nav>
 
       <!-- Console -->
-      <div id="view-console" class="view-panel" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+      <div id="view-console" class="view-panel" role="tabpanel" aria-labelledby="tab-console" style="display:none;flex-direction:column;flex:1;overflow:hidden">
         <div class="console-header">
           <span class="console-label"><i class="fa-solid fa-terminal" style="color:var(--accent)"></i> {{ t.console_reasoning }}</span>
-          <span id="step-counter" style="font-size:11px;color:var(--text-3);font-family:var(--mono)"></span>
+          <span id="step-counter" style="font-size: 12px;color:var(--text-3);font-family:var(--mono)"></span>
         </div>
-        <div id="terminal-logs">
+        <div id="terminal-logs" role="log" aria-live="polite" dir="auto">
           <div style="color:var(--text-3)">{{ t.console_ready }}</div>
         </div>
       </div>
 
       <!-- Graph SVG -->
-      <div id="graph-svg-container" class="view-panel" style="display:none;flex:1;overflow:auto;padding:16px">
-        <div id="graph-svg-holder" style="display:inline-block;min-width:100%"></div>
+      <div id="graph-svg-container" class="view-panel" role="tabpanel" aria-labelledby="tab-graph" style="display:none;flex:1;position:relative;min-height:0">
+        <div class="svg-controls" dir="ltr">
+          <button class="btn" onclick="zoomGraph(1.25)" aria-label="{{ t.graph_zoom_in }}"><i class="fa-solid fa-plus" aria-hidden="true"></i></button>
+          <button class="btn" onclick="zoomGraph(0.8)" aria-label="{{ t.graph_zoom_out }}"><i class="fa-solid fa-minus" aria-hidden="true"></i></button>
+          <button class="btn" onclick="fitGraph()" aria-label="{{ t.graph_fit }}"><i class="fa-solid fa-expand" aria-hidden="true"></i></button>
+        </div>
+        <div id="svg-stage" class="svg-stage" tabindex="0" dir="ltr" aria-label="{{ t.graph_stage_hint }}">
+          <div id="graph-svg-holder"></div>
+        </div>
       </div>
 
       <!-- Timeline -->
-      <div id="timeline-container" class="view-panel" style="display:none;flex:1;overflow-y:auto;padding:20px">
-        <div id="timeline-steps"></div>
+      <div id="timeline-container" class="view-panel" role="tabpanel" aria-labelledby="tab-timeline" tabindex="0" style="display:none;flex:1;overflow-y:auto;padding:20px">
+        <div id="timeline-steps"><p class="panel-empty">{{ t.timeline_empty }}</p></div>
       </div>
 
       <!-- Graph (vis.js) -->
-      <div id="graph-container" class="view-panel" style="flex:1;position:relative;min-height:0;overflow:hidden">
-        <div id="graph-counter" class="graph-stats" style="display:none">
-          NODOS: <span id="node-count" class="val">0</span> · CONEXIONES: <span id="edge-count" class="val">0</span>
-        </div>
+      <div id="graph-container" class="view-panel" role="tabpanel" aria-labelledby="tab-graph" style="flex:1;position:relative;min-height:0;overflow:hidden">
         <div id="empty-state" class="empty-state">
-          <svg class="bg-pattern" viewBox="0 0 800 500" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <svg class="bg-pattern" aria-hidden="true" viewBox="0 0 800 500" fill="none" xmlns="http://www.w3.org/2000/svg">
             <circle cx="400" cy="250" r="4" fill="#2dd4bf"/>
             <circle cx="300" cy="180" r="3" fill="#2dd4bf"/>
             <circle cx="500" cy="180" r="3" fill="#2dd4bf"/>
@@ -362,7 +441,7 @@
             <line x1="480" y1="340" x2="520" y2="380" stroke="#2dd4bf" stroke-width="0.3"/>
           </svg>
           <div class="empty-icon"><i class="fa-solid fa-fingerprint"></i></div>
-          <div class="empty-title">{{ t.empty_title }}</div>
+          <div class="empty-title">{{ t.status_ready }}</div>
           <div class="empty-desc">{{ t.empty_desc }}</div>
           <div class="empty-steps">
             <span class="empty-step"><span class="step-dot">1</span> {{ t.empty_step1 }}</span>
@@ -373,13 +452,13 @@
       </div>
 
       <!-- Report drawer -->
-      <div id="report-drawer" class="report-drawer">
+      <div id="report-drawer" class="report-drawer" role="region" aria-label="{{ t.report_title }}" inert>
         <div class="report-header">
           <div style="display:flex;align-items:center;gap:8px">
             <span class="report-title">{{ t.report_title }}</span>
-            <span id="report-confidence" class="report-conf">87%</span>
+            <span id="report-confidence" class="report-conf"></span>
           </div>
-          <button onclick="toggleReportDrawer()" class="btn" style="padding:4px 8px"><i class="fa-solid fa-xmark"></i></button>
+          <button onclick="toggleReportDrawer()" class="btn" style="padding:4px 8px" aria-label="{{ t.aria_close }}"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
         </div>
         <div id="report-highlights" style="margin-bottom:12px"></div>
         <div id="report-summary"></div>
@@ -393,20 +472,43 @@
     // i18n strings injected from server
     const T = {{ t | tojson }};
     let network = null, nodes = new vis.DataSet([]), edges = new vis.DataSet([]);
+    const AI_KEY_CONFIGURED = {{ ai_key_configured | tojson }};
+    const CONFIGURED_PROVIDER = {{ ai_provider | tojson }};
     let currentInvId = null, lastInvId = null, ws = null, currentView = 'graph';
 
     document.addEventListener('DOMContentLoaded', () => {
-      document.querySelectorAll('.view-tab').forEach(t => t.addEventListener('click', () => switchView(t.dataset.view)));
+      const tabs = [...document.querySelectorAll('.view-tab')];
+      tabs.forEach((t, i) => {
+        t.addEventListener('click', () => switchView(t.dataset.view));
+        t.addEventListener('keydown', e => {
+          const step = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
+          if (!step) return;
+          e.preventDefault();
+          const direction = document.dir === 'rtl' ? -step : step;
+          const next = tabs[(i + direction + tabs.length) % tabs.length];
+          switchView(next.dataset.view); next.focus();
+        });
+      });
+      document.addEventListener('keydown', e => {
+        if (e.key === 'Escape' && document.getElementById('report-drawer').classList.contains('open')) {
+          setDrawerOpen(false); document.getElementById('btn-report').focus();
+        }
+      });
+      initGraphStage();
+      restoreForm();
+      document.getElementById('vector-form').addEventListener('input', saveForm);
+      document.getElementById('vector-form').addEventListener('change', saveForm);
       ['usernames-input','emails-input','phones-input','max-steps-input'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.addEventListener('input', updateFormSummary);
       });
+      document.getElementById('vector-form').addEventListener('keydown', e => {
+        if (e.key === 'Enter' && e.target.matches('input:not([type="checkbox"])')) launchInvestigation();
+      });
       updateFormSummary();
-      // Show mobile toggle on small screens
-      if (window.innerWidth < 1024) {
-        const tb = document.getElementById('form-toggle-btn');
-        if (tb) tb.style.display = '';
-      }
+      updateModeUI();
+      updateVecCounts();
+      resumeInvestigation();
     });
 
     function initNetwork() {
@@ -433,8 +535,16 @@
     }
 
     async function launchInvestigation() {
+      if (currentInvId || document.getElementById('btn-start').classList.contains('is-loading')) return;
       const target = document.getElementById('target-input').value.trim();
-      if (!target) return;
+      const phonesRaw = document.getElementById('phones-input').value.trim();
+      const isPhoneMode = document.getElementById('mode-select').value === 'phone';
+      if (!target || (isPhoneMode && !phonesRaw)) {
+        setFormError(!target ? T.err_target_required : T.err_phone_required);
+        document.getElementById(!target ? 'target-input' : 'phones-input').focus();
+        return;
+      }
+      setFormError('');
       const usernames = document.getElementById('usernames-input').value.split(',').map(s=>s.trim()).filter(Boolean);
       const emails = document.getElementById('emails-input').value.split(',').map(s=>s.trim()).filter(Boolean);
       const phones = document.getElementById('phones-input').value.split(',').map(s=>s.trim()).filter(Boolean);
@@ -443,39 +553,41 @@
       const aiProvider = document.getElementById('ai-provider-select').value;
       const lang = document.getElementById('lang-select').value;
       const maxSteps = parseInt(document.getElementById('max-steps-input').value) || 6;
+      const enableBreachCheck = document.getElementById('breach-check-input').checked;
 
-      nodes.clear(); edges.clear();
+      if (ws) { ws.onclose = null; ws.close(); ws = null; }
+      nodes.clear(); edges.clear(); updateCounters();
+      setProgress(0); document.getElementById('step-counter').innerText = '';
       document.getElementById('terminal-logs').innerHTML = '';
-      hide('btn-download-pdf'); hide('btn-download-canvas');
-      document.getElementById('report-drawer').classList.remove('open');
-      document.getElementById('timeline-steps').innerHTML = '';
+      hide('btn-download-pdf'); hide('btn-download-canvas'); hide('btn-report');
+      setDrawerOpen(false);
+      document.getElementById('timeline-steps').replaceChildren(panelEmpty(T.timeline_empty));
       document.getElementById('graph-svg-holder').innerHTML = '';
       hide('graph-svg-container'); hide('timeline-container');
       show('graph-container');
-      document.getElementById('badge-status').innerHTML = '<span style="width:6px;height:6px;border-radius:50%;background:var(--accent);animation:pulse 1.5s infinite"></span> '+T.status_investigating;
-      document.getElementById('badge-status').className = 'badge badge-active';
+      setStatus('badge-active', T.status_investigating);
       hide('empty-state'); hasSvgGraph = false;
+      setRunError('');
       const btn = document.getElementById('btn-start'); if (btn) btn.classList.add('is-loading');
-      const gc = document.getElementById('graph-counter');
-      if (gc) gc.style.display = '';
       if (!network) initNetwork();
-
-      if (window.innerWidth < 1024) {
-        const form = document.getElementById('vector-form');
-        if (form) form.style.display = 'none';
-      }
+      setFormCollapsed(true);
       switchView('console');
 
       try {
         const resp = await fetch('/api/investigate', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ target, usernames, emails, phones, trust_anchors: anchors, mode, ai_provider: aiProvider, language: lang, max_steps: maxSteps })
+          body: JSON.stringify({ target, usernames, emails, phones, trust_anchors: anchors, mode, ai_provider: aiProvider, language: lang, max_steps: maxSteps, enable_breach_check: enableBreachCheck })
         });
         const data = await resp.json();
+        if (!resp.ok) throw new Error(typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail));
         currentInvId = data.investigation_id;
+        storeSession('osint-d2-run', currentInvId);
         show('btn-cancel');
         connectWebSocket(currentInvId);
-      } catch (err) { logToTerminal(`[ERROR] ${T.js_api_error}: ${err}`); }
+      } catch (err) {
+        logToTerminal(`[ERROR] ${T.js_api_error}: ${err.message || err}`);
+        finishInvestigation('failed');
+      }
     }
 
     function show(id) { const e = document.getElementById(id); if (e) e.style.display = ''; }
@@ -486,18 +598,23 @@
       ws = new WebSocket(`${protocol}//${location.host}/ws/${invId}`);
       ws.onmessage = (event) => {
         const msg = JSON.parse(event.data);
-        if (msg.type === 'log') { logToTerminal(msg.data); }
+        if (msg.type === 'error') { forgetInvestigation(); }
+        else if (msg.type === 'log') { logToTerminal(msg.data); }
         else if (msg.type === 'graph_svg') {
           const holder = document.getElementById('graph-svg-holder');
           if (holder && msg.data.svg) {
             holder.innerHTML = DOMPurify.sanitize(msg.data.svg, {USE_PROFILES: {svg: true, svgFilters: true}});
             const svgEl = holder.querySelector('svg');
-            if (svgEl) { svgEl.style.maxWidth = '100%'; svgEl.style.height = 'auto'; svgEl.style.display = 'block'; }
+            if (svgEl) {
+              const box = svgEl.viewBox.baseVal;
+              svgEl.setAttribute('width', box.width); svgEl.setAttribute('height', box.height);
+              svgEl.setAttribute('role', 'img'); svgEl.setAttribute('aria-label', T.tab_graph + ': ' + msg.data.target);
+            }
             showGraphSvg();
+            fitGraph(true);
           }
           logToTerminal('[GRAPH] ' + msg.data.nodes + ' ' + T.js_graph_entities + ', ' + msg.data.edges + ' ' + T.js_graph_relations + ', ' + msg.data.vectors + ' ' + T.js_graph_vectors + '.');
         } else if (msg.type === 'timeline') { renderTimeline(msg.data); showTimeline(); }
-        else if (msg.type === 'graph_reset') { nodes.clear(); edges.clear(); updateCounters(); logToTerminal('[GRAPH] ' + T.js_graph_rebuilding); }
         else if (msg.type === 'node_add') {
           if (!nodes.get(msg.data.id)) { nodes.add(msg.data); updateCounters(); if (network) network.fit({ animation: { duration: 400, easingFunction: 'easeInOutQuad' } }); }
         } else if (msg.type === 'edge_add') {
@@ -505,55 +622,241 @@
         } else if (msg.type === 'phone_data') {
           logToTerminal(`[TELECOM] ${T.js_telecom_carrier}: ${msg.data.carrier} | ${T.js_telecom_country}: ${msg.data.country} | ${T.js_telecom_whatsapp}: ${msg.data.whatsapp ? T.js_telecom_yes : T.js_telecom_no}`);
         } else if (msg.type === 'report_done') { showReport(msg.data); }
-        else if (msg.type === 'status' && msg.data === 'completed') {
-          document.getElementById('badge-status').innerHTML = '<span style="width:6px;height:6px;border-radius:50%;background:var(--green)"></span> '+T.status_completed;
-          document.getElementById('badge-status').className = 'badge badge-ok';
-          hide('btn-cancel'); lastInvId = currentInvId; currentInvId = null; show('btn-download-pdf'); show('btn-download-canvas'); switchView('graph');
-          const btn = document.getElementById('btn-start'); if (btn) btn.classList.remove('is-loading');
-        } else if (msg.type === 'status' && msg.data === 'cancelled') {
-          document.getElementById('badge-status').innerHTML = '<span style="width:6px;height:6px;border-radius:50%;background:var(--orange)"></span> '+T.status_cancelled;
-          hide('btn-cancel'); lastInvId = currentInvId; currentInvId = null; show('btn-download-pdf'); show('btn-download-canvas');
-          const btn = document.getElementById('btn-start'); if (btn) btn.classList.remove('is-loading');
+        else if (msg.type === 'progress') { setProgress(msg.data.step / msg.data.max_steps); document.getElementById('step-counter').innerText = `${T.console_step} ${msg.data.step} / ${msg.data.max_steps}`; }
+        else if (msg.type === 'artifact') { show('btn-download-' + msg.data); }
+        else if (msg.type === 'status') { finishInvestigation(msg.data); }
+      };
+      ws.onclose = () => {
+        if (currentInvId) {
+          logToTerminal('[ERROR] ' + T.js_ws_lost);
+          finishInvestigation('failed');
         }
       };
     }
 
-    const KIND_STYLE = { Target:['#f87171','INICIO'], Platform:['#818cf8','PERFIL'], Domain:['#818cf8','WEB'], Phone:['#4ade80','TEL'], Email:['#fbbf24','EMAIL'], Identity:['#fb923c','ID'], Finding:['#38bdf8','HALLAZGO'], Colleague:['#c084fc','TERCERO'], Breach:['#ef4444','BREACH'], Noise:['#52525b','DESCARTADO'] };
+    const STATUS_VIEW = {
+      completed: ['badge-ok', () => T.status_completed],
+      partial: ['badge-warn', () => T.status_partial],
+      cancelled: ['badge-warn', () => T.status_cancelled],
+      failed: ['badge-error', () => T.status_failed],
+    };
+
+    function finishInvestigation(status) {
+      const view = STATUS_VIEW[status];
+      if (!view) return;
+      setStatus(view[0], view[1]());
+      setProgress(status === 'completed' || status === 'partial' ? 1 : 0);
+      hide('btn-cancel');
+      lastInvId = currentInvId; currentInvId = null;
+      const btn = document.getElementById('btn-start'); if (btn) btn.classList.remove('is-loading');
+      if (status === 'failed') {
+        setRunError(lastError || T.status_failed);
+        document.getElementById('timeline-steps').replaceChildren(panelEmpty(T.timeline_no_steps));
+        switchView('console');
+      } else if (hasSvgGraph) switchView('graph');
+    }
+
+    let lastError = '';
+    function setRunError(text) {
+      const el = document.getElementById('run-error');
+      if (!text) { lastError = ''; el.classList.remove('is-visible'); el.replaceChildren(); return; }
+      const message = document.createElement('div');
+      message.textContent = text.replace(/^\[ERROR\]\s*/, '');
+      if (/401|api.?key/i.test(text)) {
+        const hint = document.createElement('small'); hint.textContent = T.hint_api_key; message.appendChild(hint);
+      }
+      el.replaceChildren(message); el.classList.add('is-visible');
+    }
+
+    function setFormCollapsed(collapsed) {
+      document.getElementById('control-panel').classList.toggle('is-collapsed', collapsed);
+      const button = document.getElementById('form-toggle-btn');
+      button.setAttribute('aria-expanded', String(!collapsed));
+      document.getElementById('form-chevron').className = 'fa-solid fa-chevron-' + (collapsed ? 'down' : 'up');
+    }
+
+    // Tab-scoped state: survives a reload or language switch, not closing the tab.
+    function storeSession(key, value) {
+      try {
+        if (value === null) sessionStorage.removeItem(key); else sessionStorage.setItem(key, value);
+      } catch (e) { /* storage unavailable: nothing to keep */ }
+    }
+    function readSession(key) {
+      try { return sessionStorage.getItem(key); } catch (e) { return null; }
+    }
+    const FORM_FIELDS = ['target-input', 'usernames-input', 'emails-input', 'phones-input', 'anchors-input', 'mode-select', 'ai-provider-select', 'lang-select', 'max-steps-input'];
+    function saveForm() {
+      const data = Object.fromEntries(FORM_FIELDS.map(id => [id, document.getElementById(id).value]));
+      data['breach-check-input'] = document.getElementById('breach-check-input').checked;
+      storeSession('osint-d2-form', JSON.stringify(data));
+    }
+    function restoreForm() {
+      let data = null;
+      try { data = JSON.parse(readSession('osint-d2-form')); } catch (e) { data = null; }
+      if (!data) return;
+      FORM_FIELDS.filter(id => id !== 'lang-select').forEach(id => {
+        if (data[id] != null) document.getElementById(id).value = data[id];
+      });
+      document.getElementById('breach-check-input').checked = Boolean(data['breach-check-input']);
+    }
+
+    // Reconnect after a reload: the server replays every event of the run.
+    function resumeInvestigation() {
+      const id = readSession('osint-d2-run');
+      if (!id) return;
+      currentInvId = id;
+      setStatus('badge-active', T.status_investigating);
+      hide('empty-state'); initNetwork();
+      document.getElementById('terminal-logs').replaceChildren();
+      document.getElementById('btn-start').classList.add('is-loading');
+      show('btn-cancel'); setFormCollapsed(true);
+      connectWebSocket(id);
+    }
+    function forgetInvestigation() {
+      storeSession('osint-d2-run', null);
+      currentInvId = null;
+      setStatus('badge-ok', T.status_ready);
+      show('empty-state');
+      hide('btn-cancel'); setFormCollapsed(false);
+      document.getElementById('btn-start').classList.remove('is-loading');
+    }
+
+    // Final graph: pan with drag or arrow keys, zoom with wheel, pinch, buttons, or +/-.
+    const stage = { x: 0, y: 0, scale: 1 };
+    function applyStage() {
+      document.getElementById('graph-svg-holder').style.transform = `translate(${stage.x}px, ${stage.y}px) scale(${stage.scale})`;
+    }
+    function zoomGraph(factor, cx, cy) {
+      const el = document.getElementById('svg-stage');
+      const px = cx ?? el.clientWidth / 2, py = cy ?? el.clientHeight / 2;
+      const scale = Math.min(3, Math.max(0.1, stage.scale * factor));
+      stage.x = px - (px - stage.x) * (scale / stage.scale);
+      stage.y = py - (py - stage.y) * (scale / stage.scale);
+      stage.scale = scale; applyStage();
+    }
+    // Starts readable: the whole graph when it fits at a legible size, otherwise its start.
+    function fitGraph(initial) {
+      const el = document.getElementById('svg-stage');
+      const svg = el.querySelector('svg');
+      if (!svg || !el.clientWidth) return;
+      const box = svg.viewBox.baseVal;
+      const fit = Math.min(el.clientWidth / box.width, el.clientHeight / box.height);
+      stage.scale = initial === true ? Math.max(fit, 0.85) : fit;
+      stage.x = initial === true && stage.scale > fit ? 0 : (el.clientWidth - box.width * stage.scale) / 2;
+      stage.y = initial === true && stage.scale > fit ? 0 : (el.clientHeight - box.height * stage.scale) / 2;
+      applyStage();
+    }
+    function initGraphStage() {
+      const el = document.getElementById('svg-stage');
+      const pointers = new Map();
+      let pinchDistance = 0;
+      el.addEventListener('wheel', e => {
+        e.preventDefault();
+        const rect = el.getBoundingClientRect();
+        zoomGraph(e.deltaY < 0 ? 1.1 : 0.9, e.clientX - rect.left, e.clientY - rect.top);
+      }, { passive: false });
+      el.addEventListener('pointerdown', e => {
+        el.setPointerCapture(e.pointerId); pointers.set(e.pointerId, [e.clientX, e.clientY]); pinchDistance = 0;
+        el.classList.add('is-panning');
+      });
+      el.addEventListener('pointermove', e => {
+        const last = pointers.get(e.pointerId);
+        if (!last) return;
+        pointers.set(e.pointerId, [e.clientX, e.clientY]);
+        if (pointers.size === 1) {
+          stage.x += e.clientX - last[0]; stage.y += e.clientY - last[1]; applyStage();
+        } else if (pointers.size === 2) {
+          const [a, b] = [...pointers.values()];
+          const distance = Math.hypot(a[0] - b[0], a[1] - b[1]);
+          const rect = el.getBoundingClientRect();
+          if (pinchDistance) zoomGraph(distance / pinchDistance, (a[0] + b[0]) / 2 - rect.left, (a[1] + b[1]) / 2 - rect.top);
+          pinchDistance = distance;
+        }
+      });
+      const release = e => { pointers.delete(e.pointerId); pinchDistance = 0; if (!pointers.size) el.classList.remove('is-panning'); };
+      el.addEventListener('pointerup', release);
+      el.addEventListener('pointercancel', release);
+      el.addEventListener('keydown', e => {
+        const pan = { ArrowLeft: [60, 0], ArrowRight: [-60, 0], ArrowUp: [0, 60], ArrowDown: [0, -60] }[e.key];
+        if (pan) { e.preventDefault(); stage.x += pan[0]; stage.y += pan[1]; applyStage(); }
+        else if (e.key === '+' || e.key === '=') zoomGraph(1.25);
+        else if (e.key === '-') zoomGraph(0.8);
+        else if (e.key === '0') fitGraph();
+      });
+    }
+
+    function confidenceLevel(value) { return value >= 0.7 ? 'high' : value >= 0.4 ? 'medium' : 'low'; }
+    function confidenceText(value) { return Math.round(value * 100) + '% · ' + T['confidence_' + confidenceLevel(value)]; }
+
+    function setStatus(cls, text) {
+      const badge = document.getElementById('badge-status');
+      badge.className = 'badge ' + cls;
+      const dot = document.createElement('span'); dot.className = 'badge-dot';
+      badge.replaceChildren(dot, ' ' + text);
+    }
+
+    function setProgress(ratio) { document.getElementById('progress-bar').style.width = Math.min(100, Math.round(ratio * 100)) + '%'; }
+
+    function setFormError(text) {
+      const el = document.getElementById('form-error');
+      el.textContent = text; el.classList.toggle('is-visible', Boolean(text));
+    }
+
+    function panelEmpty(text) { const p = document.createElement('p'); p.className = 'panel-empty'; p.textContent = text; return p; }
+
+    function updateModeUI() {
+      const isAgent = document.getElementById('mode-select').value === 'agent';
+      const provider = document.getElementById('ai-provider-select');
+      ['ai-provider-select', 'max-steps-input', 'breach-check-input'].forEach(id => { document.getElementById(id).disabled = !isAgent; });
+      updateFormSummary();
+      document.getElementById('api-key-notice').style.display = isAgent && provider.value !== 'ollama' && !(AI_KEY_CONFIGURED && provider.value === CONFIGURED_PROVIDER) ? 'flex' : 'none';
+    }
+
+    const KIND_STYLE = { Platform:['#818cf8',T.kind_platform], Phone:['#4ade80',T.kind_phone], Email:['#fbbf24',T.kind_email], Identity:['#fb923c',T.kind_identity], Finding:['#38bdf8',T.kind_finding], Breach:['#ef4444',T.kind_breach] };
     function esc(s) { return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
     function extractFacts(text) {
       if (!text) return [];
       const out=[], push=v=>{if(v&&!out.map(x=>x.toLowerCase()).includes(v.toLowerCase()))out.push(v);};
-      (text.match(/\+?\d[\d\s\-()]{7,}\d/g)||[]).forEach(m=>{if(m.replace(/\D/g,'').length>=8)push('tel '+m.trim());});
+      (text.match(/\+\d[\d\s\-()]{7,}\d/g)||[]).forEach(m=>{if(m.replace(/\D/g,'').length>=8)push('tel '+m.trim());});
       (text.match(/[\w.+-]+@[\w-]+\.[\w.]+/g)||[]).forEach(push);
-      let m; if((m=/followers[=:\s]+(\d+)/i.exec(text)))push(m[1]+' seguidores');
-      if((m=/public_repos[=:\s]+(\d+)/i.exec(text)))push(m[1]+' repos');
+      let m; if((m=/followers[=:\s]+(\d+)/i.exec(text)))push(m[1]+' '+T.fact_followers);
+      if((m=/public_repos[=:\s]+(\d+)/i.exec(text)))push(m[1]+' '+T.fact_repos);
       return out.slice(0,5);
     }
 
     function renderTimeline(data) {
       const wrap=document.getElementById('timeline-steps'); wrap.innerHTML='';
       const steps=data.steps||[];
-      if(!steps.length){wrap.innerHTML='<div style="color:var(--text-3);font-size:12px">Sin pasos.</div>';return;}
-      if(data.confidence!=null){const c=document.createElement('div');c.style.cssText='margin-bottom:16px;display:flex;align-items:center;gap:10px';c.innerHTML='<span style="font-size:11px;color:var(--text-3)">CONFIANZA</span><span style="font-size:22px;font-weight:700;color:var(--green)">'+Math.round(data.confidence*100)+'%</span>';wrap.appendChild(c);}
+      if(!steps.length){wrap.appendChild(panelEmpty(T.timeline_no_steps));return;}
+      if(data.confidence!=null){const c=document.createElement('div');c.style.cssText='margin-bottom:16px;display:flex;align-items:center;gap:10px';c.innerHTML='<span style="font-size: 12px;color:var(--text-3)">'+esc(T.timeline_confidence)+'</span><span class="report-conf conf-'+confidenceLevel(data.confidence)+'">'+esc(confidenceText(data.confidence))+'</span>';wrap.appendChild(c);}
       steps.forEach((s,i)=>{
         const style=KIND_STYLE[s.kind]||['#71717a',s.kind], color=style[0], kind=style[1];
         const label=(s.label||'').split('\n')[0], via=(s.label||'').match(/\[via ([a-z_]+)\]/);
         const facts=extractFacts(s.evidence||''), corr=s.correlation!=null?Math.round(s.correlation*100)+'%':'';
         const el=document.createElement('div');el.style.cssText='display:flex;gap:14px';
-        el.innerHTML='<div style="width:14px;display:flex;flex-direction:column;align-items:center;flex-shrink:0"><div style="width:10px;height:10px;border-radius:50%;border:2px solid '+color+';background:'+color+'22;margin-top:12px"></div>'+(i<steps.length-1?'<div style="width:1px;flex:1;background:var(--border)"></div>':'')+'</div><div style="flex:1;padding-bottom:16px"><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px"><span style="font-size:10px;font-weight:600;padding:2px 6px;border-radius:4px;border:1px solid '+color+'44;color:'+color+'">'+esc(kind)+'</span><span style="font-size:10px;color:var(--text-3);font-family:var(--mono)">#'+i+'</span>'+(via?'<span style="font-size:10px;color:var(--text-3);font-family:var(--mono);background:var(--surface-2);padding:2px 6px;border-radius:4px">via '+esc(via[1])+'</span>':'')+(corr?'<span style="font-size:10px;font-weight:600;color:var(--green);margin-left:auto">'+corr+'</span>':'')+'</div><div style="font-size:13px;color:var(--text);line-height:1.4;font-weight:500">'+esc(label)+'</div>'+(facts.length?'<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">'+facts.map(f=>'<span style="font-size:10px;background:var(--surface-2);border:1px solid var(--border);color:var(--accent);padding:2px 8px;border-radius:99px">'+esc(f)+'</span>').join('')+'</div>':'')+'</div>';
+        el.innerHTML='<div style="width:14px;display:flex;flex-direction:column;align-items:center;flex-shrink:0"><div style="width:10px;height:10px;border-radius:50%;border:2px solid '+color+';background:'+color+'22;margin-top:12px"></div>'+(i<steps.length-1?'<div style="width:1px;flex:1;background:var(--border)"></div>':'')+'</div><div style="flex:1;padding-bottom:16px"><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px"><span style="font-size: 12px;font-weight:600;padding:2px 6px;border-radius:4px;border:1px solid '+color+'44;color:'+color+'">'+esc(kind)+'</span><span style="font-size: 12px;color:var(--text-3);font-family:var(--mono)">#'+i+'</span>'+(via?'<span style="font-size: 12px;color:var(--text-3);font-family:var(--mono);background:var(--surface-2);padding:2px 6px;border-radius:4px">via '+esc(via[1])+'</span>':'')+(corr?'<span style="font-size: 12px;font-weight:600;color:var(--green);margin-inline-start:auto">'+corr+'</span>':'')+'</div><div style="font-size:13px;color:var(--text);line-height:1.4;font-weight:500">'+esc(label)+'</div>'+(facts.length?'<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">'+facts.map(f=>'<span style="font-size: 12px;background:var(--surface-2);border:1px solid var(--border);color:var(--accent);padding:2px 8px;border-radius:99px">'+esc(f)+'</span>').join('')+'</div>':'')+'</div>';
         wrap.appendChild(el);
       });
     }
 
     let hasSvgGraph = false;
     function switchView(view) {
-      document.querySelectorAll('.view-tab').forEach(t => { const on=t.dataset.view===view; t.classList.toggle('is-active',on); t.setAttribute('aria-selected',String(on)); });
+      document.querySelectorAll('.view-tab').forEach(t => {
+        const on = t.dataset.view === view;
+        t.classList.toggle('is-active', on);
+        t.setAttribute('aria-selected', String(on));
+        t.tabIndex = on ? 0 : -1;
+      });
+      document.getElementById('tab-graph').setAttribute('aria-controls', hasSvgGraph ? 'graph-svg-container' : 'graph-container');
+      document.getElementById('graph-counter').style.display = view === 'graph' && !hasSvgGraph && nodes.length ? '' : 'none';
       document.querySelectorAll('.view-panel').forEach(p => p.style.display = 'none');
       if (view === 'graph') {
         if (hasSvgGraph) {
           const el = document.getElementById('graph-svg-container'); if(el) el.style.display='flex';
         } else {
           const el = document.getElementById('graph-container'); if(el) el.style.display='';
+          // vis-network cannot measure a hidden container.
+          if (network) { network.redraw(); network.fit(); }
         }
       } else {
         const map = { timeline:['timeline-container'], console:['view-console'] };
@@ -565,20 +868,40 @@
     function toggleAdvanced() {
       const p=document.getElementById('advanced-options'),c=document.getElementById('adv-chevron');
       if(!p)return;const hidden=p.style.display==='none';p.style.display=hidden?'':'none';
+      document.getElementById('adv-toggle').setAttribute('aria-expanded',String(hidden));
       if(c)c.style.transform=hidden?'rotate(180deg)':'';
     }
-    function updateVecCounts(){const c=(id)=>{const el=document.getElementById(id);if(!el||!el.value.trim())return 0;return el.value.split(',').filter(s=>s.trim()).length;};const set=(id,n,label)=>{const el=document.getElementById(id);if(el)el.textContent=n+' '+label;};set('vc-users',c('usernames-input'),T.vec_handles);set('vc-emails',c('emails-input'),T.vec_emails);set('vc-phones',c('phones-input'),T.vec_phones);set('vc-anchors',c('anchors-input'),T.vec_anchors);updateFormSummary();}
-    function updateFormSummary(){const el=document.getElementById('form-summary');if(!el)return;const count=id=>{const i=document.getElementById(id);if(!i||!i.value.trim())return 0;return i.value.split(',').filter(s=>s.trim()).length;};const vec=count('usernames-input')+count('emails-input')+count('phones-input');const n=document.getElementById('max-steps-input');el.textContent=`${vec} ${T.summary_vectors} · ${T.summary_agent} · ${T.summary_up_to} ${n?n.value:'6'} ${T.summary_steps}`;}
-    function toggleForm(){const f=document.getElementById('vector-form');if(f)f.style.display=f.style.display==='none'?'':'none';}
+    function fieldCount(id){const el=document.getElementById(id);return el&&el.value.trim()?el.value.split(',').filter(v=>v.trim()).length:0;}
+    function updateVecCounts(){[['vc-users','usernames-input'],['vc-emails','emails-input'],['vc-phones','phones-input'],['vc-anchors','anchors-input']].forEach(([counter,field])=>{document.getElementById(counter).textContent=fieldCount(field);});updateFormSummary();}
+    function updateFormSummary(){
+      const el=document.getElementById('form-summary');if(!el)return;
+      const known=fieldCount('usernames-input')+fieldCount('emails-input')+fieldCount('phones-input');
+      const steps=document.getElementById('max-steps-input').value;
+      el.textContent=document.getElementById('mode-select').value==='agent'
+        ? `${T.summary_vectors}: ${known} · ${T.summary_agent} · ${T.summary_up_to} ${steps} ${T.summary_steps}`
+        : `${T.label_phones}: ${fieldCount('phones-input')} · ${T.mode_telecom}`;
+    }
+    function toggleForm(){setFormCollapsed(!document.getElementById('control-panel').classList.contains('is-collapsed'));}
     async function cancelInvestigation(){if(!currentInvId)return;logToTerminal('[CANCEL] '+T.js_cancel_stopping);try{await fetch(`/api/cancel/${currentInvId}`,{method:'POST'});}catch(e){logToTerminal('[ERROR] '+e.message);}}
     function showGraphSvg(){ hasSvgGraph = true; switchView('graph'); }
     function showTimeline(){ switchView('timeline'); }
-    function logToTerminal(text){const logs=document.getElementById('terminal-logs');const row=document.createElement('div');if(text.includes('[PASO'))row.style.cssText='color:var(--accent);font-weight:600';else if(text.includes('[ERROR]'))row.style.color='var(--red)';else row.style.color='var(--text-2)';row.innerText=text;logs.appendChild(row);logs.scrollTop=logs.scrollHeight;}
+    function logToTerminal(text){const logs=document.getElementById('terminal-logs');const row=document.createElement('div');row.dir='auto';if(text.includes('[STEP'))row.style.cssText='color:var(--accent);font-weight:600';else if(text.includes('[ERROR]')){row.style.color='var(--red)';lastError=text;}else if(text.includes('[WARN]')||text.includes('[AVISO]')||text.includes('[ВНИМАНИЕ]')||text.includes('[تنبيه]'))row.style.color='var(--orange)';else row.style.color='var(--text-2)';row.innerText=text;logs.appendChild(row);logs.scrollTop=logs.scrollHeight;}
     function updateCounters(){const nc=document.getElementById('node-count'),ec=document.getElementById('edge-count');if(nc)nc.innerText=nodes.length;if(ec)ec.innerText=edges.length;}
-    function showReport(rep){const c=document.getElementById('report-confidence');if(c)c.innerText=Math.round(rep.confidence*100)+'%';const h=document.getElementById('report-highlights');if(h){h.innerHTML='';(rep.highlights||[]).forEach(t=>{const d=document.createElement('div');d.innerHTML=DOMPurify.sanitize('<span style="color:var(--accent);margin-right:6px">•</span>'+t);h.appendChild(d);});}document.getElementById('report-summary').innerText=rep.summary||'';document.getElementById('report-drawer').classList.add('open');}
-    function toggleReportDrawer(){document.getElementById('report-drawer').classList.toggle('open');}
+    function showReport(rep){
+      const conf = document.getElementById('report-confidence');
+      conf.innerText = confidenceText(rep.confidence);
+      conf.className = 'report-conf conf-' + confidenceLevel(rep.confidence);
+      const h = document.getElementById('report-highlights');
+      h.replaceChildren(...(rep.highlights||[]).map(t => { const d = document.createElement('div'); d.textContent = t; return d; }));
+      document.getElementById('report-summary').innerHTML = DOMPurify.sanitize(rep.summary_html || esc(rep.summary));
+      show('btn-report'); setDrawerOpen(true);
+    }
+    function setDrawerOpen(open){
+      const d = document.getElementById('report-drawer');
+      d.classList.toggle('open', open); d.inert = !open;
+    }
+    function toggleReportDrawer(){ setDrawerOpen(!document.getElementById('report-drawer').classList.contains('open')); }
     function downloadArtefact(type){const id=currentInvId||lastInvId;if(!id)return;window.open(`/api/download/${id}/${type}`,'_blank');}
-    window.onload = function(){};
   </script>
   <style>@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}</style>
 </body>
