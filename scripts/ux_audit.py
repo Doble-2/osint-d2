@@ -10,7 +10,8 @@ Aplica las sondas de la skill `dashboard-ui-review` sobre el servidor vivo:
 
 Salida: informe con números reales, no opiniones.
 """
-import asyncio, json, sys
+import asyncio
+import json
 from playwright.async_api import async_playwright
 
 URL = "http://127.0.0.1:8000/"
@@ -119,7 +120,6 @@ async def main():
             ctx = await browser.new_context(viewport={"width": w, "height": h},
                                             device_scale_factor=2, is_mobile=(w < 800), has_touch=(w < 800))
             pg = await ctx.new_page()
-            errs = []
             await pg.add_init_script(
                 "window.__errs=[];window.onerror=(m,s,l,c,e)=>window.__errs.push(String(m)+(e&&e.stack?(' @ '+e.stack.split('\\n')[1]):''));")
             await pg.goto(URL, wait_until="networkidle")

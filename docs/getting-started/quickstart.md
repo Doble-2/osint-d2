@@ -1,109 +1,98 @@
 # Quick Start
 
-This guide walks you through your first OSINT investigation. In 5 minutes you'll go from a username to a structured intelligence dossier.
+This tutorial takes you from installation to your first result, then to an AI-assisted investigation. Direct scans need no API key.
 
----
+!!! warning "Before you start"
+    Only investigate where you have a lawful basis and, where required, authorization. Practice on a username of your own. See [Security & Responsible Use](../guides/security.md).
 
-## Your First Investigation
+This guide assumes a [Poetry installation](installation.md). With Docker, replace `poetry run` with `docker compose exec osint-d2`.
 
-### 1. Start the interactive CLI
+## 1. Check your setup
 
 ```bash
-poetry run osint-d2
+poetry run osint-d2 doctor run
 ```
 
-You'll see the OSINT-D2 banner and a guided wizard:
+The table shows what works, and what to do about anything that doesn't. A missing AI key is fine for now.
+
+## 2. Run your first scan
+
+```bash
+poetry run osint-d2 scan your-username
+```
+
+You get a table with one row per source: `Exists` says whether the profile was found. Expect some false positives, because other people may use the same handle.
+
+!!! tip "If a source shows an error"
+    Some platforms block automated requests. The scan continues with the others, and the error appears in that row.
+
+## 3. Remove false positives
+
+Tell OSINT-D2 which account you know is yours. Profiles that contradict it are discarded:
+
+```bash
+poetry run osint-d2 scan your-username --trust github:your-username
+```
+
+## 4. Save the results
+
+```bash
+poetry run osint-d2 hunt -u your-username --export-json --export-pdf
+```
+
+Files are saved to `reports/` in the current directory. They contain personal data, so store and delete them with care.
 
 <div class="os-screenshot" markdown>
 
-![CLI Interactive Mode](../assets/demo.png)
-<div class="os-screenshot__caption">Interactive CLI — the wizard guides you through investigation options</div>
+![First page of a dossier with demo data](../assets/dossier-demo.png){ width="420" }
+<div class="os-screenshot__caption">PDF dossier (demo data)</div>
 
 </div>
 
-### 2. Choose an investigation mode
+## 5. Run an agent investigation
 
-| Mode | What it does | Speed | Depth |
-|------|-------------|-------|-------|
-| **username** | Scan a username across 18+ native scanners | ~15s | Surface-level profiles |
-| **email** | Scan email via Gravatar, PGP keyservers + optional local-part pivot | ~20s | Email-linked accounts |
-| **both** | Combined username + email scan | ~30s | Broader coverage |
-| **agent** | Autonomous AI agent that reasons, pivots, and cross-correlates | ~2-5min | Deep — 6D cognitive profile |
+Agent mode needs an AI provider, and sends scan results to it unless you use Ollama. Add your provider to `.env`:
 
-### 3. Review results
-
-After scanning, OSINT-D2 displays:
-
-- **Social profiles table** with confirmation status (YES/NO per platform)
-- **AI analysis** with the 6-dimension cognitive profile (Agent Mode only)
-- **Optional exports**: JSON, PDF dossier, HTML report
-
-<div class="os-screenshot" markdown>
-
-![Trust Anchors Results](../assets/trust_anchors.png)
-<div class="os-screenshot__caption">Scan results with trust anchor verification filtering false positives</div>
-
-</div>
-
----
-
-## Direct Commands (Non-Interactive)
-
-For scripting or quick lookups, use direct CLI commands:
-
-```bash
-# Quick username scan
-osint-d2 scan johndoe
-
-# Scan multiple usernames + emails
-osint-d2 hunt -u johndoe,jdoe123 -e john@example.com
-
-# Full autonomous investigation
-osint-d2 agent johndoe --ai-provider deepseek --max-steps 10
-
-# Scan + Sherlock (400+ sites) + breach check
-osint-d2 hunt -u johndoe --sherlock --breach-check
+```env
+OSINT_D2_AI_PROVIDER=deepseek
+OSINT_D2_AI_API_KEY=sk-your-key
 ```
 
-### Export Results
+Then run:
 
 ```bash
-# Export as JSON
-osint-d2 hunt -u johndoe --export-json
-
-# Export as PDF dossier (classified-style)
-osint-d2 hunt -u johndoe --export-pdf
-
-# Both
-osint-d2 agent johndoe --export-json --export-pdf --max-steps 10
+poetry run osint-d2 agent your-username --trust github:your-username --max-steps 6
 ```
 
-<div class="os-screenshot" markdown>
+Each tool call appears as it runs, followed by the report. Treat the report as a set of leads to verify. See [Agent Mode](../guides/agent-mode.md).
 
-![PDF Dossier](../assets/pdf.png)
-<div class="os-screenshot__caption">Classified-style PDF dossier with identity card, trust tags, and evidence summary</div>
-
-</div>
-
----
-
-## Web Dashboard
-
-For a visual interface with real-time investigation streaming:
+## 6. Try the dashboard
 
 ```bash
-osint-d2 serve
-# or
-docker compose up -d
+poetry run osint-d2 serve
 ```
 
-Open **http://localhost:8000** in your browser. See the [Web Dashboard guide](../guides/web-dashboard.md) for details.
+Open <http://127.0.0.1:8000>. See the [Web Dashboard guide](../guides/web-dashboard.md).
 
----
+## Commands at a glance
 
-## What's Next?
+| Command | Use it for | AI |
+|---------|-----------|----|
+| `scan` | One username | Optional (`--deep-analyze`) |
+| `scan-email` | One email | Optional (`--deep-analyze`) |
+| `hunt` | Several targets, Sherlock, site lists, breach checks | Optional (`--ai`) |
+| `agent` | Autonomous investigation | Required |
+| `analyze` | AI analysis of a saved JSON file | Falls back to a local heuristic without a key |
+| `phone` | Phone number lookup | No |
+| `wizard` | Guided prompts | Depends on the choices |
 
-- [:material-robot: Agent Mode](../guides/agent-mode.md) — Deep dive into the autonomous AI agent
-- [:material-shield-check: Trust Anchors](../architecture/trust-anchors.md) — Eliminate false positives
-- [:material-docker: Docker Deployment](../guides/docker.md) — Production setup
-- [:material-console: CLI Reference](../guides/cli-reference.md) — All commands and flags
+## Troubleshooting
+
+| Problem | Fix |
+|---------|-----|
+| `Agent mode needs an AI provider key` | Set `OSINT_D2_AI_API_KEY`, run `osint-d2 doctor setup-ai`, or use Ollama |
+| `command not found: osint-d2` | Use `poetry run osint-d2`, or activate the environment with `poetry env activate` |
+| PDF export creates an HTML file | Install the [system libraries](installation.md#system-dependencies), then run `doctor run` |
+| `--breach-check requires a HaveIBeenPwned API key` | Set `OSINT_D2_HIBP_API_KEY`, or remove the flag |
+| A setting seems to be ignored | The user config overrides the project `.env`. See [precedence](configuration.md#where-settings-come-from) |
+| Output is JSON instead of a table | Output is being piped. Add `--format table` |

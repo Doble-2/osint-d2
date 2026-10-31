@@ -12,15 +12,17 @@ theme:
   name: material
   custom_dir: docs/overrides
   palette:
-    - scheme: slate
-      primary: black
-      accent: teal
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: custom
+      accent: custom
       toggle:
         icon: material/brightness-4
         name: Switch to light mode
-    - scheme: default
-      primary: teal
-      accent: teal
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: custom
+      accent: custom
       toggle:
         icon: material/brightness-7
         name: Switch to dark mode
@@ -33,7 +35,7 @@ theme:
     - navigation.tabs
     - navigation.tabs.sticky
     - navigation.sections
-    - navigation.expand
+    - navigation.footer
     - navigation.top
     - navigation.instant
     - navigation.instant.progress
@@ -93,6 +95,12 @@ nav:
     - Agent Mode: guides/agent-mode.md
     - Docker Deployment: guides/docker.md
     - Languages: guides/languages.md
+    - Security & Responsible Use: guides/security.md
+  - Security & Legal:
+    - Threat Model: threat-model.md
+    - Acceptable Use: legal/acceptable-use.md
+    - Data Flows: legal/data-flows.md
+    - Impact Assessment Template: legal/dpia-template.md
   - API Reference:
     - REST Endpoints: api/endpoints.md
     - WebSocket Protocol: api/websocket.md

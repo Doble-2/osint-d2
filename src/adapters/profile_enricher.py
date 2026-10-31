@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import asyncio
 
-from adapters.http_client import build_async_client, extract_html_metadata
+from adapters.http_client import build_async_client, extract_html_metadata, get_limited
 from core.config import AppSettings
 from core.domain.models import SocialProfile
 
@@ -43,12 +43,12 @@ async def enrich_profiles_from_html(
 
             async with sem:
                 try:
-                    resp = await client.get(url)
+                    resp = await get_limited(client, url)
                     if resp.status_code < 200 or resp.status_code >= 400:
                         return
 
                     html = resp.text or ""
-                    meta = extract_html_metadata(html=html, base_url=str(resp.url))
+                    meta = await asyncio.to_thread(extract_html_metadata, html=html, base_url=str(resp.url))
                     if not meta:
                         return
 

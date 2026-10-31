@@ -45,6 +45,8 @@ _PRIVATE_RANGES: tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...] = (
     ipaddress.ip_network("fe80::/10"),        # link-local
 )
 
+_NAT64_RANGE = ipaddress.ip_network("64:ff9b::/96")
+
 
 def _is_private_ip(host: str) -> bool:
     """Return True if *host* is a literal IP in a private/reserved range."""
@@ -52,7 +54,16 @@ def _is_private_ip(host: str) -> bool:
         addr = ipaddress.ip_address(host)
     except ValueError:
         return False
-    return any(addr in net for net in _PRIVATE_RANGES)
+
+    # IPv6 can embed an IPv4 target: ::ffff:127.0.0.1, 2002:7f00:1::, 64:ff9b::7f00:1
+    if isinstance(addr, ipaddress.IPv6Address):
+        embedded = addr.ipv4_mapped or addr.sixtofour
+        if embedded is None and addr in _NAT64_RANGE:
+            embedded = ipaddress.IPv4Address(int(addr) & 0xFFFFFFFF)
+        if embedded is not None:
+            addr = embedded
+
+    return any(addr in net for net in _PRIVATE_RANGES) or not addr.is_global or addr.is_multicast
 
 
 def _resolves_to_private(hostname: str) -> bool:
@@ -88,6 +99,12 @@ def validate_url(url: str) -> str:
         If the URL targets a private/internal address or a blocked host.
     ValueError
         If the URL is malformed.
+
+    Notes
+    -----
+    Only the given URL is checked: callers must re-validate every redirect hop.
+    The check resolves DNS separately from the HTTP client, so a host that
+    changes its answer between both lookups (DNS rebinding) is not covered.
     """
     parsed = urlparse(url)
     scheme = (parsed.scheme or "").lower()

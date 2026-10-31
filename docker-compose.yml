@@ -1,5 +1,5 @@
 # OSINT-D2 — Docker Compose
-# Quick start: cp .env.example .env && docker compose up -d
+# Quick start: cp .env.example .env && mkdir -p reports && docker compose up -d
 # Dashboard: http://localhost:8000
 
 services:
@@ -9,7 +9,8 @@ services:
     # build: .
     container_name: osint-d2
     ports:
-      - "${OSINT_PORT:-8000}:8000"
+      # The dashboard has no authentication: published on loopback by default.
+      - "${OSINT_BIND:-127.0.0.1}:${OSINT_PORT:-8000}:8000"
     env_file:
       - path: .env
         required: false

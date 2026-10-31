@@ -1,126 +1,147 @@
 # Web Dashboard
 
-The web dashboard provides a real-time visual interface for OSINT investigations, powered by WebSocket streaming from the FastAPI backend.
+The dashboard is a local web interface for agent investigations. It streams each step over a WebSocket and lets you download the results when the run finishes.
 
 ```bash
-osint-d2 serve              # Start dashboard at http://localhost:8000
+osint-d2 serve              # http://127.0.0.1:8000
 # or
-docker compose up -d         # Docker deployment
+docker compose up -d        # http://localhost:8000
 ```
 
----
-
-## Interface
+!!! warning "Local tool"
+    The dashboard is meant to run on your own machine, and has no authentication by design. Both commands above listen on loopback only. See [Security & Responsible Use](security.md).
 
 <div class="os-screenshot" markdown>
 
-![OSINT-D2 Dashboard](../assets/demo.png)
-<div class="os-screenshot__caption">Investigation wizard with real-time agent reasoning</div>
+![Finished investigation showing the report](../assets/dashboard-report.png)
+<div class="os-screenshot__caption">Finished investigation with the report open (demo data)</div>
 
 </div>
 
-The dashboard is a single-page application built with vanilla JavaScript and the OSINT-D2 design system (dark intelligence theme). It communicates with the backend entirely via WebSocket.
+---
 
-!!! info "Offline & Private"
-    The dashboard makes **zero external network requests**. All JavaScript (vis-network, DOMPurify) and CSS (Font Awesome) dependencies are vendorized locally. No CDNs, no telemetry, no data leaks — suitable for air-gapped and sensitive environments.
+## Run an investigation
 
-### Key Components
+1. Enter the **subject name**. It is required, and it is treated as a person's name, never scanned as a username.
+2. Add what you already know: **usernames**, **emails**, and **phone numbers**, separated by commas.
+3. Optionally add **verified accounts** (trust anchors) such as `github:johndoe` or `email:john@example.com`. They give the agent a verified starting point. Without them, attributions are marked as unconfirmed.
+4. Open **Options** to change the mode, AI provider, report language, step limit, or breach check.
+5. Click **Start Investigation**, or press ++enter++ in any field.
 
-| Component | What it shows |
-|-----------|--------------|
-| **Investigation Panel** | Configure target, mode, language, trust anchors, AI provider |
-| **Agent Console** | Real-time streaming of agent reasoning steps and tool calls |
-| **Social Profiles Table** | Discovered profiles with confirmation status, avatars, and metadata |
-| **Entity Graph** | Interactive relationship visualization between identities |
-| **AI Analysis** | Full 6D cognitive profile when using Agent Mode |
-| **Export Actions** | Download JSON, PDF dossier, or HTML report |
+The top bar shows the status. Above the results, a bar shows the subject, the current step (such as `Step 2 / 6`), and the progress. The **Console** tab opens while the agent works, and **Cancel** stops the run immediately. When the run finishes, the **Report** tab opens, or the **Graph** tab if there is no report.
+
+You can reload the page or change the language at any time: the form stays filled in, and a run in progress reconnects. The status **Completed with errors** means a tool failed or a file could not be created, so check the console.
+
+On small screens the form collapses when a run starts. Use the arrow next to **New investigation** to reopen it.
+
+### Options
+
+| Option | Values | Default |
+|--------|--------|---------|
+| Mode | **AI Agent**, **Telecom** | AI Agent |
+| AI provider | DeepSeek, OpenAI, Ollama | `OSINT_D2_AI_PROVIDER` |
+| Language | `en`, `es`, `pt`, `ar`, `ru` | Interface language |
+| Max steps | 3–15 | 6 |
+| Breach check | On, Off (requires `OSINT_D2_HIBP_API_KEY`) | Off |
+
+**Telecom** mode only looks up the phone numbers you enter. It does not use the AI agent and produces no files.
+
+!!! note "API keys belong to one provider"
+    The dashboard sends `OSINT_D2_AI_API_KEY` only to the provider set in `OSINT_D2_AI_PROVIDER`. Selecting a different provider runs without that key, so hosted providers fail with a configuration error until you change `.env`. Ollama needs no key.
 
 ---
 
-## Real-Time Architecture
+## Read the results
 
-The dashboard uses a **WebSocket connection** to stream investigation progress:
+### Graph
+
+Nodes appear as the agent works. When the run finishes, they are replaced by the final graph: each vertical band is an investigation vector, and the last band holds the conclusions.
+
+To explore it, drag or use the arrow keys to move, and use the wheel, a pinch, the buttons, or ++plus++ and ++minus++ to zoom. ++0++ fits the whole graph.
+
+Handles that look like common first names are labeled as probable false positives.
+
+### Timeline
+
+<div class="os-screenshot" markdown>
+
+![Timeline listing each agent step](../assets/dashboard-timeline.png)
+<div class="os-screenshot__caption">Each tool call the agent made, in order (demo data)</div>
+
+</div>
+
+The timeline appears when the run finishes.
+
+### Console
+
+The console logs each step as it happens, along with warnings and errors.
+
+### Report
+
+The **Report** tab shows the main findings and the full analysis. It opens automatically when the agent finishes.
+
+The confidence score is colored by level, but it's the model's own estimate, not a measured probability. Check the evidence before relying on a finding.
+
+### Downloads
+
+| Button | File |
+|--------|------|
+| **PDF** | Dossier with the graph page |
+| **Canvas** | Graph for [Obsidian Canvas](https://obsidian.md/canvas) |
+
+The buttons are above the results, next to the subject's name. A button appears only once its file exists. Copies, plus the HTML, SVG, and PNG versions, are saved to `reports/`.
+
+---
+
+## Languages
+
+Change the interface with the selector in the top bar or with `?lang=`:
+
+```
+http://localhost:8000/?lang=ar
+```
+
+Arabic uses a right-to-left layout. See [Languages](languages.md) for what each language covers.
+
+---
+
+## Troubleshooting
+
+| What you see | Cause | Fix |
+|--------------|-------|-----|
+| Yellow "No API key" notice | No key for the selected provider | Set `OSINT_D2_AI_API_KEY` and `OSINT_D2_AI_PROVIDER` in `.env`, restart, or choose Ollama |
+| **Failed** with `LLM error: 401` | The provider rejected the key | Check that the key matches the provider, then restart the server |
+| **Failed** with a connection error on Ollama | Ollama is unreachable | Start Ollama. In Docker, set `OSINT_D2_AI_BASE_URL=http://ollama:11434/v1` |
+| `Too many investigations running` | 5 runs are already active | Wait for one to finish, or cancel it |
+| **Completed with errors** | A tool failed, the model stopped early, or a file failed | Read the warnings in the console. The dossier contains what was gathered |
+| No **PDF** button after finishing | Chromium could not render it | Run `playwright install chromium` and read the error in the console |
+| The results disappear after a server restart | Sessions are kept in memory | The files are still in `reports/` |
+
+---
+
+## How it works
 
 ```mermaid
 sequenceDiagram
     participant B as Browser
-    participant S as FastAPI Server
-    participant A as Agent Engine
-    participant T as OSINT Tools
+    participant S as FastAPI server
+    participant A as Agent engine
+    participant T as OSINT tools
 
-    B->>S: WebSocket connect
-    B->>S: Start investigation (target, mode, options)
-    S->>A: Initialize agent
-    loop Each reasoning step
-        A->>T: Call tool (scan_username, fetch_url, etc.)
-        T-->>A: Tool result
-        A-->>S: Step update (tool, args, result)
-        S-->>B: Stream step via WebSocket
+    B->>S: POST /api/investigate
+    S-->>B: investigation_id
+    B->>S: Connect WebSocket
+    S-->>B: Replay earlier events
+    loop Each step
+        A->>T: Call tool
+        T-->>A: Result
+        A-->>S: Step
+        S-->>B: progress, log, node_add
     end
-    A-->>S: Final report (6D profile)
-    S-->>B: Stream complete report
+    S-->>B: report_done, graph_svg, timeline
+    S-->>B: artifact, status
 ```
 
-Each agent step is pushed to the browser **as it happens** — you can watch the AI reason in real time.
+The dashboard loads all its scripts, styles, and fonts from the local server, so the page itself needs no CDN. Investigations still contact the scanned sites and, unless you use Ollama, your AI provider.
 
----
-
-## Investigation Modes
-
-### Quick Scan
-
-Select **Username** or **Email** mode for a fast scan across native scanners. Results appear in the social profiles table within seconds.
-
-### Agent Mode
-
-Select **AI Agent** for autonomous investigation:
-
-1. Set the **AI provider** (DeepSeek, OpenAI, Ollama)
-2. Set **max reasoning steps** (default: 10)
-3. Optionally enable **breach checking**
-4. Optionally add **trust anchors** to filter false positives
-5. Click **Start Investigation**
-
-<div class="os-screenshot" markdown>
-
-![Agent Mode Steps](../assets/agent_mode.png)
-<div class="os-screenshot__caption">Agent reasoning steps streamed in real time</div>
-
-</div>
-
----
-
-## Entity Graph
-
-The dashboard renders an interactive entity graph showing relationships between discovered identities:
-
-- **Green node** — the investigation target
-- **Cyan nodes** — confirmed profiles (exists = YES)
-- **Grey nodes** — unconfirmed or non-existent profiles
-- **Red markers** — profiles with breach data
-- **Edges** — connection type (username match, email link, avatar match)
-
----
-
-## Language Support
-
-Switch languages via the sidebar dropdown or URL parameter:
-
-```
-http://localhost:8000/?lang=es
-```
-
-The dashboard UI, AI prompts, and PDF exports all adapt to the selected language. See [Languages](languages.md) for supported languages.
-
----
-
-## Configuration
-
-| Setting | Where | Options |
-|---------|-------|---------|
-| AI Provider | Sidebar | DeepSeek, OpenAI, Ollama |
-| Max Steps | Sidebar | 1-20 (default: 10) |
-| Breach Check | Sidebar toggle | On/Off |
-| Trust Anchors | Sidebar input | `network:username` format |
-| Proxy | `.env` file | ScrapingAnt residential/datacenter |
-| Language | Sidebar dropdown | en, es, pt, ar, ru |
+For integrations, see the [REST API](../api/endpoints.md) and the [WebSocket protocol](../api/websocket.md).

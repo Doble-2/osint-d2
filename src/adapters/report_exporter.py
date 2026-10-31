@@ -9,12 +9,19 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import urlparse
+from urllib.request import url2pathname
+import re
+import contextlib
+import io
 import sys
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 try:
-    from weasyprint import HTML
+    # When libraries are missing, WeasyPrint prints a banner to stdout, which carries JSON output.
+    with contextlib.redirect_stdout(io.StringIO()):
+        from weasyprint import HTML
 except (ImportError, OSError):
     # Missing system libraries (cairo, pango, gdk-pixbuf) cause OSError.
     HTML = None
@@ -62,14 +69,14 @@ _STRINGS: dict[Language, dict[str, object]] = {
     Language.ENGLISH: {
         "lang_code": "en",
         "title_prefix": "OSINT-D2 • Dossier",
-        "watermark": "CLASSIFIED",
+        "watermark": "CONFIDENTIAL",
         "layout": {
             "top_left": "OSINT-D2",
             "top_right": "Generated",
             "page_label": "Page",
         },
         "cover": {
-            "badge": "CLASSIFIED DOSSIER",
+            "badge": "IDENTITY DOSSIER",
             "subtitle": "Identity Intelligence Brief",
             "target_label": "SUBJECT",
             "date_label": "DATE (UTC)",
@@ -170,7 +177,7 @@ _STRINGS: dict[Language, dict[str, object]] = {
             "page_label": "Página",
         },
         "cover": {
-            "badge": "EXPEDIENTE CLASIFICADO",
+            "badge": "EXPEDIENTE DE IDENTIDAD",
             "subtitle": "Informe de Inteligencia de Identidad",
             "target_label": "TARGET",
             "date_label": "FECHA (UTC)",
@@ -272,7 +279,7 @@ _STRINGS: dict[Language, dict[str, object]] = {
             "page_label": "Página",
         },
         "cover": {
-            "badge": "DOSSIE CLASSIFICADO",
+            "badge": "DOSSIÊ DE IDENTIDADE",
             "subtitle": "Relatório de Inteligência de Identidade",
             "target_label": "ALVO",
             "date_label": "DATA (UTC)",
@@ -366,14 +373,14 @@ _STRINGS: dict[Language, dict[str, object]] = {
     Language.ARABIC: {
         "lang_code": "ar",
         "title_prefix": "OSINT-D2 • ملف",
-        "watermark": "سري للغاية",
+        "watermark": "سري",
         "layout": {
             "top_left": "OSINT-D2",
             "top_right": "تم إنشاؤه",
             "page_label": "صفحة",
         },
         "cover": {
-            "badge": "ملف سري",
+            "badge": "ملف الهوية",
             "subtitle": "تقرير استخبارات الهوية",
             "target_label": "الهدف",
             "date_label": "التاريخ (UTC)",
@@ -474,7 +481,7 @@ _STRINGS: dict[Language, dict[str, object]] = {
             "page_label": "Страница",
         },
         "cover": {
-            "badge": "СЕКРЕТНОЕ ДОСЬЕ",
+            "badge": "ДОСЬЕ ЛИЧНОСТИ",
             "subtitle": "Отчет по разведке личности",
             "target_label": "ЦЕЛЬ",
             "date_label": "ДАТА (UTC)",
@@ -567,6 +574,9 @@ _STRINGS: dict[Language, dict[str, object]] = {
     },}
 
 
+_UNSAFE_MD_URL = re.compile(r'\b(href|src)="(?!https?://|mailto:|#)[^"]*"', re.IGNORECASE)
+
+
 def _get_env() -> Environment:
     import markupsafe
 
@@ -584,17 +594,24 @@ def _get_env() -> Environment:
             """Convert markdown text to safe HTML."""
             if not text:
                 return markupsafe.Markup("")
-            html = _md.markdown(
-                text,
-                extensions=["tables", "fenced_code", "nl2br"],
-            )
+            # The text comes from an LLM that reads attacker-controlled pages:
+            # raw HTML gets escaped and only harmless link schemes survive.
+            converter = _md.Markdown(extensions=["tables", "fenced_code", "nl2br"])
+            converter.preprocessors.deregister("html_block")
+            converter.inlinePatterns.deregister("html")
+            html = _UNSAFE_MD_URL.sub(r'\1="#"', converter.convert(text))
             return markupsafe.Markup(html)
     except ImportError:
         def _md_filter(text: str) -> markupsafe.Markup:  # type: ignore[misc]
-            return markupsafe.Markup(f"<pre>{text}</pre>") if text else markupsafe.Markup("")
+            return markupsafe.Markup("<pre>{}</pre>").format(text) if text else markupsafe.Markup("")
 
     env.filters["markdown"] = _md_filter
     return env
+
+
+def render_markdown(text: str) -> str:
+    """Render untrusted Markdown to the same sanitized HTML used in dossiers."""
+    return str(_get_env().filters["markdown"](text))
 
 
 def _extract_identity_card(person: PersonEntity) -> dict[str, object]:
@@ -881,6 +898,53 @@ def export_person_html(*, person: PersonEntity, output_path: Path, language: Lan
     return output_path
 
 
+def _toc_pages_css(document: object) -> str:
+    """CSS that prints each section's real page in the table of contents.
+
+    WeasyPrint 70 resolves target-counter() to 0 in this template, so the page
+    numbers come from a first layout pass.
+    """
+    first_page: dict[str, int] = {}
+    for number, page in enumerate(document.pages, start=1):  # type: ignore[attr-defined]
+        for anchor in page.anchors:
+            # A section spanning several pages repeats its anchor on each one.
+            if anchor.startswith("sec-"):
+                first_page.setdefault(anchor, number)
+    return "\n".join(
+        f'.toc a.toc-link[href="#{anchor}"]::after {{ content: "{number}"; }}'
+        for anchor, number in first_page.items()
+    )
+
+
+def _guarded_url_fetcher(templates_dir: Path) -> object:
+    """A fetcher for dossiers, whose image URLs come from third-party data."""
+    from weasyprint.urls import URLFetcher
+
+    from core.services.url_guard import validate_url
+
+    allowed_root = templates_dir.resolve()
+
+    class GuardedFetcher(URLFetcher):
+        def fetch(self, url, headers=None):
+            if url.startswith("file:"):
+                path = Path(url2pathname(urlparse(url).path)).resolve()
+                if not path.is_relative_to(allowed_root):
+                    raise ValueError(f"Blocked local file: {url}")
+            elif not url.startswith("data:"):
+                validate_url(url)
+            return super().fetch(url, headers)
+
+    # Without redirects, a public image cannot lead to an internal address.
+    return GuardedFetcher(allowed_protocols={"http", "https", "data", "file"}, allow_redirects=False)
+
+
+def _with_toc_pages(html_class: type, html: str, base_url: str | None, url_fetcher: object = None) -> str:
+    """Return *html* with the table of contents' page numbers filled in."""
+    first_pass = html_class(string=html, base_url=base_url, url_fetcher=url_fetcher).render()
+    # In the document itself: stylesheets passed to WeasyPrint lose to the template's CSS.
+    return html.replace("</head>", f"<style>{_toc_pages_css(first_pass)}</style></head>", 1)
+
+
 def export_person_pdf(*, person: PersonEntity, output_path: Path, language: Language) -> Path:
     """Exporta el agregado `PersonEntity` como PDF.
 
@@ -911,5 +975,7 @@ def export_person_pdf(*, person: PersonEntity, output_path: Path, language: Lang
         warnings.filterwarnings("ignore", message=".*fsSelection.*")
         warnings.filterwarnings("ignore", message=".*instantiateVariableFont.*")
         warnings.filterwarnings("ignore", category=DeprecationWarning)
-        HTML(string=html, base_url=base_url).write_pdf(str(output_path))
+        fetcher = _guarded_url_fetcher(_resolve_templates_dir())
+        final_html = _with_toc_pages(HTML, html, base_url, fetcher)
+        HTML(string=final_html, base_url=base_url, url_fetcher=fetcher).write_pdf(str(output_path))
     return output_path

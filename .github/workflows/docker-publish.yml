@@ -9,7 +9,6 @@ on:
 
 permissions:
   contents: read
-  packages: write
 
 env:
   REGISTRY: ghcr.io
@@ -18,20 +17,45 @@ env:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up QEMU (multi-arch)
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      # Nothing is published until this exact build passes.
+      - name: Build image for the smoke test
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          load: true
+          tags: osint-d2:smoke
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Smoke test container
+        run: |
+          docker run --rm osint-d2:smoke osint-d2 --version
+          docker run -d --name smoke -p 8000:8000 osint-d2:smoke
+          for attempt in $(seq 1 30); do
+            curl -sf http://localhost:8000/ > /dev/null && break
+            sleep 2
+          done
+          curl -sf http://localhost:8000/ > /dev/null || (echo "::error::Dashboard not responding" && docker logs smoke && exit 1)
+          docker exec smoke python -c "from playwright.sync_api import sync_playwright as s; p = s().start(); b = p.chromium.launch(); b.close(); p.stop()"
+          docker rm -f smoke
 
       - name: Log in to GitHub Container Registry
         if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -39,7 +63,7 @@ jobs:
 
       - name: Extract metadata (tags, labels)
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
@@ -50,25 +74,13 @@ jobs:
             type=sha,prefix=
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v5
+        if: github.event_name != 'pull_request'
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
-          push: ${{ github.event_name != 'pull_request' }}
+          push: true
           platforms: linux/amd64,linux/arm64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-      - name: Smoke test container
-        if: github.event_name != 'pull_request'
-        run: |
-          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:main"
-          IMAGE="${IMAGE,,}"
-          docker pull "$IMAGE"
-          docker run -d --name smoke -p 8000:8000 "$IMAGE"
-          echo "Waiting for container to start..."
-          sleep 20
-          curl -sf http://localhost:8000/ > /dev/null || (echo "::error::Dashboard not responding" && docker logs smoke && exit 1)
-          echo "✅ Container is healthy"
-          docker rm -f smoke

@@ -10,31 +10,48 @@ Features:
 from __future__ import annotations
 
 import asyncio
+import base64
+import html
 import json
 import logging
 import os
-import sys
+import re
 import uuid
+from collections.abc import Awaitable, Callable, Coroutine
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
+from urllib.parse import urlparse
 
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from jinja2 import Environment, FileSystemLoader
+from markupsafe import Markup
+from playwright.async_api import Error as PlaywrightError
+from pydantic import BaseModel, Field, SecretStr, field_validator
 
-from core.config import AppSettings
+from core import __version__
+from core.config import AI_PROVIDER_PRESETS, AppSettings, write_user_env_vars
 from core.domain.language import Language
 from core.domain.models import PersonEntity
-from core.services.agent_engine import AgentEngine, AgentStep
+from core.services.agent_engine import AgentEngine, AgentResult, AgentStep
+from core.services.agent_prompts import build_objective
+from core.services.identity_pipeline import sanitize_target_for_filename
+from core.services.url_guard import SSRFBlockedError, validate_url
+from adapters.browser import chromium_installed
+from adapters.chain_builder import ChainBuilder
+from adapters.i18n import SUPPORTED_LANGUAGES, TEMPLATES_DIR, load_translations
 from adapters.graph_exporter import GraphExporter
 from adapters.phone_scanner import PhoneScanner
-from adapters.report_exporter import export_person_html
+from adapters.radial_graph_renderer import RadialGraphRenderer
+from adapters.report_exporter import export_person_html, render_markdown
+from adapters.report_store import purge_expired
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="OSINT-D2 Forensic Dashboard", version="3.0.0")
+app = FastAPI(title="OSINT-D2 Dashboard", version=__version__)
 
 # CORS: locked to localhost by default. Override with OSINT_D2_CORS_ORIGINS
 # (comma-separated) for LAN access, e.g. "http://192.168.1.50:8000".
@@ -45,26 +62,25 @@ _allowed_origins = (
     else ["http://localhost:8000", "http://127.0.0.1:8000"]
 )
 
+# Una página que apunte su dominio a 127.0.0.1 (DNS rebinding) sería "same-origin"
+# con este servidor, que no tiene login: solo se aceptan hosts conocidos.
+_allowed_hosts = ["localhost", "127.0.0.1", *(urlparse(o).hostname or "" for o in _allowed_origins)]
+_allowed_hosts = sorted({h for h in _allowed_hosts if h})
+
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=_allowed_hosts)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_allowed_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type"],
 )
-
-TEMPLATES_DIR = Path(__file__).parent / "templates"
-
-# PyInstaller: templates are extracted under sys._MEIPASS/adapters/templates
-_meipass = getattr(sys, "_MEIPASS", None)
-if _meipass:
-    _mei_templates = Path(str(_meipass)) / "adapters" / "templates"
-    if _mei_templates.is_dir():
-        TEMPLATES_DIR = _mei_templates
 
 VENDOR_DIR = TEMPLATES_DIR / "vendor"
 REPORTS_DIR = Path("reports")
-REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+
+# Límites del servidor: cada investigación consume créditos de IA y Chromium.
+MAX_RUNNING_INVESTIGATIONS = 5
+MAX_STORED_SESSIONS = 100
 
 # Serve vendorized JS/CSS (vis-network, Font Awesome) from /static/vendor/
 if VENDOR_DIR.is_dir():
@@ -72,16 +88,50 @@ if VENDOR_DIR.is_dir():
 
 
 class InvestigationRequest(BaseModel):
-    target: str = Field(..., description="Target name or primary identifier.")
-    usernames: list[str] = Field(default_factory=list, description="List of usernames/handles to investigate.")
-    emails: list[str] = Field(default_factory=list, description="List of email addresses.")
-    phones: list[str] = Field(default_factory=list, description="List of phone numbers.")
-    trust_anchors: list[str] = Field(default_factory=list, description="Verified trust anchors (e.g. github:username).")
-    mode: str = Field(default="agent", description="'agent' for autonomous AI, 'hunt' for full OSINT sweep, 'phone' for telecom.")
-    ai_provider: str = Field(default="deepseek", description="AI provider: deepseek, ollama, openai.")
+    target: str = Field(..., min_length=1, max_length=200, description="Target name or primary identifier.")
+    usernames: list[str] = Field(default_factory=list, max_length=50, description="List of usernames/handles to investigate.")
+    emails: list[str] = Field(default_factory=list, max_length=50, description="List of email addresses.")
+    phones: list[str] = Field(default_factory=list, max_length=20, description="List of phone numbers.")
+    trust_anchors: list[str] = Field(default_factory=list, max_length=50, description="Verified trust anchors (e.g. github:username).")
+    mode: Literal["agent", "phone"] = Field(default="agent", description="'agent' for autonomous AI, 'phone' for telecom only.")
+    ai_provider: str | None = Field(default=None, description="AI provider preset; defaults to the configured one.")
     language: str = Field(default="es", description="Language code: es, en, pt, ar, ru.")
-    max_steps: int = Field(default=6, description="Max agent reasoning steps.")
+    max_steps: int = Field(default=6, ge=1, le=30, description="Max agent reasoning steps.")
     enable_breach_check: bool = Field(default=False, description="Check data breaches.")
+    sensitive_inferences: bool = Field(default=False, description="Include personality, ideology and attack-surface inferences.")
+
+    @field_validator("target")
+    @classmethod
+    def _target_not_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("target must not be blank")
+        return value
+
+    @field_validator("ai_provider")
+    @classmethod
+    def _provider_known(cls, value: str | None) -> str | None:
+        if value is not None and value not in AI_PROVIDER_PRESETS:
+            raise ValueError(f"unknown provider; choose one of: {', '.join(AI_PROVIDER_PRESETS)}")
+        return value
+
+    @field_validator("language")
+    @classmethod
+    def _language_supported(cls, value: str) -> str:
+        Language.from_str(value)
+        return value
+
+
+class AiKeyRequest(BaseModel):
+    provider: str
+    api_key: SecretStr
+
+    @field_validator("provider")
+    @classmethod
+    def _provider_known(cls, value: str) -> str:
+        if value not in AI_PROVIDER_PRESETS:
+            raise ValueError(f"unknown provider; choose one of: {', '.join(AI_PROVIDER_PRESETS)}")
+        return value
 
 
 class InvestigationSession:
@@ -94,21 +144,35 @@ class InvestigationSession:
         self.pdf_path: str | None = None
         self.canvas_path: str | None = None
         self.steps: list[Any] = []
-        self.timeline_path: str | None = None
+        # Eventos ya emitidos: se reproducen al conectar, porque la investigación
+        # arranca antes de que el navegador abra el WebSocket.
+        self.events: list[dict[str, Any]] = []
         self.graph_svg_path: str | None = None
         self.graph_png_path: str | None = None
         # Cancelación cooperativa: el bucle del agente consulta este flag.
         self.cancelled: bool = False
+        # Fallos no fatales: la investigación termina, pero con resultado parcial.
+        self.partial: bool = False
+        self.task: asyncio.Task[Any] | None = None
+
+    def t(self, key: str, **values: Any) -> str:
+        """Traduce un mensaje al idioma de la investigación."""
+        lang_code = Language.from_str(self.request.language).value
+        return load_translations(lang_code)[key].format(**values)
 
     def cancel(self) -> None:
         """Marca la sesión como cancelada; el bucle del agente la detiene."""
         self.cancelled = True
         self.status = "cancelled"
+        # Una herramienta colgada nunca llegaría a consultar el flag.
+        if self.task is not None:
+            self.task.cancel()
 
     async def broadcast(self, message_type: str, data: Any):
         payload = {"type": message_type, "data": data}
+        self.events.append(payload)
         dead_ws = []
-        for ws in self.websockets:
+        for ws in list(self.websockets):
             try:
                 await ws.send_json(payload)
             except Exception:
@@ -163,27 +227,78 @@ def _is_generic_handle(handle: str, target: str, declared_usernames: list[str]) 
 
 active_sessions: dict[str, InvestigationSession] = {}
 
+# asyncio solo guarda referencias débiles a las tareas: sin esto el GC puede
+# destruir una investigación en curso.
+_background_tasks: set[asyncio.Task[Any]] = set()
+
+
+class _InvestigationCancelled(Exception):
+    """Señal interna para abortar una investigación cancelada por el usuario."""
+
+
+def _spawn(coro: Coroutine[Any, Any, Any]) -> asyncio.Task[Any]:
+    task = asyncio.create_task(coro)
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+    return task
+
+
+def _evict_finished_sessions() -> None:
+    """Olvida las sesiones terminadas más antiguas al superar el máximo."""
+    excess = len(active_sessions) - MAX_STORED_SESSIONS + 1
+    if excess <= 0:
+        return
+    finished = [k for k, v in active_sessions.items() if v.status != "running"]
+    for inv_id in finished[:excess]:
+        del active_sessions[inv_id]
+
+
+def _settings_for_provider(provider: str | None) -> AppSettings:
+    """Carga la configuración y aplica el preset si se pide otro proveedor."""
+    settings = AppSettings()
+    if provider and provider != settings.ai_provider.lower():
+        preset = AI_PROVIDER_PRESETS[provider]
+        # La key pertenece al proveedor configurado: nunca se envía a otro.
+        if not settings.key_belongs_to(provider):
+            settings.ai_api_key = None
+        settings.ai_provider = provider
+        settings.ai_base_url = preset["base_url"]
+        settings.ai_model = preset["model"]
+    return settings
+
+
+def _origin_allowed(websocket: WebSocket) -> bool:
+    """Evita que una web ajena abra el WebSocket desde el navegador del usuario.
+
+    Se compara con Host porque el puerto es configurable (``serve --port``).
+    Los clientes que no son navegadores no envían Origin.
+    """
+    origin = websocket.headers.get("origin")
+    if not origin or origin in _allowed_origins:
+        return True
+    return urlparse(origin).netloc == websocket.headers.get("host")
+
 
 def _inject_graph_page_into_html(
     html_path: Path,
     graph_png_base64: str,
     target: str,
-    heading: str = "01.5 // Grafo de Inteligencia Forense",
-    caption: str = "Topología multi-vectorial de entidades correlacionadas.",
+    heading: str = "01.5 // Graph",
+    caption: str = "",
 ) -> None:
     """Injects a dedicated full-page figure section into the dossier HTML before section 02."""
     html_content = html_path.read_text(encoding="utf-8")
+    target = html.escape(target)
+    heading = html.escape(heading)
+    caption = html.escape(caption)
 
     graph_page = f'''
     <div class="page" id="sec-graph">
       <h2 class="section-title">{heading}</h2>
       <div class="card" style="padding: 12px; background: #04120e; border: 1px solid rgba(52,211,153,0.18); border-radius: 12px;">
-        <div style="color: #34d399; font-family: monospace; font-size: 10px; margin-bottom: 10px; font-weight: bold;">
-          &gt; TOPOLOG&Iacute;A MULTI-VECTORIAL DE ENTIDADES &mdash; OBJETIVO: {target}
-        </div>
-        <img src="data:image/png;base64,{graph_png_base64}" style="width: 100%; border-radius: 8px;" alt="Grafo Forense" />
+        <img src="data:image/png;base64,{graph_png_base64}" style="width: 100%; border-radius: 8px;" alt="" />
         <p class="muted" style="font-size: 9px; margin-top: 10px;">
-          {caption} &mdash; Objetivo: {target}
+          {caption} &mdash; {target}
         </p>
       </div>
     </div>
@@ -209,33 +324,60 @@ async def get_dashboard(request: Request, lang: str | None = None):
 
     # ── Load i18n strings ──
     lang_code = (lang or "en").strip().lower()[:2]
-    i18n_dir = TEMPLATES_DIR / "i18n"
-    i18n_file = i18n_dir / f"{lang_code}.json"
-    if not i18n_file.exists():
-        i18n_file = i18n_dir / "en.json"
-        lang_code = "en"
-    try:
-        t = json.loads(i18n_file.read_text(encoding="utf-8"))
-    except Exception:
-        t = {}
+    if lang_code not in SUPPORTED_LANGUAGES:
+        lang_code = Language.default().value
+    t = load_translations(lang_code)
 
     # ── Render with Jinja2 ──
-    from jinja2 import Environment, FileSystemLoader
-    from markupsafe import Markup
     env = Environment(loader=FileSystemLoader(str(TEMPLATES_DIR)))
     env.filters["tojson"] = lambda v: Markup(json.dumps(v, ensure_ascii=False))
     template = env.get_template("dashboard.html")
-    html = template.render(t=t, ui_lang=lang_code)
-    return HTMLResponse(content=html)
+    settings = AppSettings()
+    return HTMLResponse(content=template.render(
+        t=t,
+        ui_lang=lang_code,
+        text_dir="rtl" if lang_code == "ar" else "ltr",
+        ai_provider=settings.ai_provider.lower(),
+        ai_key_configured=bool(settings.ai_api_key),
+    ))
+
+
+@app.post("/api/ai-key")
+async def save_ai_key(req: AiKeyRequest):
+    """Store the key in the user config, like `doctor setup-ai`, for people who don't use a terminal."""
+    # Checked here because validation errors repeat their input, and this input is a secret.
+    # Printable characters only: a line break could add other settings to the file.
+    if not re.fullmatch(r"[\x21-\x7e]{1,512}", req.api_key.get_secret_value()):
+        raise HTTPException(status_code=422, detail="The key is empty, too long, or has invalid characters.")
+    preset = AI_PROVIDER_PRESETS[req.provider]
+    try:
+        await asyncio.to_thread(write_user_env_vars, {
+            "OSINT_D2_AI_PROVIDER": req.provider,
+            "OSINT_D2_AI_BASE_URL": preset["base_url"],
+            "OSINT_D2_AI_MODEL": preset["model"],
+            "OSINT_D2_AI_API_KEY": req.api_key.get_secret_value(),
+        })
+    except (OSError, UnicodeError) as exc:
+        logger.warning("Could not save the AI key: %s", type(exc).__name__)
+        raise HTTPException(status_code=500, detail="Could not save the settings file.") from None
+    # Environment variables and a project .env take priority over the saved file.
+    settings = AppSettings()
+    active = settings.ai_provider.lower() == req.provider and settings.ai_api_key == req.api_key
+    return {"saved": True, "active": active}
 
 
 @app.post("/api/investigate")
 async def start_investigation(req: InvestigationRequest):
-    inv_id = str(uuid.uuid4())[:8]
+    running = sum(1 for s in active_sessions.values() if s.status == "running")
+    if running >= MAX_RUNNING_INVESTIGATIONS:
+        raise HTTPException(status_code=429, detail="Too many investigations running.")
+
+    _evict_finished_sessions()
+    inv_id = uuid.uuid4().hex
     session = InvestigationSession(inv_id, req)
     active_sessions[inv_id] = session
 
-    asyncio.create_task(_run_investigation(session))
+    session.task = _spawn(_run_investigation(session))
     return {"investigation_id": inv_id, "status": "started", "target": req.target}
 
 
@@ -248,8 +390,8 @@ async def cancel_investigation(inv_id: str):
     """
     session = active_sessions.get(inv_id)
     if not session:
-        return {"status": "not_found", "investigation_id": inv_id}
-    if session.status not in ("running",):
+        raise HTTPException(status_code=404, detail="Session not found.")
+    if session.status != "running":
         return {"status": session.status, "investigation_id": inv_id}
     session.cancel()
     await session.broadcast("status", "cancelled")
@@ -258,6 +400,10 @@ async def cancel_investigation(inv_id: str):
 
 @app.websocket("/ws/{inv_id}")
 async def websocket_stream(websocket: WebSocket, inv_id: str):
+    if not _origin_allowed(websocket):
+        await websocket.close(code=1008)
+        return
+
     await websocket.accept()
     session = active_sessions.get(inv_id)
     if not session:
@@ -265,12 +411,21 @@ async def websocket_stream(websocket: WebSocket, inv_id: str):
         await websocket.close()
         return
 
-    session.websockets.append(websocket)
     try:
+        # Sin await entre la última comprobación y el registro: ningún evento
+        # puede perderse ni llegar dos veces.
+        sent = 0
+        while sent < len(session.events):
+            await websocket.send_json(session.events[sent])
+            sent += 1
+        session.websockets.append(websocket)
+
         while True:
             # Keep alive / listen for client actions
             await websocket.receive_text()
     except WebSocketDisconnect:
+        pass
+    finally:
         if websocket in session.websockets:
             session.websockets.remove(websocket)
 
@@ -281,58 +436,78 @@ async def download_artefact(inv_id: str, file_type: str):
     if not session:
         raise HTTPException(status_code=404, detail="Session not found.")
 
-    safe_name = session.request.target.replace("@", "").replace("/", "_").replace("+", "").replace(" ", "_")
+    safe_name = sanitize_target_for_filename(session.request.target)
 
+    # Solo se sirven archivos de esta sesión: derivar la ruta del nombre del
+    # objetivo daría acceso a informes de investigaciones ajenas.
     if file_type == "canvas":
-        canvas_file = REPORTS_DIR / f"{safe_name}.canvas"
-        if not canvas_file.exists():
-            # Buscar cualquier canvas generado para esta sesión
-            if session.canvas_path and Path(session.canvas_path).exists():
-                canvas_file = Path(session.canvas_path)
-            else:
-                raise HTTPException(status_code=404, detail="Canvas not generated yet.")
-        return FileResponse(canvas_file, filename=f"{safe_name}.canvas", media_type="application/json")
+        path, filename, media_type = session.canvas_path, f"{safe_name}.canvas", "application/json"
+    elif file_type == "pdf":
+        path, filename, media_type = session.pdf_path, f"dossier_{safe_name}.pdf", "application/pdf"
+    else:
+        raise HTTPException(status_code=400, detail="Invalid format.")
 
-    if file_type == "pdf":
-        pdf_file = REPORTS_DIR / f"{safe_name}_dossier.pdf"
-        if not pdf_file.exists():
-            if session.pdf_path and Path(session.pdf_path).exists():
-                pdf_file = Path(session.pdf_path)
-            else:
-                raise HTTPException(status_code=404, detail="PDF not generated yet.")
-        return FileResponse(pdf_file, filename=f"dossier_{safe_name}.pdf", media_type="application/pdf")
-
-    raise HTTPException(status_code=400, detail="Invalid format.")
+    if not path or not Path(path).exists():
+        raise HTTPException(status_code=404, detail=f"{file_type} not generated yet.")
+    return FileResponse(path, filename=filename, media_type=media_type)
 
 
-async def _run_investigation(session: InvestigationSession):
+async def _run_investigation(session: InvestigationSession) -> None:
+    """Ejecuta la investigación y garantiza que el cliente reciba un estado final."""
+    try:
+        await _execute_investigation(session)
+    except (_InvestigationCancelled, asyncio.CancelledError):
+        # La tarea se absorbe aquí para poder avisar al cliente.
+        await session.broadcast("log", session.t("log_cancelled"))
+    except Exception as exc:
+        logger.exception("Investigation %s failed", session.inv_id)
+        session.status = "failed"
+        await session.broadcast("log", f"[ERROR] {exc}")
+        await session.broadcast("status", "failed")
+    else:
+        session.status = "partial" if session.partial else "completed"
+        await session.broadcast("status", session.status)
+
+
+def _raise_if_cancelled(session: InvestigationSession) -> None:
+    if session.cancelled:
+        raise _InvestigationCancelled()
+
+
+async def _execute_investigation(session: InvestigationSession) -> None:
     req = session.request
-    target = req.target
-    lang = Language.from_str(req.language)
-    settings = AppSettings()
+    settings = _settings_for_provider(req.ai_provider)
+    settings.sensitive_inferences = settings.sensitive_inferences or req.sensitive_inferences
 
-    if req.ai_provider:
-        settings.ai_provider = req.ai_provider
-        if req.ai_provider == "ollama":
-            settings.ai_base_url = "http://localhost:11434/v1"
-            settings.ai_model = "qwen2.5-coder:7b"
+    await session.broadcast("log", session.t("log_init", target=req.target, mode=req.mode.upper()))
+    await _seed_graph(session, settings)
+    _raise_if_cancelled(session)
 
-    await session.broadcast("log", f"[INIT] Objetivo inicializado: {target} (Modo: {req.mode.upper()})")
+    if req.mode == "agent":
+        lang = Language.from_str(req.language)
+        result = await _run_agent(session, settings, lang)
+        _raise_if_cancelled(session)
+        await _export_artifacts(session, result, lang)
 
-    def _cancelled() -> bool:
-        return session.cancelled
 
-    if _cancelled():
-        await session.broadcast("log", "[CANCEL] Investigación cancelada antes de empezar.")
-        return
+async def _seed_graph(session: InvestigationSession, settings: AppSettings) -> None:
+    """Publica en el grafo los datos aportados por el usuario."""
+    req = session.request
 
-    # Si hay teléfonos especificados
+    async def add_linked_node(node_id: str, label: str, group: str, edge_label: str) -> None:
+        await session.broadcast("node_add", {"id": node_id, "label": label, "group": group})
+        await session.broadcast("edge_add", {"from": "target:root", "to": node_id, "label": edge_label})
+
+    await session.broadcast("node_add", {"id": "target:root", "label": req.target, "group": "target"})
+
     for phone_num in req.phones:
-        if _cancelled():
-            await session.broadcast("log", "[CANCEL] Detenido durante el escaneo de teléfonos.")
-            return
-        await session.broadcast("log", f"[TELECOM] Escaneando teléfono {phone_num}...")
+        _raise_if_cancelled(session)
+        await session.broadcast("log", session.t("log_phone", phone=phone_num))
         phone_res = await PhoneScanner.scan(phone_number=phone_num, settings=settings)
+        if not phone_res.is_valid:
+            session.partial = True
+            await session.broadcast("log", session.t("log_phone_invalid", phone=phone_num, error=phone_res.error or ""))
+            continue
         await session.broadcast("phone_data", {
             "e164": phone_res.e164,
             "carrier": phone_res.carrier_name,
@@ -341,323 +516,281 @@ async def _run_investigation(session: InvestigationSession):
             "whatsapp": phone_res.whatsapp_active,
             "timezones": phone_res.timezones,
         })
-        await session.broadcast("node_add", {
-            "id": f"phone:{phone_res.e164}",
-            "label": f"{phone_res.e164}\\n({phone_res.carrier_name or 'Tel'})",
-            "group": "phone",
-        })
-        await session.broadcast("edge_add", {
-            "from": f"target:{target}",
-            "to": f"phone:{phone_res.e164}",
-            "label": "PHONE_NUM",
-        })
+        await add_linked_node(
+            f"phone:{phone_res.e164}",
+            f"{phone_res.e164}\n({phone_res.carrier_name or 'Tel'})",
+            "phone",
+            "PHONE_NUM",
+        )
 
-    # Si hay emails especificados
     for email in req.emails:
-        await session.broadcast("node_add", {
-            "id": f"email:{email}",
-            "label": f"{email}",
-            "group": "email",
-        })
-        await session.broadcast("edge_add", {
-            "from": f"target:{target}",
-            "to": f"email:{email}",
-            "label": "USES_EMAIL",
-        })
+        await add_linked_node(f"email:{email}", email, "email", "USES_EMAIL")
 
-    # Si hay anclas de confianza
     for anchor in req.trust_anchors:
-        await session.broadcast("log", f"[TRUST ANCHOR] Ancla verificada fijada: {anchor}")
-        await session.broadcast("node_add", {
-            "id": f"anchor:{anchor}",
-            "label": f"[VERIFIED]\\n{anchor}",
-            "group": "identity",
-        })
-        await session.broadcast("edge_add", {
-            "from": f"target:{target}",
-            "to": f"anchor:{anchor}",
-            "label": "TRUST_ANCHOR",
-        })
+        await session.broadcast("log", session.t("log_anchor", anchor=anchor))
+        await add_linked_node(f"anchor:{anchor}", f"[VERIFIED]\n{anchor}", "identity", "TRUST_ANCHOR")
 
-    if _cancelled():
-        await session.broadcast("log", "[CANCEL] Detenido antes de la fase de agente.")
-        return
 
-    # Modo Agente Autónomo
-    if req.mode == "agent":
-        # Registro de correlaciones verificadas durante la corrida.
-        correlation_log: list[dict[str, Any]] = []
+def _build_objective(req: InvestigationRequest) -> str:
+    # IMPORTANTE: el nombre del sujeto NUNCA se escanea como handle, porque
+    # produce decenas de homónimos (ver _is_generic_handle).
+    return build_objective(
+        language=Language.from_str(req.language),
+        target=req.target,
+        usernames=req.usernames,
+        emails=req.emails,
+        phones=req.phones,
+        trust_anchors=req.trust_anchors,
+    )
 
-        class _Cancelled(Exception):
-            """Señal interna para abortar el bucle del agente al cancelar."""
 
-        def on_step_callback(step: AgentStep):
-            if session.cancelled:
-                raise _Cancelled()
-            asyncio.create_task(session.broadcast("log", f"[PASO {step.step_number}] {step.tool_name} -> {step.tool_args}"))
+async def _run_agent(session: InvestigationSession, settings: AppSettings, lang: Language) -> AgentResult:
+    req = session.request
 
-            # Marca homónimos: buscar "angel" cuando el sujeto se llama Angel
-            # produce decenas de falsos positivos. Se anotan, no se dan por ciertos.
-            if step.tool_name == "scan_username":
-                uname = str(step.tool_args.get("username", "")).strip()
-                if not uname:
-                    return
-                is_generic = _is_generic_handle(uname, target, req.usernames)
-                correlation_log.append({
-                    "kind": "handle",
-                    "value": uname,
-                    "generic": is_generic,
-                    "step": step.step_number,
-                })
-                label = f"@{uname}" + (" | falso positivo probable" if is_generic else "")
-                asyncio.create_task(session.broadcast("node_add", {
+    def on_step(step: AgentStep) -> None:
+        _raise_if_cancelled(session)
+        _spawn(session.broadcast("progress", {"step": step.step_number, "max_steps": req.max_steps}))
+        if step.tool_name is None:
+            # Los fallos del LLM se informan una sola vez, como error final.
+            if step.reasoning and not step.reasoning.startswith("LLM error"):
+                _spawn(session.broadcast("log", f"[STEP {step.step_number}] {step.reasoning[:500]}"))
+            return
+
+        _spawn(session.broadcast("log", f"[STEP {step.step_number}] {_describe_tool_call(step)}"))
+
+        failure = _tool_failure(step)
+        if failure:
+            session.partial = True
+            _spawn(session.broadcast("log", session.t("log_tool_failed", tool=step.tool_name, error=failure)))
+
+        # Marca homónimos: buscar "angel" cuando el sujeto se llama Angel
+        # produce decenas de falsos positivos. Se anotan, no se dan por ciertos.
+        if step.tool_name == "scan_username":
+            uname = str(step.tool_args.get("username", "")).strip()
+            if uname:
+                is_generic = _is_generic_handle(uname, req.target, req.usernames)
+                _spawn(session.broadcast("node_add", {
                     "id": f"user:{uname}",
-                    "label": label,
+                    "label": f"@{uname}" + (f" | {session.t('noise_label')}" if is_generic else ""),
                     "group": "noise" if is_generic else "platform",
                 }))
-            elif step.tool_name == "scan_email":
-                em = str(step.tool_args.get("email", "")).strip()
-                if em:
-                    correlation_log.append({"kind": "email", "value": em, "step": step.step_number})
-            elif step.tool_name == "scan_phone":
-                ph = str(step.tool_args.get("phone_number", "")).strip()
-                if ph:
-                    correlation_log.append({"kind": "phone", "value": ph, "step": step.step_number})
-            elif step.tool_name == "correlate_stylometry":
-                correlation_log.append({
-                    "kind": "stylometry",
-                    "value": str(step.tool_args.get("sample_text", ""))[:80],
-                    "result": str(step.tool_result)[:200],
-                    "step": step.step_number,
-                })
 
-        await session.broadcast("node_add", {
-            "id": "target:root",
-            "label": f"{target}",
-            "group": "target"
+    engine = AgentEngine(settings=settings, enable_breach_check=req.enable_breach_check, on_step=on_step)
+    result = await engine.run(
+        objective=_build_objective(req),
+        language=lang,
+        max_steps=req.max_steps,
+        trust_anchors=req.trust_anchors or None,
+        target=req.target,
+    )
+    session.person = result.person
+    session.steps = list(result.steps)
+
+    # El motor registra los fallos del LLM como un paso de texto y no lanza.
+    if not result.finished_naturally:
+        reason = next((s.reasoning for s in reversed(result.steps) if s.reasoning), None)
+        if not result.person.profiles:
+            raise RuntimeError(reason or session.t("log_no_evidence"))
+        session.partial = True
+        await session.broadcast("log", f"{session.t('log_partial')} {reason or ''}".rstrip())
+    return result
+
+
+def _tool_failure(step: AgentStep) -> str | None:
+    """Devuelve el error informado por una herramienta, si lo hubo."""
+    try:
+        result = json.loads(step.tool_result or "")
+    except ValueError:
+        return None
+    error = result.get("error") if isinstance(result, dict) else None
+    return str(error)[:200] if error else None
+
+
+def _describe_tool_call(step: AgentStep) -> str:
+    """Resume una llamada para humanos; el informe final no se repite entero."""
+    if step.tool_name == "generate_report":
+        return "generate_report"
+    args = ", ".join(f"{k}={v}" for k, v in step.tool_args.items())
+    return f"{step.tool_name}({args})"[:160]
+
+
+def _timeline_kind(tool: str) -> str:
+    for needle, kind in (
+        ("username", "Platform"),
+        ("email", "Email"),
+        ("phone", "Phone"),
+        ("breach", "Breach"),
+        ("correlate", "Identity"),
+        ("stylometry", "Identity"),
+    ):
+        if needle in tool:
+            return kind
+    return "Finding"
+
+
+async def _publish_graph(session: InvestigationSession, person: PersonEntity, stem: str, lang: Language) -> None:
+    """Genera el grafo multi-vector y el hilo, y los envía al cliente.
+
+    Se ejecuta antes de exportar el HTML porque el dossier incluye el PNG.
+    """
+    target = session.request.target
+    chain = ChainBuilder.build_chain(session.steps, target, person, language=lang)
+    confidence = person.analysis.confidence if person.analysis else None
+
+    # Un solo render del SVG: sirve al cliente y al PDF
+    graph_svg = RadialGraphRenderer.render_svg(chain, target=target, confidence=confidence, language=lang)
+    svg_path = REPORTS_DIR / f"{stem}_grafo.svg"
+    svg_path.write_text(graph_svg, encoding="utf-8")
+    session.graph_svg_path = str(svg_path)
+
+    try:
+        session.graph_png_path = await asyncio.to_thread(
+            RadialGraphRenderer.export_png,
+            chain,
+            str(REPORTS_DIR / f"{stem}_grafo.png"),
+            target=target,
+            confidence=confidence,
+            scale=2,
+            language=lang,
+        )
+    except Exception as png_err:
+        logger.warning("Fallo al rasterizar el grafo: %s", png_err)
+
+    vector_numbers = (re.search(r"#(\d+)", e.label or "") for e in chain.edges)
+    await session.broadcast("graph_svg", {
+        "target": target,
+        "confidence": confidence,
+        "svg": graph_svg,
+        "nodes": len(chain.nodes),
+        "edges": len(chain.edges),
+        "vectors": max((int(m.group(1)) for m in vector_numbers if m), default=1),
+    })
+
+    await session.broadcast("timeline", {
+        "steps": [
+            {
+                "kind": _timeline_kind(s.tool_name or ""),
+                "label": _describe_tool_call(s),
+                "evidence": str(s.tool_result or "")[:500],
+                "correlation": None,
+            }
+            for s in session.steps
+            if s.tool_name
+        ],
+        "confidence": confidence,
+    })
+
+
+def _pdf_request_guard(html_path: Path) -> Callable[[Any], Awaitable[None]]:
+    """Limit what Chromium loads while rendering a dossier with third-party data."""
+    own_file = html_path.resolve().as_uri()
+
+    async def guard(route: Any) -> None:
+        url = route.request.url
+        if url.startswith("data:") or url.split("#")[0] == own_file:
+            await route.continue_()
+            return
+        if url.startswith("file:"):
+            await route.abort()
+            return
+        try:
+            await asyncio.to_thread(validate_url, url)
+            # Playwright does not route redirect hops, so a public image could
+            # otherwise redirect the browser to an internal address.
+            response = await route.fetch(max_redirects=0)
+        except (SSRFBlockedError, ValueError, PlaywrightError):
+            await route.abort()
+            return
+        if 300 <= response.status < 400:
+            await route.abort()
+            return
+        await route.fulfill(response=response)
+
+    return guard
+
+
+async def _render_pdf(html_path: Path, pdf_path: Path) -> None:
+    from playwright.async_api import async_playwright
+
+    async with async_playwright() as p:
+        browser = await p.chromium.launch()
+        # El dossier contiene datos de terceros y no necesita JavaScript.
+        context = await browser.new_context(java_script_enabled=False)
+        page = await context.new_page()
+        await page.route("**/*", _pdf_request_guard(html_path))
+        await page.goto(f"file://{html_path.resolve()}", wait_until="networkidle")
+        await page.pdf(
+            path=str(pdf_path),
+            format="A4",
+            print_background=True,
+            margin={"top": "10mm", "bottom": "10mm", "left": "10mm", "right": "10mm"},
+        )
+        await browser.close()
+
+
+async def _export_artifacts(session: InvestigationSession, result: AgentResult, lang: Language) -> None:
+    """Genera canvas, grafo y PDF. Los fallos visuales no invalidan la investigación."""
+    target = session.request.target
+    person = result.person
+    REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+    purge_expired(AppSettings().report_retention_days, reports_dir=REPORTS_DIR)
+    # El id evita que dos investigaciones del mismo objetivo se sobrescriban.
+    stem = f"{sanitize_target_for_filename(target)}_{session.inv_id[:8]}"
+
+    # Primero el informe: ya está pagado y no debe depender de que se guarden archivos.
+    if person.analysis:
+        await session.broadcast("report_done", {
+            "summary": person.analysis.summary,
+            "summary_html": render_markdown(person.analysis.summary),
+            "highlights": person.analysis.highlights,
+            "confidence": person.analysis.confidence,
         })
 
-        engine = AgentEngine(settings=settings, enable_breach_check=req.enable_breach_check, on_step=on_step_callback)
-
-        # IMPORTANTE: el nombre del sujeto NUNCA se escanea como handle, porque
-        # produce decenas de homónimos (ver _is_generic_handle).
-        all_handles = ", ".join(req.usernames) if req.usernames else "N/A (no aportados)"
-        all_emails = ", ".join(req.emails) if req.emails else "N/A"
-        all_phones = ", ".join(req.phones) if req.phones else "N/A"
-        # Las anclas de confianza son la fuente de verdad: si existen, el agente
-        # debe partir de ellas y descartar todo lo que no correlacione.
-        anchors_line = (
-            f"ANCLAS DE CONFIANZA VERIFICADAS (fuente de verdad, priorízalas): [{', '.join(req.trust_anchors)}]. "
-            if req.trust_anchors else
-            "Sin anclas verificadas: marca toda atribución como NO CONFIRMADA. "
-        )
-        objective = (
-            f"Investigación de inteligencia del sujeto '{target}'. "
-            f"{anchors_line}"
-            f"Handles a correlacionar: [{all_handles}]. "
-            f"Emails a investigar: [{all_emails}]. "
-            f"Teléfonos a investigar: [{all_phones}]. "
-            "REGLAS ESTRICTAS: (1) '{target}' es un NOMBRE PROPIO, nunca lo uses como handle. "
-            "(2) Para cada hallazgo indica el nivel de correlación (confirmado/ probable/ descartado) "
-            "y la evidencia concreta que lo sustenta. "
-            "(3) Descarta explícitamente los homónimos y explica por qué."
-        )
-
-        try:
-            result = await engine.run(
-                objective=objective,
-                language=lang,
-                max_steps=req.max_steps,
-                trust_anchors=req.trust_anchors or None,
-                target=target,
-            )
-        except _Cancelled:
-            await session.broadcast("log", "[CANCEL] Investigación detenida por el usuario.")
-            await session.broadcast("status", "cancelled")
-            return
-        except Exception as _cancel_probe:
-            # El callback puede haber lanzado la señal envuelta por el motor.
-            if session.cancelled or "_Cancelled" in type(_cancel_probe).__name__:
-                await session.broadcast("log", "[CANCEL] Investigación detenida por el usuario.")
-                await session.broadcast("status", "cancelled")
-                return
-            raise
-
-        session.person = result.person
-        session.steps = list(getattr(result, "steps", []) or [])
-
-        # Exportar Canvas dinámico
-        safe_name = target.replace("@", "").replace("/", "_").replace("+", "").replace(" ", "_")
-        graph = GraphExporter.build_graph(result.person)
-        canvas_path = REPORTS_DIR / f"{safe_name}.canvas"
-        GraphExporter.export_canvas(graph, canvas_path)
+    canvas_path = REPORTS_DIR / f"{stem}.canvas"
+    try:
+        await asyncio.to_thread(GraphExporter.export_canvas, GraphExporter.build_graph(person), canvas_path)
         session.canvas_path = str(canvas_path)
+        await session.broadcast("artifact", "canvas")
+    except Exception as canvas_err:
+        logger.warning("Fallo al exportar el canvas: %s", canvas_err)
+        session.partial = True
+        await session.broadcast("log", session.t("log_tool_failed", tool="canvas", error=canvas_err))
 
-        # ── GRAFO MULTI-VECTOR (bandas de vectores con datos ricos) ──────
-        # Se construye AQUÍ, antes de exportar el HTML, porque el PDF lo
-        # necesita. Antes vivía después del export y el dossier acababa
-        # llevando el grafo antiguo de GraphExporter.
-        try:
-            from adapters.chain_builder import ChainBuilder
-            from adapters.radial_graph_renderer import RadialGraphRenderer
+    try:
+        await _publish_graph(session, person, stem, lang)
+    except Exception as chain_err:
+        logger.warning("Fallo al construir el grafo multi-vector: %s", chain_err)
+    _raise_if_cancelled(session)
 
-            chain = ChainBuilder.build_chain(session.steps, target, result.person)
-            conf_val = result.person.analysis.confidence if result.person.analysis else None
+    html_path = REPORTS_DIR / f"{stem}.html"
+    pdf_path = REPORTS_DIR / f"{stem}_dossier.pdf"
+    try:
+        await asyncio.to_thread(export_person_html, person=person, output_path=html_path, language=lang)
 
-            # Un solo render del SVG: sirve al cliente y al PDF
-            graph_svg = RadialGraphRenderer.render_svg(
-                chain, target=target, confidence=conf_val
-            )
-            svg_path = REPORTS_DIR / f"{safe_name}_grafo.svg"
-            svg_path.write_text(graph_svg, encoding="utf-8")
-            session.graph_svg_path = str(svg_path)
-
-            try:
-                session.graph_png_path = RadialGraphRenderer.export_png(
-                    chain, str(REPORTS_DIR / f"{safe_name}_grafo.png"),
-                    target=target, confidence=conf_val, scale=2,
-                )
-            except Exception as png_err:
-                logger.warning("Fallo al rasterizar el grafo: %s", png_err)
-
-            await session.broadcast("graph_svg", {
-                "target": target,
-                "confidence": conf_val,
-                "svg": graph_svg,
-                "nodes": len(chain.nodes),
-                "edges": len(chain.edges),
-                "vectors": max(
-                    (int(m.group(1)) for e in chain.edges
-                     if (m := __import__("re").search(r"#(\d+)", e.label or ""))),
-                    default=1,
-                ),
-            })
-            await session.broadcast(
-                "log",
-                f"[GRAFO] {len(chain.nodes)} entidades en {len(chain.edges)} relaciones "
-                f"con datos de perfil completos.",
-            )
-
-            # ── TIMELINE (Hilo) ──────────────────────────────────────
-            timeline_steps = []
-            for s in session.steps:
-                step_kind = "Finding"
-                tool = getattr(s, "tool_name", "")
-                if "username" in tool:
-                    step_kind = "Platform"
-                elif "email" in tool:
-                    step_kind = "Email"
-                elif "phone" in tool:
-                    step_kind = "Phone"
-                elif "breach" in tool:
-                    step_kind = "Breach"
-                elif "correlate" in tool or "stylometry" in tool:
-                    step_kind = "Identity"
-                label = f"{tool} -> {getattr(s, 'tool_args', {})}"
-                evidence = str(getattr(s, "tool_result", ""))[:500]
-                corr = None
-                timeline_steps.append({
-                    "kind": step_kind,
-                    "label": label,
-                    "evidence": evidence,
-                    "correlation": corr,
-                })
-            await session.broadcast("timeline", {
-                "steps": timeline_steps,
-                "confidence": conf_val,
-            })
-        except Exception as chain_err:
-            logger.warning("Fallo al construir el grafo multi-vector: %s", chain_err)
-
-        # Exportar HTML del dossier e inyectar la página dedicada del grafo
-        html_path = REPORTS_DIR / f"{safe_name}.html"
-        export_person_html(person=result.person, output_path=html_path, language=lang)
-
-        # 1) Página del GRAFO multi-vector (la que realmente se usa)
         if session.graph_png_path and Path(session.graph_png_path).exists():
-            try:
-                import base64 as _b64
-                g_b64 = _b64.b64encode(Path(session.graph_png_path).read_bytes()).decode("utf-8")
-                _inject_graph_page_into_html(
-                    html_path, g_b64, target,
-                    heading="01.5 // Grafo Multi-Vector de la Investigación",
-                    caption=(
-                        "Cada banda vertical es un vector de investigación abierto por el agente; "
-                        "las tarjetas muestran los datos de perfil recolectados."
-                    ),
-                )
-                await session.broadcast("log", "[PDF] Página del grafo inyectada en el dossier.")
-            except Exception as g_err:
-                logger.warning("Fallo al inyectar el grafo en el PDF: %s", g_err)
-        elif session.timeline_path and Path(session.timeline_path).exists():
-            try:
-                timeline_png = REPORTS_DIR / f"{safe_name}_hilo.png"
-                # Render fuera del loop actual para evitar conflictos
-                import concurrent.futures
-
-                def _shot() -> None:
-                    import asyncio as _aio
-                    from playwright.async_api import async_playwright as _sync_apw
-
-                    async def _do():
-                        async with _sync_apw() as _p:
-                            _b = await _p.chromium.launch()
-                            _pg = await _b.new_page(
-                                viewport={"width": 1100, "height": 900},
-                                device_scale_factor=2,
-                            )
-                            await _pg.goto(
-                                f"file://{Path(session.timeline_path).resolve()}",
-                                wait_until="networkidle",
-                            )
-                            await _pg.wait_for_timeout(600)
-                            await _pg.screenshot(path=str(timeline_png), full_page=True)
-                            await _b.close()
-                    _aio.run(_do())
-
-                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as _pool:
-                    _pool.submit(_shot).result()
-
-                import base64 as _b64
-                t_b64 = _b64.b64encode(timeline_png.read_bytes()).decode("utf-8")
-                _inject_graph_page_into_html(
-                    html_path, t_b64, target,
-                    heading="01.5 // Hilo de Investigación (Cadena de Pivotes)",
-                    caption=(
-                        "Secuencia forense: qué se descubrió en cada paso, con qué acción "
-                        "y la evidencia que lo sustenta."
-                    ),
-                )
-                await session.broadcast("log", "[PDF] Página del hilo de investigación inyectada.")
-            except Exception as tl_err:
-                logger.warning("Fallo al renderizar el hilo para el PDF: %s", tl_err)
-        else:
-            # Sin grafo ni hilo no hay pagina que inyectar: se registra
-            # para no dejar el dossier silenciosamente sin seccion visual.
-            await session.broadcast(
-                "log",
-                "[PDF] Aviso: no se pudo generar el grafo ni el hilo; "
-                "el dossier saldra sin la seccion visual.",
+            png_b64 = base64.b64encode(Path(session.graph_png_path).read_bytes()).decode("utf-8")
+            await asyncio.to_thread(
+                _inject_graph_page_into_html,
+                html_path, png_b64, target,
+                heading=session.t("pdf_graph_heading"),
+                caption=session.t("pdf_graph_caption"),
             )
+        else:
+            await session.broadcast("log", session.t("log_pdf_no_graph"))
+        _raise_if_cancelled(session)
 
-        # Compilar PDF final (diseño HTML + página del grafo) con Playwright
-        pdf_path = REPORTS_DIR / f"{safe_name}_dossier.pdf"
-        try:
-            from playwright.async_api import async_playwright
-            async with async_playwright() as p:
-                browser = await p.chromium.launch()
-                page = await browser.new_page()
-                await page.goto(f"file://{html_path.resolve()}", wait_until="networkidle")
-                await page.pdf(
-                    path=str(pdf_path),
-                    format="A4",
-                    print_background=True,
-                    margin={"top": "10mm", "bottom": "10mm", "left": "10mm", "right": "10mm"}
-                )
-                await browser.close()
-            session.pdf_path = str(pdf_path)
-            await session.broadcast("log", "[PDF] Dossier compilado con la página del grafo incluida.")
-        except Exception as pdf_err:
-            logger.warning("Fallo al generar PDF con Playwright: %s", pdf_err)
+        if not await asyncio.to_thread(chromium_installed):
+            session.partial = True
+            await session.broadcast("log", session.t("log_browser_missing"))
+            return
 
-        await session.broadcast("status", "completed")
+        await _render_pdf(html_path, pdf_path)
+        session.pdf_path = str(pdf_path)
+        await session.broadcast("artifact", "pdf")
+        await session.broadcast("log", session.t("log_pdf_ok"))
+    except _InvestigationCancelled:
+        raise
+    except Exception as pdf_err:
+        logger.warning("Fallo al generar PDF con Playwright: %s", pdf_err)
+        session.partial = True
+        await session.broadcast("log", session.t("log_pdf_error", error=pdf_err))

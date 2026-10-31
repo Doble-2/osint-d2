@@ -79,14 +79,14 @@ class TestCompactProfiles:
             network_name="github",
             exists=True,
             metadata={
-                "name": "Linus Torvalds",
+                "name": "John Doe",
                 "location": "Portland, OR",
                 "company": "Linux Foundation",
                 "followers": 300000,
             },
         )
         result = _compact_profiles([profile])
-        assert result[0]["name"] == "Linus Torvalds"
+        assert result[0]["name"] == "John Doe"
         assert result[0]["location"] == "Portland, OR"
         assert result[0]["followers"] == 300000
 

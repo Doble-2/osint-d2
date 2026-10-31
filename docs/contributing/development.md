@@ -18,8 +18,8 @@ cd osint-d2
 # Install all dependencies (including dev extras)
 poetry install
 
-# Install Playwright browser for PDF generation
-playwright install chromium
+# Install the Playwright browser used for dashboard PDFs and graphs
+poetry run playwright install chromium
 
 # Copy environment template
 cp .env.example .env
@@ -43,49 +43,59 @@ poetry run pytest tests/ --cov=src --cov-report=html
 
 ```bash
 # Check for issues
-poetry run ruff check src/ tests/ --select=E,F,W --ignore=E501,E402
+poetry run ruff check .
 
 # Auto-fix
-poetry run ruff check src/ tests/ --select=E,F,W --ignore=E501,E402 --fix
+poetry run ruff check . --fix
 ```
 
 ## Running Locally
 
 ```bash
 # CLI mode
-poetry run python -m cli.main scan johndoe
+poetry run osint-d2 scan johndoe
 
 # Web dashboard
-poetry run python -m cli.main serve --port 8000
+poetry run osint-d2 serve --port 8000
 
 # Doctor (environment diagnostics)
-poetry run python -m cli.main doctor run
+poetry run osint-d2 doctor run
+
+# Show the full traceback for an unexpected error
+OSINT_D2_DEBUG=1 poetry run osint-d2 scan johndoe
 ```
+
+## Documentation
+
+```bash
+pip install mkdocs-material mkdocs-minify-plugin
+mkdocs serve                # Preview at http://127.0.0.1:8000
+mkdocs build --strict       # What to run before opening a pull request
+```
+
+Screenshots and examples must use fictitious data. Never publish real people's data.
 
 ## Docker Development
 
+`docker-compose.yml` pulls the published image, so build your own image directly:
+
 ```bash
-# Build and run
-docker compose up --build
-
-# Run tests in container
-docker compose exec osint-d2 pytest tests/ -v
-
-# Rebuild after code changes
-docker compose up --build --force-recreate
+docker build -t osint-d2:dev .
+docker run --rm -p 127.0.0.1:8000:8000 --env-file .env osint-d2:dev
 ```
+
+The image doesn't include the tests or development tools, so run the tests with Poetry.
 
 ## Project Layout
 
 ```
 osint-d2/
 ├── src/
-│   ├── core/              # Domain logic (no I/O)
+│   ├── core/              # Domain models and services
 │   ├── adapters/          # I/O implementations
-│   └── cli/               # CLI entry point
+│   └── cli/               # Typer app; one module per command in cli/commands/
 ├── tests/                 # pytest test suite
 ├── docs/                  # MkDocs documentation
-├── assets/                # README screenshots
 ├── .github/workflows/     # CI/CD pipelines
 ├── pyproject.toml         # Poetry config
 ├── Dockerfile             # Multi-stage Docker build
@@ -95,7 +105,7 @@ osint-d2/
 ## Code Style
 
 - **Language**: English for code, comments, commit messages
-- **Architecture**: Clean Architecture — domain in `core/`, I/O in `adapters/`
+- **Architecture**: domain models and orchestration in `core/`, integrations in `adapters/`
 - **Commits**: [Conventional Commits](https://www.conventionalcommits.org/)
 - **Linter**: Ruff (E, F, W rules)
 - **Types**: Pydantic models for all data, Protocol for interfaces

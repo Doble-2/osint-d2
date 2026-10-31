@@ -6,20 +6,24 @@ All commands use the `osint-d2` entry point. Use `osint-d2 <command> --help` for
 
 ## Global Options
 
-These options are available across most commands:
+These options are available across most commands. Run `osint-d2 --version` for the version.
+
+Exit codes: `0` success, `1` failure, `2` invalid usage, `130` interrupted. Results go to stdout, and messages to stderr. Set `OSINT_D2_DEBUG=1` to see tracebacks.
 
 | Flag | Short | Description |
 |------|-------|-------------|
 | `--language` | `-l` | Output language: `en`, `es`, `pt`, `ar`, `ru` |
 | `--export-json` | | Export results as JSON to `reports/` |
 | `--export-pdf` | | Export a classified-style PDF dossier to `reports/` |
-| `--ai-provider` | | AI provider preset: `deepseek`, `groq`, `openai`, `ollama` |
-| `--ai-key` | | AI API key (prefer `osint-d2 doctor setup-ai` to avoid shell history leaks) |
+| `--ai-provider` | | AI provider preset: `deepseek`, `openai`, `groq`, `groq-70b`, `groq-fast`, `openrouter`, `huggingface`, `ollama` |
+| `--ai-key` | | AI API key for that provider (prefer `osint-d2 doctor setup-ai`, because arguments end up in shell history) |
+| `--ai-save` / `--no-ai-save` | | Save the provider and key to the user config. Off by default |
 | `--proxy` | | Override proxy mode: `residential`, `datacenter` |
 | `--no-proxy` | | Disable proxy for this run even if configured in `.env` |
 | `--proxy-country` | | 2-letter country code for geo-targeted proxy (e.g. `us`) |
-| `--format` | | Terminal output format: `table` (default) or `json` |
-| `--trust` | | Trust anchor (repeatable). Format: `network:username` |
+| `--format` | | `table` or `json`. Defaults to `table` in a terminal, and `json` when piped |
+| `--json-raw` / `--no-json-raw` | | With JSON output, include the raw AI payload |
+| `--trust` | | Trust anchor (repeatable). Format: `network:username` or `email:address` |
 
 ---
 
@@ -37,7 +41,8 @@ osint-d2 scan <target> [OPTIONS]
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--deep-analyze` / `--no-deep-analyze` | `--no-deep-analyze` | Run cognitive AI analysis on collected evidence |
+| `--sensitive-inferences` | off | Add personality, ideology, and attack-surface sections to the AI report |
+| `--deep-analyze` / `--no-deep-analyze` | `--no-deep-analyze` | Send the evidence to the AI provider for analysis |
 | `--language`, `-l` | `en` | Output language |
 | `--export-pdf` / `--no-export-pdf` | `--no-export-pdf` | Export PDF dossier |
 | `--export-json` / `--no-export-json` | `--no-export-json` | Export JSON to `reports/` |
@@ -72,7 +77,8 @@ osint-d2 scan-email <email> [OPTIONS]
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--deep-analyze` / `--no-deep-analyze` | `--deep-analyze` | Run cognitive AI analysis (enabled by default for email) |
+| `--sensitive-inferences` | off | Add personality, ideology, and attack-surface sections to the AI report |
+| `--deep-analyze` / `--no-deep-analyze` | `--no-deep-analyze` | Send the evidence to the AI provider for analysis |
 | `--scan-localpart` / `--no-scan-localpart` | `--no-scan-localpart` | Also try the local part (before `@`) as a username |
 | `--language`, `-l` | `en` | Output language |
 | `--export-pdf` / `--no-export-pdf` | `--no-export-pdf` | Export PDF dossier |
@@ -102,19 +108,24 @@ osint-d2 hunt [OPTIONS]
 
 | Flag | Short | Default | Description |
 |------|-------|---------|-------------|
-| `--usernames` | `-u` | — | Target usernames (comma-separated) |
-| `--emails` | `-e` | — | Target emails (comma-separated) |
-| `--sherlock` / `--no-sherlock` | | `--no-sherlock` | Enable Sherlock manifest (400+ sites) |
-| `--breach-check` / `--no-breach-check` | | `--no-breach-check` | Query HaveIBeenPwned for breaches |
-| `--ai` / `--noai` | | `--ai` | Run cognitive AI analysis |
+| `--sensitive-inferences` | | off | Add personality, ideology, and attack-surface sections to the AI report |
+| `--usernames` | `-u` | — | Target usernames (comma-separated or repeated) |
+| `--emails` | `-e` | — | Target emails (comma-separated or repeated) |
+| `--sherlock` / `--no-sherlock` | | `--no-sherlock` | Enable the Sherlock manifest (about 470 sites) |
+| `--breach-check` / `--no-breach-check` | | `--no-breach-check` | Query the official HaveIBeenPwned API. Requires `OSINT_D2_HIBP_API_KEY` |
+| `--ai` / `--noai` | | `--noai` | Send the evidence to the AI provider for analysis |
 | `--strict` / `--no-strict` | | `--no-strict` | Conservative heuristics to trim false positives |
 | `--trust` | | — | Trust anchor (repeatable): `--trust github:johndoe` |
-| `--scan-localpart` / `--no-scan-localpart` | | `--no-scan-localpart` | Pivot email local part as username |
+| `--scan-localpart` / `--no-scan-localpart` | | `--scan-localpart` | Pivot email local part as username |
 | `--language`, `-l` | | `en` | Output language |
 | `--export-json` / `--no-export-json` | | `--no-export-json` | Export JSON to `reports/` |
 | `--export-pdf` / `--no-export-pdf` | | `--no-export-pdf` | Export PDF dossier |
-| `--category` | | — | Filter site-lists by category (repeatable) |
-| `--nsfw` | | `inherit` | NSFW policy: `inherit`, `exclude`, `allow` |
+| `--site-lists` / `--no-site-lists` | | `--no-site-lists` | Enable the data-driven site lists |
+| `--username-sites-path` | | — | Local JSON file of username sites |
+| `--email-sites-path` | | — | Local JSON file of email sites |
+| `--sites-max-concurrency` | | `OSINT_D2_SITES_MAX_CONCURRENCY` | Maximum concurrent site-list requests |
+| `--category` | | — | Filter site lists by category (repeatable) |
+| `--nsfw` | | `inherit` | Site-list NSFW policy: `inherit`, `exclude`, `allow` |
 
 ### Examples
 
@@ -145,9 +156,10 @@ osint-d2 agent <objective> [OPTIONS]
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--ai-provider` | — | AI provider preset: `deepseek`, `groq`, `openai`, `ollama` |
+| `--sensitive-inferences` | off | Add personality, ideology, and attack-surface sections to the AI report |
+| `--ai-provider` | — | AI provider preset (see [global options](#global-options)) |
 | `--max-steps` | `10` | Maximum reasoning steps before the agent concludes (1–50) |
-| `--breach-check` / `--no-breach-check` | `--no-breach-check` | Allow the agent to query HaveIBeenPwned |
+| `--breach-check` / `--no-breach-check` | `--no-breach-check` | Allow the agent to query the official HaveIBeenPwned API. Requires `OSINT_D2_HIBP_API_KEY` |
 | `--trust` | — | Trust anchor (repeatable): `--trust github:johndoe` |
 | `--language`, `-l` | `en` | Output language |
 | `--export-json` / `--no-export-json` | `--no-export-json` | Export JSON to `reports/` |
@@ -187,6 +199,7 @@ osint-d2 analyze <input_path> [OPTIONS]
 
 | Flag | Default | Description |
 |------|---------|-------------|
+| `--sensitive-inferences` | off | Add personality, ideology, and attack-surface sections to the AI report |
 | `--ai-provider` | — | AI provider preset |
 | `--language`, `-l` | `en` | Output language |
 | `--format` | `table` | Terminal output format: `table` or `json` |
@@ -214,14 +227,14 @@ osint-d2 phone <phone_number> [OPTIONS]
 | Flag | Short | Default | Description |
 |------|-------|---------|-------------|
 | `--region` | `-r` | `US` | Default ISO country code if international prefix is omitted |
-| `--language` | `-l` | `en` | Output language |
 | `--export-json` | | — | Export phone intelligence report to JSON |
+| `--format` | | Automatic | `table` or `json` |
 
 ### Examples
 
 ```bash
 osint-d2 phone +12125551234
-osint-d2 phone 04241234567 --region VE --language es
+osint-d2 phone 04241234567 --region VE
 ```
 
 ---
@@ -241,8 +254,9 @@ osint-d2 doctor <subcommand>
 
 | Subcommand | Description |
 |------------|-------------|
-| `run` | Run baseline diagnostics and show recommended fixes |
+| `run` | Run diagnostics and show how to fix problems. Exits with `1` if a check fails |
 | `setup-ai` | Interactive AI setup (stores config in user `.env`) |
+| `install-browser` | Download Chromium, for dashboard PDFs and graph images |
 
 ### Examples
 
@@ -270,7 +284,6 @@ osint-d2 serve [OPTIONS]
 |------|-------|---------|-------------|
 | `--host` | `-h` | `127.0.0.1` | Host interface to bind to |
 | `--port` | `-p` | `8000` | Port number |
-| `--reload` | | — | Enable auto-reload for development |
 
 ### Examples
 
@@ -281,6 +294,32 @@ osint-d2 serve
 # Bind to all interfaces (LAN access)
 osint-d2 serve --host 0.0.0.0 --port 9000
 ```
+
+!!! warning
+    The dashboard has no authentication. See [Security & Responsible Use](security.md) before binding to other interfaces.
+
+---
+
+## `purge`
+
+Delete saved reports by target, by age, or both.
+
+```
+osint-d2 purge [OPTIONS]
+```
+
+### Options
+
+| Flag | Short | Default | Description |
+|------|-------|---------|-------------|
+| `--target` | `-t` | — | Exact target of the investigation |
+| `--older-than` | | — | Only reports older than this many days |
+| `--dry-run` | | off | List the files without deleting them |
+| `--yes` | `-y` | off | Delete without asking for confirmation |
+
+At least one of `--target` and `--older-than` is required. Only files with report extensions in `reports/` are deleted.
+
+To delete old reports automatically, set `OSINT_D2_REPORT_RETENTION_DAYS`. The check runs when the dashboard starts and whenever reports are exported.
 
 ---
 

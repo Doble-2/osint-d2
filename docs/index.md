@@ -6,34 +6,50 @@ hide:
 
 <div class="os-hero" markdown>
 
-<span class="os-hero__badge">Identity Intelligence Platform</span>
+<div markdown>
 
 # OSINT-D2
 
 <p class="os-hero__subtitle">
-Turn a username into a <strong>structured identity dossier</strong>.<br>
-Not a Sherlock wrapper — an <strong>autonomous AI agent</strong> that reasons, pivots, and cross-correlates across 30+ platforms.
+Investigate public identity data with an <strong>AI agent</strong> that follows leads and documents its evidence, or run <strong>direct scans</strong> with no AI at all.
 </p>
 
 <div class="os-hero__actions" markdown>
 
-[:material-rocket-launch: Quick Start](getting-started/quickstart.md){ .md-button .md-button--primary }
+[Quick Start](getting-started/quickstart.md){ .md-button .md-button--primary }
 [:material-github: Source Code](https://github.com/Doble-2/osint-d2){ .md-button }
+
+</div>
+
+</div>
+
+<div class="os-hero__start" markdown>
+
+<div class="os-hero__start-label">Start the dashboard with Docker</div>
+
+```bash
+git clone https://github.com/Doble-2/osint-d2.git && cd osint-d2
+cp .env.example .env          # Add your AI key
+mkdir -p reports
+docker compose up -d          # Dashboard at http://localhost:8000
+```
+
+</div>
 
 </div>
 
 <div class="os-stats">
 <div class="os-stat">
-<span class="os-stat__value">30+</span>
-<span class="os-stat__label">Platform Scanners</span>
+<span class="os-stat__value">24</span>
+<span class="os-stat__label">Native scanners</span>
 </div>
 <div class="os-stat">
 <span class="os-stat__value">9</span>
-<span class="os-stat__label">Agent Tools</span>
+<span class="os-stat__label">Agent tools</span>
 </div>
 <div class="os-stat">
-<span class="os-stat__value">6D</span>
-<span class="os-stat__label">Cognitive Profile</span>
+<span class="os-stat__value">6</span>
+<span class="os-stat__label">Report areas</span>
 </div>
 <div class="os-stat">
 <span class="os-stat__value">5</span>
@@ -41,121 +57,121 @@ Not a Sherlock wrapper — an <strong>autonomous AI agent</strong> that reasons,
 </div>
 </div>
 
-</div>
+!!! warning "Use it responsibly"
+    Use OSINT-D2 only for lawful, authorized investigations. Results can be wrong, and scan results go to your AI provider unless you use Ollama. Read [Security & Responsible Use](guides/security.md).
 
----
+## What it does
 
-## Why OSINT-D2?
-
-Most OSINT tools run a **fixed checklist**: scan this list of sites, check this API, generate a report. OSINT-D2 is different — it **thinks**.
-
-The core of the platform is an **agentic AI** that uses LLM function calling to autonomously investigate identities. It starts with what you give it (a username, an email), scans it, analyzes the results, and **pivots** — discovering new leads and investigating them without being told to.
-
-**A real investigation**: the agent scanned `torvalds`, found the GitHub profile, extracted two email addresses, scanned both as separate identities, fetched the GitHub and Keybase pages for social links, and identified that multiple people share the handle across platforms — producing a report that distinguishes the real Linus Torvalds from impersonators.
-
----
-
-## Core Capabilities
+OSINT-D2 is a command-line tool and local dashboard. Direct scans use 20 username scanners and 4 email scanners, with optional Sherlock for about 470 more sites. The agent uses function calling to choose its next step: it scans what you give it, reads the results, and follows new leads such as emails and websites.
 
 <div class="os-features" markdown>
 
 <div class="os-feature" markdown>
-<span class="os-feature__icon">🤖</span>
+
+:material-robot-outline:{ .os-feature__icon }
 
 ### Agentic AI
 
-The LLM decides which tools to invoke, interprets results, and pivots to new leads. ReAct reasoning loop with forced-report fallback when steps are exhausted.
+The model decides which tools to call, interprets the results, and pivots to new leads. If it runs out of steps, it is forced to write a report.
+
+[Agent mode](guides/agent-mode.md)
+
 </div>
 
 <div class="os-feature" markdown>
-<span class="os-feature__icon">🔗</span>
+
+:material-link-variant:{ .os-feature__icon }
 
 ### Identity Triangulation
 
-Cross-correlates usernames, emails, bios, avatars, and writing style across platforms. Perceptual avatar hashing (dHash) detects the same photo even when resized.
+Cross-correlates usernames, emails, bios, avatars, and writing style across platforms. Avatar hashing (dHash) detects the same photo even when resized.
+
+[Architecture](architecture/overview.md)
+
 </div>
 
 <div class="os-feature" markdown>
-<span class="os-feature__icon">🧠</span>
 
-### 6D Cognitive Profiling
+:material-file-document-outline:{ .os-feature__icon }
 
-Every investigation produces a structured analysis across 6 dimensions: Identity, Geo-temporal, OCEAN Psychology, Tech Stack, Ideology, and OpSec/Attack Surface.
+### Six-Area Reports
+
+Agent reports cover Identity, Geo-temporal, OCEAN Psychology, Tech Stack, Ideology, and OpSec/Attack Surface. The personality and ideology sections are speculative inferences.
+
+[Security & responsible use](guides/security.md)
+
 </div>
 
 <div class="os-feature" markdown>
-<span class="os-feature__icon">🛡️</span>
+
+:material-shield-check-outline:{ .os-feature__icon }
 
 ### Trust Anchor Verification
 
-Declare known-good sources (`--trust github:user`). The system builds a reference identity and uses 4-signal weighted scoring (name, bio, avatar, location) to filter false positives.
+Declare known-good sources (`--trust github:user`). Weighted scoring on name, bio, avatar, and location then filters out false positives.
+
+[Trust anchors](architecture/trust-anchors.md)
+
 </div>
 
 <div class="os-feature" markdown>
-<span class="os-feature__icon">📊</span>
 
-### Classified-Style PDF Dossiers
+:material-file-pdf-box:{ .os-feature__icon }
 
-Generate intelligence briefs with identity cards, OCEAN profiles, risk matrices, and entity graphs. CSS-rendered via WeasyPrint with Playwright fallback.
+### PDF Dossiers
+
+Generate reports with identity cards, profile analysis, risk matrices, and entity graphs. The CLI renders them with WeasyPrint, and the dashboard with Chromium.
+
+[Web dashboard](guides/web-dashboard.md)
+
 </div>
 
 <div class="os-feature" markdown>
-<span class="os-feature__icon">🌍</span>
 
-### 5 Languages, Full Stack
+:material-translate:{ .os-feature__icon }
 
-English, Spanish, Portuguese, Arabic, Russian — across CLI, web dashboard, AI prompts, and PDF reports. Not just translated labels; the AI system prompt changes per language.
+### Five Languages
+
+English, Spanish, Portuguese, Arabic, and Russian in the CLI, web dashboard, profiler, and PDF reports.
+
+[Language coverage](guides/languages.md)
+
 </div>
 
 </div>
 
----
+## See it in action
 
-## See It In Action
+<div class="os-gallery">
 
 <div class="os-screenshot">
-<img src="assets/demo.png" alt="OSINT-D2 Agent Investigation">
-<div class="os-screenshot__caption">Agent Mode — autonomous investigation with real-time reasoning</div>
+<a href="assets/dashboard-report.png"><img src="assets/dashboard-report.png" alt="Dashboard showing a finished investigation with demo data"></a>
+<div class="os-screenshot__caption">Finished agent investigation in the dashboard (demo data)</div>
 </div>
 
 <div class="os-screenshot">
-<img src="assets/trust_anchors.png" alt="Trust Anchor Verification">
-<div class="os-screenshot__caption">Trust anchors verified 1 source and discarded 2 false positives</div>
+<a href="assets/dashboard-graph.png"><img src="assets/dashboard-graph.png" alt="Investigation graph with demo data"></a>
+<div class="os-screenshot__caption">Investigation graph: each band is a line of inquiry (demo data)</div>
 </div>
 
-<div class="os-screenshot">
-<img src="assets/ai_analysis.png" alt="6D Cognitive Profile">
-<div class="os-screenshot__caption">6D cognitive profile — identity, geo-temporal, psychological analysis</div>
 </div>
 
----
-
-## Quick Start
+## Investigate from the command line
 
 ```bash
-git clone https://github.com/Doble-2/osint-d2.git && cd osint-d2
-cp .env.example .env          # Add your API keys
-docker compose up -d           # Dashboard at http://localhost:8000
-```
-
-Or investigate from the command line:
-
-```bash
-# Quick scan across 18+ platforms
+# Quick scan with the 20 username scanners, no AI
 osint-d2 scan johndoe
 
 # Autonomous AI agent with 10 reasoning steps
 osint-d2 agent johndoe --ai-provider deepseek --max-steps 10
 
-# Full pipeline with Sherlock (400+ sites) + breach check
-osint-d2 hunt -u johndoe,jdoe123 -e john@example.com --sherlock --breach-check
+# Several targets with Sherlock (about 470 sites)
+osint-d2 hunt -u johndoe,jdoe123 -e john@example.com --sherlock
 ```
 
-[:material-arrow-right: Full Installation Guide](getting-started/installation.md){ .md-button .md-button--primary }
-[:material-arrow-right: Agent Mode Deep Dive](guides/agent-mode.md){ .md-button }
-
----
+[Installation guide](getting-started/installation.md){ .md-button .md-button--primary }
+[CLI reference](guides/cli-reference.md){ .md-button }
 
 ## License
 
-OSINT-D2 is released under the [MIT License](https://github.com/Doble-2/osint-d2/blob/main/LICENSE). Designed for **authorized security research**, **journalism**, and **OSINT investigations**. Users are responsible for compliance with applicable laws.
+OSINT-D2 is released under the [MIT License](https://github.com/Doble-2/osint-d2/blob/main/LICENSE). It is designed for **authorized security research**, **journalism**, and **OSINT investigations**. You are responsible for complying with applicable laws.

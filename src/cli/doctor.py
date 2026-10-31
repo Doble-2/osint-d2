@@ -3,21 +3,24 @@
 from __future__ import annotations
 
 import asyncio
+import tempfile
 from pathlib import Path
 
 import typer
 from rich.console import Console
 from rich.table import Table
 
+from adapters.browser import can_install_chromium, chromium_path, install_chromium
 from adapters.http_client import build_async_client
 from adapters.report_exporter import export_person_pdf
-from core.config import AppSettings, write_user_env_vars
+from core.config import AI_PROVIDER_PRESETS, AppSettings, write_user_env_vars
 from core.domain.language import Language
 from core.domain.models import PersonEntity
 
 app = typer.Typer(no_args_is_help=True, help="Environment diagnostics and configuration checks.")
 
 _console = Console()
+_CHROMIUM_FIX = "run `osint-d2 doctor install-browser`."
 
 
 async def _check_http(url: str) -> tuple[bool, str]:
@@ -33,23 +36,31 @@ def _check_pdf() -> tuple[bool, str]:
     """Attempt to generate a minimal PDF to detect WeasyPrint issues."""
 
     try:
-        tmp = Path("reports") / "_doctor_test.pdf"
-        person = PersonEntity(target="doctor", profiles=[])
-        export_person_pdf(person=person, output_path=tmp, language=Language.ENGLISH)
-        try:
-            tmp.unlink(missing_ok=True)
-        except Exception:
-            pass
+        with tempfile.TemporaryDirectory() as tmp:
+            person = PersonEntity(target="doctor", profiles=[])
+            export_person_pdf(person=person, output_path=Path(tmp) / "doctor.pdf", language=Language.ENGLISH)
         return True, "OK"
     except Exception as exc:
         return False, str(exc)
 
 
+def _check_chromium() -> tuple[bool, str]:
+    """Check that Playwright's browser, used for dashboard PDFs and graphs, exists."""
+
+    try:
+        path = chromium_path()
+    except Exception as exc:
+        return False, str(exc)
+    return Path(path).exists(), path
+
+
 @app.command()
 def run() -> None:
-    """Run baseline diagnostics and show recommended fixes."""
+    """Run baseline diagnostics and show how to fix what fails."""
 
     settings = AppSettings()
+    fixes: list[str] = []
+    failed = False
 
     table = Table(title="OSINT-D2 Doctor")
     table.add_column("Check", style="bright_green", no_wrap=True)
@@ -57,24 +68,43 @@ def run() -> None:
     table.add_column("Details", style="dim")
 
     # Config
-    if bool(settings.ai_api_key):
-        table.add_row("AI key", "OK", "Remote AI enabled")
+    table.add_row("AI provider", "OK", settings.ai_provider)
+    if settings.ai_api_key:
+        table.add_row("AI key", "OK", "Configured")
+    elif settings.ai_provider.lower() == "ollama":
+        table.add_row("AI key", "OK", "Not needed for Ollama")
     else:
-        table.add_row(
-            "AI key",
-            "[yellow]MISSING[/yellow]",
-            "No key → heuristic fallback. Agent mode (--agent) will fail.",
-        )
+        table.add_row("AI key", "[yellow]MISSING[/yellow]", "`agent` fails; AI analysis uses a local heuristic.")
+        fixes.append("AI key: run `osint-d2 doctor setup-ai` or set OSINT_D2_AI_API_KEY.")
     table.add_row("AI base_url", "OK", settings.ai_base_url)
     table.add_row("AI model", "OK", settings.ai_model)
 
+    if settings.hibp_api_key:
+        table.add_row("HIBP key", "OK", "Configured")
+    else:
+        table.add_row("HIBP key", "OFF", "Breach checks are unavailable. Set OSINT_D2_HIBP_API_KEY to use them.")
+
     # Connectivity (best-effort)
     ok_http, detail_http = asyncio.run(_check_http("https://github.com"))
-    table.add_row("HTTP connectivity", "OK" if ok_http else "FAIL", detail_http)
+    table.add_row("HTTP connectivity", "OK" if ok_http else "[red]FAIL[/red]", detail_http)
+    if not ok_http:
+        failed = True
+        fixes.append("HTTP: check your network connection and proxy settings.")
 
     # PDF
     ok_pdf, detail_pdf = _check_pdf()
-    table.add_row("WeasyPrint PDF", "OK" if ok_pdf else "FAIL", detail_pdf)
+    table.add_row("CLI PDFs (optional)", "OK" if ok_pdf else "[yellow]NOT INSTALLED[/yellow]", detail_pdf)
+    if not ok_pdf:
+        fixes.append(
+            "Optional, for --export-pdf: install Pango (see the installation guide). "
+            "Scans work without it, and --export-pdf falls back to HTML."
+        )
+
+    # Chromium
+    ok_chromium, detail_chromium = _check_chromium()
+    table.add_row("Chromium (optional)", "OK" if ok_chromium else "[yellow]NOT INSTALLED[/yellow]", detail_chromium)
+    if not ok_chromium:
+        fixes.append(f"Optional, for dashboard PDFs and graph images: {_CHROMIUM_FIX}")
 
     # Proxy (ScrapingAnt)
     proxy_mode = settings.effective_proxy_mode
@@ -90,10 +120,26 @@ def run() -> None:
 
     _console.print(table)
 
-    if not ok_pdf:
-        _console.print(
-            "\n[yellow]Note:[/yellow] When PDF export fails, `--export-pdf` automatically falls back to HTML."
-        )
+    if fixes:
+        _console.print("\n[bold]How to fix:[/bold]")
+        for fix in fixes:
+            _console.print(f"  - {fix}", markup=False)
+
+    if failed:
+        raise typer.Exit(code=1)
+
+
+@app.command(name="install-browser")
+def install_browser() -> None:
+    """Download Chromium, used for dashboard PDFs and graph images."""
+
+    if not can_install_chromium():
+        _console.print("This build can't install Chromium itself. See the installation guide.")
+        raise typer.Exit(code=1)
+    if not install_chromium():
+        _console.print("[red]Chromium could not be installed.[/red] Check your connection and try again.")
+        raise typer.Exit(code=1)
+    _console.print("[green]Chromium is installed.[/green]")
 
 
 @app.command(name="setup-ai")
@@ -104,40 +150,30 @@ def setup_ai() -> None:
     """
 
     provider = typer.prompt(
-        "AI provider",
-        default="groq",
+        f"AI provider ({', '.join(AI_PROVIDER_PRESETS)})",
+        default="deepseek",
         show_default=True,
     ).strip().lower()
 
-    presets: dict[str, dict[str, str]] = {
-        "deepseek": {"OSINT_D2_AI_BASE_URL": "https://api.deepseek.com", "OSINT_D2_AI_MODEL": "deepseek-chat"},
-        # Calidad (más lento, mejor para informes):
-        "groq": {"OSINT_D2_AI_BASE_URL": "https://api.groq.com/openai/v1", "OSINT_D2_AI_MODEL": "llama-3.1-70b-versatile"},
-        "groq-70b": {"OSINT_D2_AI_BASE_URL": "https://api.groq.com/openai/v1", "OSINT_D2_AI_MODEL": "llama-3.1-70b-versatile"},
-        # Velocidad:
-        "groq-fast": {"OSINT_D2_AI_BASE_URL": "https://api.groq.com/openai/v1", "OSINT_D2_AI_MODEL": "llama-3.1-8b-instant"},
-        "openrouter": {"OSINT_D2_AI_BASE_URL": "https://openrouter.ai/api/v1", "OSINT_D2_AI_MODEL": "openai/gpt-4o-mini"},
-        "huggingface": {"OSINT_D2_AI_BASE_URL": "https://api-inference.huggingface.co/v1", "OSINT_D2_AI_MODEL": "meta-llama/Llama-3.1-8B-Instruct"},
-        "ollama": {"OSINT_D2_AI_BASE_URL": "http://localhost:11434/v1", "OSINT_D2_AI_MODEL": "llama3"},
-    }
-
-    values = presets.get(provider, {}).copy()
-    if not values:
+    preset = AI_PROVIDER_PRESETS.get(provider, {})
+    if not preset:
         _console.print("[yellow]Unknown provider preset. You can still enter custom values.[/yellow]")
 
-    base_url = typer.prompt("AI base URL", default=values.get("OSINT_D2_AI_BASE_URL", ""), show_default=True).strip()
-    model = typer.prompt("AI model", default=values.get("OSINT_D2_AI_MODEL", ""), show_default=True).strip()
-    api_key = typer.prompt("AI API key", hide_input=True, confirmation_prompt=False).strip()
+    base_url = typer.prompt("AI base URL", default=preset.get("base_url", ""), show_default=True).strip()
+    model = typer.prompt("AI model", default=preset.get("model", ""), show_default=True).strip()
+    api_key = typer.prompt("AI API key (leave blank to keep the saved one)", hide_input=True, default="", show_default=False).strip()
 
     if not base_url or not model:
         raise typer.BadParameter("base_url and model are required")
 
-    env_path = write_user_env_vars(
-        {
-            "OSINT_D2_AI_BASE_URL": base_url,
-            "OSINT_D2_AI_MODEL": model,
-            "OSINT_D2_AI_API_KEY": api_key,
-        }
-    )
+    values = {
+        "OSINT_D2_AI_PROVIDER": provider,
+        "OSINT_D2_AI_BASE_URL": base_url,
+        "OSINT_D2_AI_MODEL": model,
+    }
+    # A blank answer keeps the saved key instead of erasing it.
+    if api_key:
+        values["OSINT_D2_AI_API_KEY"] = api_key
+    env_path = write_user_env_vars(values)
 
     _console.print(f"[green]Saved AI config to:[/green] {env_path}")

@@ -33,9 +33,9 @@ The agent has access to 9 tools, each wrapping an existing OSINT scanner and com
 
 | # | Tool | What it does | Key output |
 |---|------|-------------|------------|
-| 1 | `scan_username` | Scan across 18+ platforms (GitHub, X, Instagram, Reddit, Telegram, etc.) | Confirmed profiles with bios, avatars, metadata |
+| 1 | `scan_username` | Check the 20 native username scanners (GitHub, X, Instagram, Reddit, Telegram, etc.) | Confirmed profiles with bios, avatars, metadata |
 | 2 | `scan_email` | Pivot from email via Gravatar, PGP keyservers, Ubuntu keyserver. Optionally scans local part as username. | Cross-platform profiles, PGP keys |
-| 3 | `breach_check` | HaveIBeenPwned k-anonymity check | Breach names, dates, compromised data types |
+| 3 | `breach_check` | Official HaveIBeenPwned API. Requires `OSINT_D2_HIBP_API_KEY` and sends the full email to HIBP | Breach names, dates, compromised data types |
 | 4 | `fetch_url` | Extract intelligence from any URL: title, emails, social links, OG metadata | Discovered usernames, emails, social links |
 | 5 | `compare_avatars` | Perceptual hashing (dHash) to compare two avatar images | Similarity %, hamming distance |
 | 6 | `scan_phone` | Telecom intelligence: E.164 validation, carrier, country, WhatsApp status | Carrier, line type, timezones, footprint URLs |
@@ -45,7 +45,7 @@ The agent has access to 9 tools, each wrapping an existing OSINT scanner and com
 
 ### SSRF Protection
 
-The `fetch_url` tool validates URLs against private IP ranges and cloud IMDS endpoints before fetching. Attempts to access `169.254.169.254`, `localhost`, `10.x.x.x`, or similar are blocked with an `SSRFBlockedError`.
+`fetch_url` and `compare_avatars` validate each URL, including every redirect, against private, reserved, and cloud metadata addresses. See the [known limits](security.md#known-limits).
 
 ---
 
@@ -108,16 +108,16 @@ The vector store is **pure Python** (no numpy/scipy dependency):
 
 ## System Prompt Strategy
 
-The agent's system prompt is dynamically constructed based on the investigation language. It includes:
+The agent's system prompt exists in English and Spanish, and other languages use the English version. It includes:
 
 1. **Role definition** — "expert OSINT investigator and Criminal Profiler"
 2. **Method** — 5-step investigation methodology (start → gather → analyze → pivot → report)
-3. **Rules** — step limits, no data fabrication, pattern recognition guidance
+3. **Rules** — step limits, no data fabrication, treating tool results as untrusted data
 4. **Score interpretation** — explicit instructions for BM25, stylometry, and avatar metrics
 5. **Report structure** — must cover the 6 dimensions
 6. **Language** — response language matches the investigation
 
-The prompt changes per language. In Spanish, the agent receives instructions in Spanish and responds in "español neutro". This isn't just translation — the investigation methodology description adapts to the linguistic context.
+In Spanish, the agent receives instructions in Spanish and responds in "español neutro".
 
 ---
 
@@ -137,23 +137,22 @@ Select **AI Agent** mode in the sidebar configuration, set the AI provider and m
 
 ```env
 OSINT_D2_AGENT_MAX_STEPS=10       # Default max reasoning steps
-OSINT_D2_AI_API_KEY=sk-...        # API key (not needed for Ollama)
-OSINT_D2_AI_BASE_URL=https://api.deepseek.com
-OSINT_D2_AI_MODEL=deepseek-chat
+OSINT_D2_AI_PROVIDER=deepseek     # Sets the default endpoint and model
+OSINT_D2_AI_API_KEY=sk-...        # Not needed for Ollama
 ```
 
 | Provider | Base URL | Model |
 |----------|----------|-------|
 | DeepSeek | `https://api.deepseek.com` | `deepseek-chat` |
 | OpenAI | `https://api.openai.com/v1` | `gpt-4o-mini` |
-| Ollama | `http://localhost:11434/v1` | `llama3.1` |
-| Groq | `https://api.groq.com/openai/v1` | `llama-3.1-70b-versatile` |
+| Ollama | `http://localhost:11434/v1` | `llama3` |
+| Groq | `https://api.groq.com/openai/v1` | `openai/gpt-oss-120b` |
 
 ---
 
 ## 6D Cognitive Profile
 
-When the agent finishes, it generates a structured analysis across 6 dimensions:
+When the agent finishes, it generates a structured analysis. **OCEAN Psychology**, **Ideology & Values**, and **OpSec / Attack Surface** are off by default. Enable them with `--sensitive-inferences`, the dashboard's **Sensitive inferences** option, or `OSINT_D2_SENSITIVE_INFERENCES=true`.
 
 | Dimension | What the agent analyzes |
 |-----------|------------------------|
@@ -164,12 +163,8 @@ When the agent finishes, it generates a structured analysis across 6 dimensions:
 | **Ideology & Values** | Interests, causes, community affiliations, political signals, content themes |
 | **OpSec / Attack Surface** | Password reuse signals, email exposure, handle consistency, data breach exposure, privacy hygiene |
 
-<div class="os-screenshot" markdown>
-
-![6D Cognitive Profile Output](../assets/ai_analysis.png)
-<div class="os-screenshot__caption">Real agent output — 6D profile for the handle "torvalds"</div>
-
-</div>
+!!! warning "Treat the profile as unverified"
+    The personality, ideology, and demographic sections are the model's inferences, not established facts. They can be wrong, and they touch categories that privacy law may specially protect. See [Responsible Use](security.md#responsible-use).
 
 ---
 
@@ -177,6 +172,6 @@ When the agent finishes, it generates a structured analysis across 6 dimensions:
 
 - **More steps = deeper investigation** — 6 for quick scans, 10-15 for thorough investigations
 - **Trust anchors** filter false positives — `--trust github:johndoe` tells the agent that GitHub profile is confirmed
-- **Ollama** works fully offline — no data leaves your machine
-- **The agent never fabricates data** — every claim traces back to a tool observation
+- **Ollama** keeps inference on your machine, but the scans still contact the target sites
+- **Check the evidence** — the prompt forbids inventing data, but models can still make mistakes
 - **Parallel tool calls**: some LLMs (GPT-4o) call multiple tools per step, making investigations faster

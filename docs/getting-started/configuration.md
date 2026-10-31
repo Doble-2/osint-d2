@@ -12,17 +12,34 @@ Or use the interactive setup:
 osint-d2 doctor setup-ai
 ```
 
+## Where Settings Come From
+
+From highest to lowest priority:
+
+1. Environment variables
+2. User config: `~/.config/osint-d2/.env` on Linux, `~/Library/Application Support/osint-d2/.env` on macOS, `%APPDATA%\\osint-d2\\.env` on Windows
+3. `.env` in the current directory
+
+So the user config overrides a project `.env`. `osint-d2 doctor setup-ai` and `--ai-save` write to the user config, so if a project setting seems to be ignored, check that file.
+
 ## Environment Variables
 
 ### AI Provider
 
 | Variable | Default | Description |
 |----------|---------|-------------|
+| `OSINT_D2_AI_PROVIDER` | `deepseek` | Provider this configuration belongs to: `deepseek`, `openai`, `ollama`. The dashboard sends the API key only to this provider. |
 | `OSINT_D2_AI_API_KEY` | — | API key for the AI provider. Required for AI analysis and agent mode. Supports DeepSeek, Groq, OpenRouter, or any OpenAI-compatible API. |
-| `OSINT_D2_AI_BASE_URL` | `https://api.deepseek.com` | Base URL for the AI API. Change for Ollama (`http://localhost:11434/v1`) or other providers. |
-| `OSINT_D2_AI_MODEL` | `deepseek-chat` | Model name to use for analysis. |
+| `OSINT_D2_AI_BASE_URL` | From the provider | Base URL for the AI API. Set it for other OpenAI-compatible services, or Ollama in another container. |
+| `OSINT_D2_AI_MODEL` | From the provider | Model name to use for analysis. |
 | `OSINT_D2_AI_TIMEOUT_SECONDS` | `45` | Timeout in seconds for AI API calls. |
 | `OSINT_D2_AI_MAX_RETRIES` | `3` | Max retries on transient AI failures (rate limits, network errors). |
+
+### Breach Checks
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OSINT_D2_HIBP_API_KEY` | — | [Have I Been Pwned API key](https://haveibeenpwned.com/API/Key), a paid service. Required for `--breach-check`. HIBP receives the full email address. |
 
 ### Proxy (ScrapingAnt)
 
@@ -30,7 +47,7 @@ osint-d2 doctor setup-ai
 |----------|---------|-------------|
 | `OSINT_D2_PROXY_API_KEY` | — | ScrapingAnt API key. Enables proxy routing for all scanner requests. |
 | `OSINT_D2_PROXY_USERNAME` | — | ScrapingAnt username for standalone proxy products. |
-| `OSINT_D2_PROXY_MODE` | `residential` | Proxy type: `residential` (recommended) or `datacenter`. |
+| `OSINT_D2_PROXY_MODE` | `residential` when a proxy key is set, otherwise none | Proxy type: `residential` or `datacenter`. |
 | `OSINT_D2_PROXY_COUNTRY` | — | 2-letter country code for geo-targeting (e.g., `us`, `de`, `br`). |
 
 ### HTTP & Rate Limiting
@@ -58,7 +75,9 @@ osint-d2 doctor setup-ai
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `OSINT_D2_CORS_ORIGINS` | `http://localhost:8000,http://127.0.0.1:8000` | Comma-separated list of allowed CORS origins. Set this to access the dashboard from LAN hosts. |
+| `OSINT_D2_CORS_ORIGINS` | `http://localhost:8000,http://127.0.0.1:8000` | Comma-separated list of extra origins. The server answers only to `localhost`, `127.0.0.1`, and the hosts listed here, so set it when you open the dashboard through any other address. |
+| `OSINT_BIND` | `127.0.0.1` | Docker Compose only: the host address the port is published on. The dashboard has no authentication, so see [Security](../guides/security.md) before changing it. |
+| `OSINT_PORT` | `8000` | Docker Compose only: the host port. |
 
 ### Agent Mode
 
@@ -71,23 +90,21 @@ osint-d2 doctor setup-ai
 ### DeepSeek (Default)
 
 ```env
+OSINT_D2_AI_PROVIDER=deepseek
 OSINT_D2_AI_API_KEY=sk-your-key-here
-OSINT_D2_AI_BASE_URL=https://api.deepseek.com
-OSINT_D2_AI_MODEL=deepseek-chat
 ```
 
 ### OpenAI
 
 ```env
+OSINT_D2_AI_PROVIDER=openai
 OSINT_D2_AI_API_KEY=sk-your-key-here
-OSINT_D2_AI_BASE_URL=https://api.openai.com/v1
-OSINT_D2_AI_MODEL=gpt-4o-mini
 ```
 
 ### Ollama (Local)
 
 ```env
-OSINT_D2_AI_BASE_URL=http://localhost:11434/v1
+OSINT_D2_AI_PROVIDER=ollama
 OSINT_D2_AI_MODEL=llama3.1
 # No API key needed for local Ollama
 ```
@@ -95,7 +112,6 @@ OSINT_D2_AI_MODEL=llama3.1
 ### Groq
 
 ```env
+OSINT_D2_AI_PROVIDER=groq
 OSINT_D2_AI_API_KEY=gsk_your-key-here
-OSINT_D2_AI_BASE_URL=https://api.groq.com/openai/v1
-OSINT_D2_AI_MODEL=llama-3.1-70b-versatile
 ```

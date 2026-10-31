@@ -3,19 +3,19 @@
 ## Quick Start
 
 ```bash
-git clone https://github.com/Doble-2/osint-d2.git
-cd osint-d2
-cp .env.example .env          # Add your API keys
-docker compose up -d
+curl -fsSLO https://raw.githubusercontent.com/Doble-2/osint-d2/main/scripts/install-docker.sh
+sh install-docker.sh
 ```
+
+This creates an `osint-d2` folder with the Compose file, a `.env` for your AI key, and a `reports` folder.
 
 Open **http://localhost:8000** to access the web dashboard.
 
 !!! success "Batteries Included"
     The Docker image includes **all native dependencies** for full functionality:
 
-    - **PDF generation** — WeasyPrint + Cairo/Pango/GDK-Pixbuf pre-installed
-    - **Graph PNG rendering** — Playwright + Chromium pre-installed
+    - **PDF generation** — WeasyPrint with Pango, plus Chromium
+    - **Graph images** — Playwright + Chromium pre-installed
     - **Web dashboard** — all assets vendorized (no external CDN calls)
     - **Non-root execution** — runs as unprivileged `osint` user
 
@@ -33,8 +33,8 @@ All OSINT-D2 configuration uses the `OSINT_D2_` prefix. Edit your `.env` file:
 |----------|-------------|---------|
 | `OSINT_D2_AI_PROVIDER` | Provider name | `deepseek`, `openai`, `ollama` |
 | `OSINT_D2_AI_API_KEY` | API key (not needed for Ollama) | `sk-xxxxxxxx` |
-| `OSINT_D2_AI_BASE_URL` | Provider endpoint | `https://api.deepseek.com` |
-| `OSINT_D2_AI_MODEL` | Model to use | `deepseek-chat` |
+| `OSINT_D2_AI_BASE_URL` | Provider endpoint (optional) | `http://ollama:11434/v1` |
+| `OSINT_D2_AI_MODEL` | Model to use (optional) | `deepseek-chat` |
 
 ### Optional Services
 
@@ -55,8 +55,6 @@ All OSINT-D2 configuration uses the `OSINT_D2_` prefix. Edit your `.env` file:
     ```env
     OSINT_D2_AI_PROVIDER=deepseek
     OSINT_D2_AI_API_KEY=sk-xxxxxxxxxxxxxxxx
-    OSINT_D2_AI_BASE_URL=https://api.deepseek.com
-    OSINT_D2_AI_MODEL=deepseek-chat
     ```
 
     ```bash
@@ -66,7 +64,7 @@ All OSINT-D2 configuration uses the `OSINT_D2_` prefix. Edit your `.env` file:
 === "Inline"
 
     ```bash
-    docker run -p 8000:8000 \
+    docker run -p 127.0.0.1:8000:8000 \
       -e OSINT_D2_AI_PROVIDER=deepseek \
       -e OSINT_D2_AI_API_KEY=sk-xxx \
       ghcr.io/doble-2/osint-d2
@@ -87,10 +85,10 @@ All OSINT-D2 configuration uses the `OSINT_D2_` prefix. Edit your `.env` file:
 
 ## LAN / Network Access
 
-By default, the dashboard's CORS policy restricts access to `localhost`. To access the dashboard from other machines on your network, set `OSINT_D2_CORS_ORIGINS`:
+By default, Compose publishes the dashboard on `127.0.0.1` only. The dashboard has **no authentication**: anyone who can reach the port can start investigations (spending your AI credits) and download dossiers. To expose it on a trusted network, set `OSINT_BIND`. Read [Security & Responsible Use](security.md) first. The server only answers to `localhost` and `127.0.0.1`, to block DNS rebinding, so also list every other address you use in `OSINT_D2_CORS_ORIGINS`:
 
 ```env
-# Allow access from any host on the LAN
+OSINT_BIND=0.0.0.0
 OSINT_D2_CORS_ORIGINS=http://192.168.1.100:8000,http://my-server.local:8000
 ```
 
@@ -98,7 +96,7 @@ OSINT_D2_CORS_ORIGINS=http://192.168.1.100:8000,http://my-server.local:8000
 
 ## Ollama (Fully Offline)
 
-Run LLM inference locally with zero data leaving your machine:
+Run LLM inference locally, so scan results don't go to an AI provider. Scans still contact the sites being checked.
 
 ```yaml
 # docker-compose.override.yml
@@ -125,7 +123,7 @@ volumes:
 After starting, pull the model:
 
 ```bash
-docker exec ollama ollama pull llama3.1
+docker compose exec ollama ollama pull llama3.1
 ```
 
 !!! tip "GPU passthrough"
@@ -159,13 +157,10 @@ Pull the latest image from GitHub Container Registry:
 
 ```bash
 docker pull ghcr.io/doble-2/osint-d2:latest
-docker run --name osint-d2 -p 8000:8000 --env-file .env ghcr.io/doble-2/osint-d2
+docker run --name osint-d2 -p 127.0.0.1:8000:8000 --env-file .env ghcr.io/doble-2/osint-d2
 ```
 
-The image is built for `linux/amd64` via GitHub Actions on every push to `main`.
-
-!!! note "ARM / Apple Silicon"
-    The pre-built image is `linux/amd64`. On ARM machines (Apple Silicon, Raspberry Pi), build locally instead: `docker compose build`.
+The image is built for `linux/amd64` and `linux/arm64` by GitHub Actions. It is for running on your own machine: the project does not operate a hosted version.
 
 ---
 
@@ -173,7 +168,9 @@ The image is built for `linux/amd64` via GitHub Actions on every push to `main`.
 
 The container runs as a non-root user (`osint`) by default. This provides defense-in-depth: even if Chromium has a sandbox escape vulnerability, the attacker lands in an unprivileged context.
 
-The web dashboard makes **zero external network requests** — all JavaScript, CSS, and font dependencies are vendorized inside the image. Suitable for air-gapped environments.
+The dashboard page loads all its JavaScript, CSS, and fonts from the image. Investigations still contact the scanned sites and, unless you use Ollama, your AI provider.
+
+The dashboard has no authentication. See [Security & Responsible Use](security.md).
 
 ---
 
@@ -202,7 +199,7 @@ docker compose up -d
 |-----------|---------|-------------|
 | RAM | 512 MB | 1 GB |
 | CPU | 1 core | 2 cores |
-| Disk | 2.5 GB (image) | 4 GB (image + reports) |
+| Disk | 2 GB (image) | 4 GB (image + reports) |
 | Ollama (optional) | 4 GB RAM | 8+ GB RAM, GPU |
 
-The main memory consumer is Playwright (used for PDF rendering). If you only use JSON exports, memory usage is much lower.
+The main memory consumer is Chromium, used for dashboard PDFs and graphs.

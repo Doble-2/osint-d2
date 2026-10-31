@@ -7,9 +7,14 @@ the LLM context window.
 
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import Any
+from urllib.parse import urljoin
 
+import httpx
+
+from adapters.http_client import get_limited
 from adapters.breach_check import enrich_profiles_with_breach_data
 from core.config import AppSettings
 from core.domain.models import SocialProfile
@@ -20,6 +25,12 @@ from core.services.identity_pipeline import (
     scan_email,
     scan_username,
 )
+from core.services.url_guard import SSRFBlockedError, validate_url
+
+_REDIRECT_STATUSES = frozenset({301, 302, 303, 307, 308})
+_MAX_REDIRECTS = 5
+_MAX_HTML_CHARS = 2_000_000
+_MAX_VECTOR_RESULTS = 20
 
 
 # ---------------------------------------------------------------------------
@@ -82,7 +93,7 @@ AGENT_TOOLS: list[dict[str, Any]] = [
         "function": {
             "name": "breach_check",
             "description": (
-                "Check an email against HaveIBeenPwned to find data breaches. "
+                "Check an email with the official HaveIBeenPwned API to find data breaches. "
                 "Returns breach names, dates, and compromised data types."
             ),
             "parameters": {
@@ -125,7 +136,7 @@ AGENT_TOOLS: list[dict[str, Any]] = [
         "function": {
             "name": "compare_avatars",
             "description": (
-                "Compare two avatar image URLs or file paths using perceptual hashing (dHash). "
+                "Compare two avatar image URLs using perceptual hashing (dHash). "
                 "Detects if both accounts use the same photo even if resized or recompressed."
             ),
             "parameters": {
@@ -133,11 +144,11 @@ AGENT_TOOLS: list[dict[str, Any]] = [
                 "properties": {
                     "avatar_url_1": {
                         "type": "string",
-                        "description": "First image URL or local path.",
+                        "description": "First image URL.",
                     },
                     "avatar_url_2": {
                         "type": "string",
-                        "description": "Second image URL or local path.",
+                        "description": "Second image URL.",
                     },
                 },
                 "required": ["avatar_url_1", "avatar_url_2"],
@@ -224,9 +235,8 @@ AGENT_TOOLS: list[dict[str, Any]] = [
                     "summary": {
                         "type": "string",
                         "description": (
-                            "Detailed Markdown report with the 6 analysis "
-                            "sections (Identity, Geo-temporal, Psychological, "
-                            "Technical, Ideology, Attack Surface)."
+                            "Detailed Markdown report with the sections the "
+                            "system prompt requires."
                         ),
                     },
                     "highlights": {
@@ -253,7 +263,9 @@ AGENT_TOOLS: list[dict[str, Any]] = [
 def _compact_profiles(profiles: list[SocialProfile], *, max_profiles: int = 30) -> list[dict[str, Any]]:
     """Convert profiles to a compact JSON-friendly format for the LLM."""
     out: list[dict[str, Any]] = []
-    for p in profiles[:max_profiles]:
+    # Confirmed profiles first, so the cap never drops real findings.
+    ordered = sorted(profiles, key=lambda p: not p.exists)
+    for p in ordered[:max_profiles]:
         entry: dict[str, Any] = {
             "network": p.network_name,
             "username": p.username,
@@ -278,6 +290,10 @@ def _compact_profiles(profiles: list[SocialProfile], *, max_profiles: int = 30) 
             if val is not None and val != "" and val != []:
                 entry[key] = val
 
+        # A failed lookup must not read as "nothing found".
+        if isinstance(meta.get("error"), str):
+            entry["error"] = meta["error"]
+
         # Breach data
         breaches = meta.get("breaches")
         if isinstance(breaches, dict):
@@ -285,6 +301,31 @@ def _compact_profiles(profiles: list[SocialProfile], *, max_profiles: int = 30) 
 
         out.append(entry)
     return out
+
+
+def _scan_result_json(target: str, profiles: list[SocialProfile]) -> str:
+    return json.dumps({
+        "target": target,
+        "total_scanned": len(profiles),
+        "confirmed": sum(1 for p in profiles if p.exists),
+        "profiles": _compact_profiles(profiles),
+    }, ensure_ascii=False)
+
+
+async def _guarded_get(client: httpx.AsyncClient, url: str) -> httpx.Response:
+    """GET *url* validating every redirect hop against the SSRF guard.
+
+    The URLs come from the LLM, which reads attacker-controlled pages, and a
+    public URL can simply redirect to an internal address.
+    """
+    for _ in range(_MAX_REDIRECTS + 1):
+        await asyncio.to_thread(validate_url, url)
+        resp = await get_limited(client, url, follow_redirects=False)
+        location = resp.headers.get("location") if resp.status_code in _REDIRECT_STATUSES else None
+        if not location:
+            return resp
+        url = urljoin(str(resp.url), location)
+    raise ValueError(f"Too many redirects (>{_MAX_REDIRECTS})")
 
 
 async def execute_tool(
@@ -317,14 +358,7 @@ async def execute_tool(
         if not username:
             return json.dumps({"error": "username is required"})
         result = await scan_username(settings=settings, username=username)
-        profiles = _compact_profiles(list(result.person.profiles))
-        confirmed = [p for p in profiles if p.get("exists")]
-        return json.dumps({
-            "target": username,
-            "total_scanned": len(profiles),
-            "confirmed": len(confirmed),
-            "profiles": profiles,
-        }, ensure_ascii=False)
+        return _scan_result_json(username, list(result.person.profiles))
 
     if name == "scan_email":
         email = arguments.get("email", "")
@@ -336,14 +370,7 @@ async def execute_tool(
             email=email,
             scan_localpart=do_localpart,
         )
-        profiles = _compact_profiles(list(result.person.profiles))
-        confirmed = [p for p in profiles if p.get("exists")]
-        return json.dumps({
-            "target": email,
-            "total_scanned": len(profiles),
-            "confirmed": len(confirmed),
-            "profiles": profiles,
-        }, ensure_ascii=False)
+        return _scan_result_json(email, list(result.person.profiles))
 
     if name == "breach_check":
         email = arguments.get("email", "")
@@ -353,12 +380,13 @@ async def execute_tool(
             return json.dumps({
                 "error": "breach_check is disabled. User must enable with --breach-check.",
             })
-        breach_profiles = enrich_profiles_with_breach_data([email])
+        breach_profiles = await asyncio.to_thread(enrich_profiles_with_breach_data, [email], settings=settings)
         profiles = _compact_profiles(breach_profiles)
-        return json.dumps({
-            "target": email,
-            "results": profiles,
-        }, ensure_ascii=False)
+        output: dict[str, Any] = {"target": email, "results": profiles}
+        errors = [p["error"] for p in profiles if p.get("error")]
+        if errors:
+            output["error"] = f"Breach data unavailable, nothing was checked: {errors[0]}"
+        return json.dumps(output, ensure_ascii=False)
 
     if name == "fetch_url":
         url = arguments.get("url", "")
@@ -367,29 +395,25 @@ async def execute_tool(
         if not (url.startswith("http://") or url.startswith("https://")):
             url = f"https://{url}"
 
-        # SSRF guard — block private/internal/IMDS targets (issue #25)
-        from core.services.url_guard import SSRFBlockedError, validate_url
-        try:
-            url = validate_url(url)
-        except (SSRFBlockedError, ValueError) as exc:
-            return json.dumps({"url": url, "error": f"SSRF blocked: {exc}"})
-
         from adapters.http_client import build_async_client, extract_html_metadata
         try:
+            # SSRF guard — block private/internal/IMDS targets (issue #25)
             async with build_async_client(settings) as client:
-                resp = await client.get(url)
+                resp = await _guarded_get(client, url)
             if resp.status_code >= 400:
                 return json.dumps({
                     "url": url,
                     "error": f"HTTP {resp.status_code}",
                 })
-            html = resp.text or ""
-            meta = extract_html_metadata(html=html, base_url=str(resp.url))
+            html = (resp.text or "")[:_MAX_HTML_CHARS]
+            meta = await asyncio.to_thread(extract_html_metadata, html=html, base_url=str(resp.url))
             return json.dumps({
                 "url": str(resp.url),
                 "status_code": resp.status_code,
                 **meta,
             }, ensure_ascii=False)
+        except (SSRFBlockedError, ValueError) as exc:
+            return json.dumps({"url": url, "error": f"SSRF blocked: {exc}"})
         except Exception as exc:
             return json.dumps({"url": url, "error": str(exc)})
 
@@ -402,14 +426,16 @@ async def execute_tool(
         try:
             from adapters.http_client import build_async_client
             async with build_async_client(settings=settings) as client:
-                resp1 = await client.get(url1)
-                resp2 = await client.get(url2)
+                resp1 = await _guarded_get(client, url1)
+                resp2 = await _guarded_get(client, url2)
                 if resp1.status_code != 200 or resp2.status_code != 200:
                     return json.dumps({
                         "error": f"Failed fetching avatars: img1={resp1.status_code}, img2={resp2.status_code}"
                     })
-                comp = AvatarAnalyzer.compare_avatars(resp1.content, resp2.content)
+                comp = await asyncio.to_thread(AvatarAnalyzer.compare_avatars, resp1.content, resp2.content)
                 return json.dumps(comp, ensure_ascii=False)
+        except (SSRFBlockedError, ValueError) as exc:
+            return json.dumps({"error": f"SSRF blocked: {exc}"})
         except Exception as exc:
             return json.dumps({"error": str(exc)})
 
@@ -437,7 +463,10 @@ async def execute_tool(
         if not vector_store:
             return json.dumps({"error": "Vector store not initialized or empty."})
         query = arguments.get("query", "")
-        limit = arguments.get("limit", 3)
+        try:
+            limit = max(1, min(int(arguments.get("limit", 3)), _MAX_VECTOR_RESULTS))
+        except (TypeError, ValueError):
+            limit = 3
         results = vector_store.search_semantic(query=query, limit=limit)
         return json.dumps({"query": query, "results": results}, ensure_ascii=False)
 

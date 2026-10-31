@@ -3,8 +3,6 @@
 Por qué aquí:
 - Centraliza variables de entorno (pydantic-settings) sin contaminar la CLI.
 - Permite que adaptadores (HTTP/IA) lean config de forma consistente.
-
-Nota: se implementará en la siguiente iteración.
 """
 
 from __future__ import annotations
@@ -13,10 +11,25 @@ import os
 import sys
 from pathlib import Path
 
-from pydantic import Field, SecretStr
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field, SecretStr, model_validator
+from pydantic_settings import BaseSettings, DotEnvSettingsSource, SettingsConfigDict
 
 from core.domain.language import Language
+
+AI_PROVIDER_PRESETS: dict[str, dict[str, str]] = {
+    # Nota: los modelos disponibles cambian según el proveedor/plan.
+    "deepseek": {"base_url": "https://api.deepseek.com", "model": "deepseek-chat"},
+    "openai": {"base_url": "https://api.openai.com/v1", "model": "gpt-4o-mini"},
+    "groq": {"base_url": "https://api.groq.com/openai/v1", "model": "openai/gpt-oss-120b"},
+    # Según la documentación de Groq, este modelo es solo para clientes Enterprise.
+    "groq-70b": {"base_url": "https://api.groq.com/openai/v1", "model": "llama-3.3-70b-versatile"},
+    # Velocidad (más barato/rápido):
+    "groq-fast": {"base_url": "https://api.groq.com/openai/v1", "model": "openai/gpt-oss-20b"},
+    "openrouter": {"base_url": "https://openrouter.ai/api/v1", "model": "openai/gpt-4o-mini"},
+    "huggingface": {"base_url": "https://router.huggingface.co/v1", "model": "meta-llama/Llama-3.1-8B-Instruct"},
+    # Local (gratis, privado, requiere instalar Ollama):
+    "ollama": {"base_url": "http://localhost:11434/v1", "model": "llama3"},
+}
 
 
 def get_user_config_dir() -> Path:
@@ -63,20 +76,26 @@ def write_user_env_vars(values: dict[str, str]) -> Path:
     env_path = get_user_env_file()
     env_path.parent.mkdir(parents=True, exist_ok=True)
 
+    # Si no se puede leer, el error sube: reescribir borraría las demás claves.
     existing: dict[str, str] = {}
     if env_path.exists():
-        try:
-            existing = _parse_env_lines(env_path.read_text(encoding="utf-8"))
-        except Exception:
-            existing = {}
+        existing = _parse_env_lines(env_path.read_text(encoding="utf-8"))
 
     existing.update({k: v for k, v in values.items() if v is not None})
 
     lines = ["# OSINT-D2 user config (.env)"]
     for key in sorted(existing.keys()):
         lines.append(f"{key}={existing[key]}")
-    env_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    # Contiene API keys: solo legible por el propietario, también durante la escritura.
+    fd = os.open(env_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as env_file:
+        env_path.chmod(0o600)
+        env_file.write("\n".join(lines) + "\n")
     return env_path
+
+
+# Gana el último: el .env del proyecto (dev) prevalece sobre el global (PyInstaller).
+ENV_FILES = (str(get_user_env_file()), ".env")
 
 
 class AppSettings(BaseSettings):
@@ -91,8 +110,7 @@ class AppSettings(BaseSettings):
         env_prefix="OSINT_D2_",
         extra="ignore",
         case_sensitive=False,
-        # Orden: proyecto primero (dev), luego config global de usuario (PyInstaller).
-        env_file=(".env", str(get_user_env_file())),
+        env_file=ENV_FILES,
         env_file_encoding="utf-8",
     )
 
@@ -192,6 +210,11 @@ class AppSettings(BaseSettings):
         description="Idioma por defecto para prompts y reportes (en/es).",
     )
 
+    hibp_api_key: SecretStr | None = Field(
+        default=None,
+        description="API key de Have I Been Pwned, necesaria para comprobar brechas.",
+    )
+
     # ── ScrapingAnt Proxy ──────────────────────────────────────────────
     proxy_mode: str | None = Field(
         default=None,
@@ -213,6 +236,34 @@ class AppSettings(BaseSettings):
         description="2-letter country code for geo-targeted proxies (e.g. 'us').",
     )
 
+    @classmethod
+    def settings_customise_sources(
+        cls, settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings,
+    ):
+        # `cp .env.example .env` leaves blank keys, which must not hide the saved ones.
+        # Only in files: a blank environment variable still clears a setting on purpose.
+        dotenv = DotEnvSettingsSource(settings_cls, env_file=dotenv_settings.env_file, env_ignore_empty=True)
+        return init_settings, env_settings, dotenv, file_secret_settings
+
+    @model_validator(mode="after")
+    def _apply_provider_preset(self) -> "AppSettings":
+        """Sin URL o modelo explícitos, usa los del proveedor.
+
+        Evita enviar la key de un proveedor al endpoint por defecto de otro.
+        """
+        preset = AI_PROVIDER_PRESETS.get(self.ai_provider.lower())
+        if preset:
+            if "ai_base_url" not in self.model_fields_set:
+                self.ai_base_url = preset["base_url"]
+            if "ai_model" not in self.model_fields_set:
+                self.ai_model = preset["model"]
+        return self
+
+    def key_belongs_to(self, provider: str) -> bool:
+        """Indica si la API key configurada corresponde a *provider*."""
+        preset = AI_PROVIDER_PRESETS.get(provider)
+        return provider == self.ai_provider.lower() or bool(preset and preset["base_url"] == self.ai_base_url)
+
     @property
     def effective_proxy_mode(self) -> str | None:
         """Return the proxy mode to use, auto-detecting from key if needed."""
@@ -222,8 +273,20 @@ class AppSettings(BaseSettings):
             return "residential"  # default when key is set
         return None
 
+    sensitive_inferences: bool = Field(
+        default=False,
+        description="Include personality, ideology and attack-surface inferences in AI reports.",
+    )
+    report_retention_days: int | None = Field(
+        default=None,
+        ge=1,
+        description="Delete saved reports older than this many days. Unset keeps them.",
+    )
+
     # ── Agent Mode ───────────────────────────────────────────────────
     agent_max_steps: int = Field(
         default=10,
+        ge=1,
+        le=50,
         description="Max reasoning steps for the autonomous agent mode.",
     )

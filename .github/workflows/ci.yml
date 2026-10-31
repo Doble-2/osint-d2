@@ -6,29 +6,127 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        python-version: ["3.11", "3.12", "3.13"]
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: ${{ matrix.python-version }}
 
+      - name: Install system libraries for PDF rendering
+        run: sudo apt-get update && sudo apt-get install -y libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0
+
+      # Installs the exact versions from poetry.lock.
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[tls]"
-          pip install pytest pytest-asyncio ruff
+          python -m pip install poetry
+          poetry install --no-interaction
 
       - name: Lint with ruff
-        run: ruff check src/ tests/
+        run: poetry run ruff check .
 
       - name: Run tests
-        run: pytest tests/ -v --tb=short
+        shell: bash # Adds pipefail, so tee doesn't hide a failure.
+        run: poetry run pytest tests/ --tb=short | tee pytest.log
+
+      # Shows failures on the pull request, without opening the log.
+      - name: Annotate failed tests
+        if: failure()
+        run: grep -E '^(FAILED|ERROR) |^E   ' pytest.log | head -n 20 | cut -c1-300 | sed 's/^/::error::/' || true
+
+  # Installs like an end user, with the newest versions the metadata allows, so
+  # a dependency release that breaks the CLI is caught here.
+  package:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.13"
+
+      - name: Build the wheel
+        run: |
+          python -m pip install build
+          python -m build --wheel
+
+      - name: Install the wheel and run it from another directory
+        run: |
+          python -m venv /tmp/wheel-env
+          /tmp/wheel-env/bin/pip install dist/*.whl
+          cd /tmp
+          /tmp/wheel-env/bin/osint-d2 --version
+          /tmp/wheel-env/bin/osint-d2 --help
+          /tmp/wheel-env/bin/osint-d2 hunt --help
+          /tmp/wheel-env/bin/python -c "from pathlib import Path; import adapters; root = Path(adapters.__file__).parent / 'templates'; assert (root / 'dashboard.html').exists(); assert (root / 'i18n' / 'en.json').exists(); assert (root / 'vendor' / 'purify.min.js').exists()"
+
+  # Installs the way the docs say, on each system, without Pango or Chromium.
+  install:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    defaults:
+      run:
+        shell: bash
+    env:
+      PYTHONUTF8: 1
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.13"
+
+      - name: Install with pipx
+        run: |
+          python -m pip install build pipx
+          python -m build --wheel
+          python -m pipx install --python "$(command -v python)" dist/*.whl
+          python -m pipx ensurepath
+          echo "$(python -m pipx environment --value PIPX_BIN_DIR)" >> "$GITHUB_PATH"
+
+      - name: Optional parts must not fail the diagnostics
+        run: osint-d2 doctor run
+
+      # The closed proxy stops every request, so this contacts no scanned site,
+      # and the scan still has to finish with clean JSON on stdout.
+      - name: A scan produces valid JSON
+        env:
+          HTTP_PROXY: http://127.0.0.1:9
+          HTTPS_PROXY: http://127.0.0.1:9
+        run: |
+          osint-d2 scan ci-smoke-test --format json > scan.json
+          python -c "import json; assert json.load(open('scan.json'))['profiles']"
+
+  audit:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.13"
+
+      - name: Audit locked dependencies
+        run: |
+          python -m pip install poetry
+          poetry install --no-interaction --only main
+          poetry run pip install -U pip setuptools pip-audit
+          poetry run pip-audit
