@@ -61,8 +61,7 @@ jobs:
         run: |
           ./dist/osint-d2/osint-d2 --version
           ./dist/osint-d2/osint-d2 --help
-          # Informational: exits with 1 here because the runner has no Chromium.
-          ./dist/osint-d2/osint-d2 doctor run || true
+          ./dist/osint-d2/osint-d2 doctor run
 
       - name: Smoke test (Windows)
         if: runner.os == 'Windows'
@@ -74,9 +73,7 @@ jobs:
           chcp 65001
           .\dist\osint-d2\osint-d2.exe --version
           .\dist\osint-d2\osint-d2.exe --help
-          # Informational: Chromium and the PDF libraries are not installed here.
           .\dist\osint-d2\osint-d2.exe doctor run
-          exit 0
 
       - name: Archive artifact (Linux/macOS)
         if: runner.os != 'Windows'
@@ -121,3 +118,14 @@ jobs:
             artifacts/**/osint-d2-*.tar.gz
             artifacts/**/osint-d2-*.zip
           generate_release_notes: true
+          body: |
+            ## Before you run a binary
+
+            **Scans work right away.** PDFs and graph images need extras:
+
+            - **Dashboard PDFs and graph images:** Chromium
+            - **CLI PDFs:** Pango. Without it, `--export-pdf` creates an HTML file
+
+            See the [installation guide](https://osint-d2.angelcalderon.dev/getting-started/installation/#standalone-binaries).
+
+            **These binaries aren't signed**, so your system may warn you or block them. Install with pipx or Docker to avoid that, or follow the steps in the guide.
