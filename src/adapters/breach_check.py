@@ -1,152 +1,102 @@
+"""Breach lookups through the official Have I Been Pwned API v3.
+
+The API needs a paid key (https://haveibeenpwned.com/API/Key) and receives the
+full email address: it identifies the queried account to HIBP.
+"""
+
 from __future__ import annotations
 
-import uuid
 from typing import Iterable
+from urllib.parse import quote
 
 import httpx
 
-try:
-    import tls_client  # type: ignore
-except Exception:  # pragma: no cover
-    tls_client = None  # type: ignore
-
+from core.config import AppSettings
 from core.domain.models import (
     HaveibeenpwnedBreach,
     HaveibeenpwnedProfiles,
     SocialProfile,
 )
-from core.config import AppSettings
+
+_API_URL = "https://haveibeenpwned.com/api/v3/breachedaccount/{account}"
+_SOURCE = "haveibeenpwned_api_v3"
 
 
-def _build_hibp_headers() -> dict[str, str]:
-    """Generate fresh HIBP headers with random identifiers per request."""
+def _failed_profile(url: str, email: str, *, error: str, status_code: int | None = None) -> SocialProfile:
+    return SocialProfile(
+        url=url,
+        username=email,
+        network_name="hibp",
+        exists=False,
+        metadata={"source": _SOURCE, "status_code": status_code, "error": error},
+    )
 
-    trace_id = uuid.uuid4().hex
-    span_id = uuid.uuid4().hex[:16]
-    return {
-        "accept": "*/*",
-        "priority": "u=1, i",
-        "referer": "https://haveibeenpwned.com/",
-        "request-id": f"|{trace_id}.{span_id}",
-        "sec-ch-ua": '"Not(A:Brand";v="8", "Chromium";v="136", "Google Chrome";v="136"',
-        "sec-ch-ua-mobile": "?0",
-        "sec-ch-ua-platform": '"Windows"',
-        "sec-fetch-dest": "empty",
-        "sec-fetch-mode": "cors",
-        "sec-fetch-site": "same-origin",
-        "traceparent": f"00-{trace_id}-{span_id}-01",
-        "user-agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-            "(KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36"
-        ),
-    }
+
+def _parse_breaches(payload: object) -> list[HaveibeenpwnedBreach]:
+    breaches: list[HaveibeenpwnedBreach] = []
+    for item in payload if isinstance(payload, list) else []:
+        if isinstance(item, dict):
+            try:
+                breaches.append(HaveibeenpwnedBreach(**item))
+            except ValueError:
+                continue
+    return breaches
 
 
 def enrich_profiles_with_breach_data(
     emails: Iterable[str],
+    *,
+    settings: AppSettings | None = None,
 ) -> list[SocialProfile]:
-    settings = AppSettings()
-
-    tls_session = None
-    if tls_client is not None:
-        try:
-            tls_session = tls_client.Session(
-                client_identifier="chrome_120",
-                random_tls_extension_order=True,  # type: ignore[call-arg]
-            )
-        except Exception:
-            tls_session = None
-
-    httpx_client: httpx.Client | None = None
-    if tls_session is None:
-        httpx_client = httpx.Client(
-            timeout=httpx.Timeout(settings.http_timeout_seconds),
-            follow_redirects=True,
-        )
+    settings = settings or AppSettings()
+    api_key = settings.hibp_api_key.get_secret_value() if settings.hibp_api_key else ""
 
     profiles: list[SocialProfile] = []
-    try:
+    with httpx.Client(
+        timeout=httpx.Timeout(settings.http_timeout_seconds),
+        headers={"hibp-api-key": api_key, "user-agent": settings.user_agent},
+    ) as client:
         for email in emails:
-            unified_url = f"https://haveibeenpwned.com/unifiedsearch/{email}"
-
-            status_code: int | None = None
-            payload: object | None = None
-            error: str | None = None
-            headers = _build_hibp_headers()
+            url = _API_URL.format(account=quote(email, safe=""))
+            if not api_key:
+                profiles.append(_failed_profile(url, email, error="hibp_api_key_missing"))
+                continue
 
             try:
-                if tls_session is not None:
-                    response = tls_session.get(unified_url, headers=headers)
-                    status_code = response.status_code or 0
-                    payload = response.json() if status_code == 200 else None
-                else:
-                    assert httpx_client is not None
-                    response = httpx_client.get(unified_url, headers=headers)
-                    status_code = response.status_code
-                    payload = response.json() if status_code == 200 else None
-            except OSError:
-                # Some tls_client wheels depend on musl (libc.musl-*.so.1).
-                # If the runtime loader fails, fall back to httpx instead of crashing.
-                try:
-                    if httpx_client is None:
-                        httpx_client = httpx.Client(
-                            timeout=httpx.Timeout(settings.http_timeout_seconds),
-                            follow_redirects=True,
-                        )
-                    response = httpx_client.get(unified_url, headers=headers)
-                    status_code = response.status_code
-                    payload = response.json() if status_code == 200 else None
-                except Exception:
-                    error = "hibp_request_failed_oserror"
-                    continue
-            except Exception:
-                error = "hibp_request_failed"
+                response = client.get(url, params={"truncateResponse": "false"})
+            except httpx.HTTPError:
+                profiles.append(_failed_profile(url, email, error="hibp_request_failed"))
                 continue
 
-            if status_code != 200 or not isinstance(payload, dict):
+            # The API answers 404 when the account appears in no breach.
+            if response.status_code == 404:
+                breaches: list[HaveibeenpwnedBreach] = []
+            elif response.status_code == 200:
+                try:
+                    breaches = _parse_breaches(response.json())
+                except ValueError:
+                    profiles.append(_failed_profile(url, email, error="hibp_invalid_response", status_code=200))
+                    continue
+            else:
                 profiles.append(
-                    SocialProfile(
-                        url=unified_url,
-                        username=email,
-                        network_name="hibp",
-                        exists=False,
-                        metadata={
-                            "source": "haveibeenpwned_unifiedsearch",
-                            "status_code": status_code,
-                            "error": error or (f"hibp_http_{status_code}" if status_code else "hibp_no_response"),
-                        },
-                    )
+                    _failed_profile(url, email, error=f"hibp_http_{response.status_code}", status_code=response.status_code)
                 )
                 continue
-
-            raw_breaches = payload.get("Breaches", [])
-            breaches: list[HaveibeenpwnedBreach] = []
-            if isinstance(raw_breaches, list):
-                for breach_data in raw_breaches:
-                    if not isinstance(breach_data, dict):
-                        continue
-                    try:
-                        breaches.append(HaveibeenpwnedBreach(**breach_data))
-                    except Exception:
-                        continue
 
             hibp = HaveibeenpwnedProfiles(email=email, breaches=breaches)
             profiles.append(
                 SocialProfile(
-                    url=unified_url,
+                    url=url,
                     username=email,
                     network_name="hibp",
                     exists=True,
                     metadata={
-                        "source": "haveibeenpwned_unifiedsearch",
-                        "status_code": status_code,
+                        "source": _SOURCE,
+                        "status_code": 200,
                         "breach_count": len(breaches),
                         "breaches": hibp.model_dump(mode="json"),
                     },
                 )
             )
-    finally:
-        if httpx_client is not None:
-            httpx_client.close()
 
     return profiles

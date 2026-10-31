@@ -437,7 +437,7 @@ async def hunt(
     if request.use_breach_check:
         from adapters.breach_check import enrich_profiles_with_breach_data
 
-        breach_profiles = enrich_profiles_with_breach_data(emails=emails)
+        breach_profiles = await asyncio.to_thread(enrich_profiles_with_breach_data, emails, settings=settings)
         profiles.extend(breach_profiles)
         profiles = dedupe_profiles(profiles)
 

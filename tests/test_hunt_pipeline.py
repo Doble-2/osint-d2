@@ -270,7 +270,8 @@ class TestBreachCheckIntegration:
             )
             await hunt(settings=settings, request=request)
 
-        mock_breach.assert_called_once_with(emails=["test@test.com"])
+        mock_breach.assert_called_once()
+        assert mock_breach.call_args.args[0] == ["test@test.com"]
 
 
 # ---------------------------------------------------------------------------
