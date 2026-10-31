@@ -208,7 +208,7 @@ def wizard() -> None:
     deep_analyze = Confirm.ask("Run AI analysis?", default=True)
     if deep_analyze:
         settings_now = AppSettings()
-        if not (settings_now.ai_api_key.get_secret_value() if settings_now.ai_api_key else "").strip() and settings_now.ai_base_url.startswith("https://api.deepseek"):
+        if not (settings_now.ai_api_key.get_secret_value() if settings_now.ai_api_key else "").strip() and settings_now.ai_provider.lower() == "deepseek":
             if Confirm.ask("No AI key configured. Configure an AI provider now?", default=True):
                 if not _prompt_ai_setup(default="deepseek"):
                     out_console.print("[yellow]Skipping remote AI setup; using heuristic fallback.[/yellow]")

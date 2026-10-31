@@ -42,7 +42,7 @@ from core.services.identity_pipeline import sanitize_target_for_filename
 from core.services.url_guard import SSRFBlockedError, validate_url
 from adapters.browser import chromium_installed
 from adapters.chain_builder import ChainBuilder
-from adapters.i18n import TEMPLATES_DIR, load_translations
+from adapters.i18n import SUPPORTED_LANGUAGES, TEMPLATES_DIR, load_translations
 from adapters.graph_exporter import GraphExporter
 from adapters.phone_scanner import PhoneScanner
 from adapters.radial_graph_renderer import RadialGraphRenderer
@@ -324,8 +324,8 @@ async def get_dashboard(request: Request, lang: str | None = None):
 
     # ── Load i18n strings ──
     lang_code = (lang or "en").strip().lower()[:2]
-    if not (TEMPLATES_DIR / "i18n" / f"{lang_code}.json").exists():
-        lang_code = "en"
+    if lang_code not in SUPPORTED_LANGUAGES:
+        lang_code = Language.default().value
     t = load_translations(lang_code)
 
     # ── Render with Jinja2 ──

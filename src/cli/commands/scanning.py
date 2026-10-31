@@ -844,7 +844,8 @@ def analyze(
     except (ValidationError, UnicodeDecodeError):
         err_console.print(
             f"[red]Error:[/red] {escape(str(input_path))} is not a valid OSINT-D2 dossier. "
-            "Use a file created with --export-json."
+            "Use a file created with --export-json.",
+            soft_wrap=True,  # A long path must not split the message across lines.
         )
         raise typer.Exit(code=1)
     output_format = auto_output_format(output_format)

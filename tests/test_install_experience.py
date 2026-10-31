@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 from typer.testing import CliRunner
 
 from adapters import browser, web_server
+from adapters.i18n import load_translations
 from cli.main import app
 from core.config import AppSettings
 from core.domain.language import Language
@@ -26,6 +27,11 @@ def _doctor(*, http=True, pdf=True, chromium=True):
          patch("cli.doctor._check_pdf", return_value=(pdf, "x")), \
          patch("cli.doctor._check_chromium", return_value=(chromium, "x")):
         return runner.invoke(app, ["doctor", "run"], env={"COLUMNS": "200"})
+
+
+def test_language_outside_the_list_never_reaches_the_file_path():
+    assert load_translations("../../../etc/passwd") == load_translations("en")
+    assert TestClient(web_server.app, base_url="http://localhost:8000").get("/?lang=../").status_code == 200
 
 
 class TestDoctor:
