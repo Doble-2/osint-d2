@@ -21,24 +21,26 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+from adapters.i18n import load_translations
 from core.domain.graph_models import GraphExportModel, GraphNode
+from core.domain.language import Language
 
 
 # ── Paleta del grafo ──────────────────────────────────────────────────────
 # Alineada con la identidad del informe PDF (esmeralda forense). Antes usaba
 # neon magenta/cian, que rompía la coherencia con el resto del producto.
-# (border color, fill color, short label)
+# (border color, fill color, translation key of the label)
 _KIND = {
-    "Target":    ("#34d399", "#0d3d33", "SUJETO"),      # accent-soft: el seed
-    "Platform":  ("#0d9488", "#0a231d", "PERFIL"),      # accent
-    "Domain":    ("#0d9488", "#0a231d", "SITIO WEB"),
-    "Phone":     ("#10b981", "#062b1f", "TELÉFONO"),    # green
-    "Email":     ("#f59e0b", "#2b1f05", "CORREO"),      # orange
-    "Identity":  ("#34d399", "#0e2c24", "IDENTIDAD"),   # accent-soft
-    "Finding":   ("#5a7d6e", "#0a231d", "CONCLUSIÓN"),  # muted
-    "Colleague": ("#7a9d92", "#0e2c24", "TERCERO"),     # text-muted
-    "Breach":    ("#ef4444", "#2b0707", "EXPOSICIÓN"),  # red
-    "Noise":     ("#5a7d6e", "#071b16", "DESCARTADO"),  # muted, bajo contraste
+    "Target":    ("#34d399", "#0d3d33", "kind_target"),      # accent-soft: el seed
+    "Platform":  ("#0d9488", "#0a231d", "kind_platform"),      # accent
+    "Domain":    ("#0d9488", "#0a231d", "kind_domain"),
+    "Phone":     ("#10b981", "#062b1f", "kind_phone"),    # green
+    "Email":     ("#f59e0b", "#2b1f05", "kind_email"),      # orange
+    "Identity":  ("#34d399", "#0e2c24", "kind_identity"),   # accent-soft
+    "Finding":   ("#5a7d6e", "#0a231d", "kind_finding"),  # muted
+    "Colleague": ("#7a9d92", "#0e2c24", "kind_colleague"),     # text-muted
+    "Breach":    ("#ef4444", "#2b0707", "kind_breach"),  # red
+    "Noise":     ("#5a7d6e", "#071b16", "kind_noise"),  # muted, bajo contraste
 }
 
 # action -> edge colour (misma familia cromática que los nodos)
@@ -51,15 +53,17 @@ _ACTION_COLOR = {
     "correlate_stylometry": "#f59e0b",
 }
 
-# Fields drawn as "label: value" rows, in visual priority order.
+# Field ids drawn as "label: value" rows, in visual priority order.
 _FIELD_ORDER = (
-    "Plataforma", "Nombre", "Ubicación", "Antigüedad", "Cuenta creada",
-    "Seguidores", "Repos", "Siguiendo", "Karma",
-    "País", "Operadora", "Tipo de línea", "WhatsApp", "Zona horaria",
-    "Título", "Descripción", "Web", "Twitter", "También en",
-    "Sitios escaneados", "Perfiles confirmados",
-    "Similitud", "Similitud avatar", "Coinciden", "Distancia dHash",
+    "platform", "name", "location", "bio", "account_age", "account_created",
+    "followers", "repos", "following", "karma", "subscribers",
+    "country", "carrier", "line_type", "whatsapp", "timezone", "associated_names",
+    "title", "description", "website", "url", "twitter", "also_on",
+    "emails_on_page", "phones_on_page", "sites_scanned", "confirmed_profiles",
+    "similarity", "stylometric_score", "avatar_similarity", "match", "dhash_distance", "distance",
 )
+_LONG_FIELDS = ("bio", "description", "title")
+_ROW_VALUE_OFFSET = 132  # Room for the longest translated label.
 
 
 @dataclass
@@ -76,7 +80,7 @@ class _Card:
 class RadialGraphRenderer:
     """Renders the investigation as a left-to-right fan of vector bands."""
 
-    COL_WIDTH = 340.0        # horizontal step between bands
+    COL_WIDTH = 430.0        # horizontal step between bands
     CARD_W = 300.0
     ROW_H = 17.5
     HEADER_H = 56.0
@@ -101,7 +105,7 @@ class RadialGraphRenderer:
         for key in _FIELD_ORDER:
             if key not in data:
                 continue
-            limit = 64 if key in ("Bio", "Descripción", "Título") else 32
+            limit = 48 if key in _LONG_FIELDS else 32
             val = cls._truncate(str(data[key]), limit)
             if val:
                 rows.append((key, val))
@@ -181,9 +185,15 @@ class RadialGraphRenderer:
         *,
         target: str,
         confidence: float | None = None,
+        language: Language = Language.ENGLISH,
     ) -> str:
         cards, pos, width, height = cls._layout(chain)
         parts: list[str] = []
+        strings: dict[str, str] = load_translations(language.value)["graph"]
+
+        # Letter spacing breaks the joining of Arabic letters.
+        def spacing(value: float) -> str:
+            return "0" if language == Language.ARABIC else str(value)
 
         # ── defs: glow + arrow markers + grid ────────────────────────────
         parts.append('''  <defs>
@@ -214,16 +224,16 @@ class RadialGraphRenderer:
         for c in range(n_cols):
             x = cls.MARGIN_X + c * cls.COL_WIDTH + cls.CARD_W / 2
             parts.append(
-                f'  <line x1="{x:.0f}" y1="{cls.MARGIN_Y - 60:.0f}" x2="{x:.0f}" '
+                f'  <line x1="{x:.0f}" y1="{cls.MARGIN_Y - 12:.0f}" x2="{x:.0f}" '
                 f'y2="{height - 46:.0f}" stroke="#141d2b" stroke-width="1" stroke-dasharray="2 8"/>'
             )
             is_conclusions = c == max_col and any(
                 card.col == c and card.node.type in ("Finding", "Identity") for card in cards
             )
-            label = "CONCLUSIONES" if is_conclusions else f"VECTOR {c + 1}"
+            label = strings["conclusions"] if is_conclusions else strings["vector"].format(n=c + 1)
             parts.append(
-                f'  <text x="{x:.0f}" y="{cls.MARGIN_Y - 68:.0f}" fill="#5a7d6e" font-size="10" '
-                f'text-anchor="middle" letter-spacing="2.5">{label}</text>'
+                f'  <text x="{x:.0f}" y="{cls.MARGIN_Y - 20:.0f}" fill="#5a7d6e" font-size="10" '
+                f'text-anchor="middle" letter-spacing="{spacing(2.5)}">{cls._esc(label)}</text>'
             )
 
         # ── bezier edges with arrow markers ──────────────────────────────
@@ -267,7 +277,8 @@ class RadialGraphRenderer:
         # ── cards ────────────────────────────────────────────────────────
         for c in cards:
             n = c.node
-            border, fill, kind = _KIND.get(n.type, ("#7a9d92", "#071b16", n.type.upper()))
+            border, fill, kind_key = _KIND.get(n.type, ("#7a9d92", "#071b16", ""))
+            kind = strings.get(kind_key, n.type.upper())
             parts.append(
                 f'  <rect x="{c.x:.0f}" y="{c.y:.0f}" width="{c.width:.0f}" height="{c.height:.0f}" '
                 f'rx="10" fill="{fill}" stroke="{border}" stroke-width="2" filter="url(#g)"/>'
@@ -278,7 +289,7 @@ class RadialGraphRenderer:
             )
             parts.append(
                 f'  <text x="{c.x + 12:.0f}" y="{c.y + 20:.0f}" fill="{border}" font-size="9" '
-                f'font-weight="bold" letter-spacing="1.3">{cls._esc(kind)}</text>'
+                f'font-weight="bold" letter-spacing="{spacing(1.3)}">{cls._esc(kind)}</text>'
             )
             if n.correlation is not None:
                 parts.append(
@@ -298,10 +309,10 @@ class RadialGraphRenderer:
                 if label:
                     parts.append(
                         f'  <text x="{c.x + 12:.0f}" y="{ry:.0f}" fill="#7a9d92" font-size="9.5" '
-                        f'font-weight="600">{cls._esc(label)}</text>'
+                        f'font-weight="600">{cls._esc(strings.get(label, label))}</text>'
                     )
                     parts.append(
-                        f'  <text x="{c.x + 100:.0f}" y="{ry:.0f}" fill="#cbd5e1" font-size="9.5">'
+                        f'  <text x="{c.x + _ROW_VALUE_OFFSET:.0f}" y="{ry:.0f}" fill="#cbd5e1" font-size="9.5">'
                         f'{cls._esc(value)}</text>'
                     )
                 else:
@@ -315,12 +326,11 @@ class RadialGraphRenderer:
         conf_txt = f"{int(float(confidence) * 100)}%" if confidence is not None else "—"
         parts.append(
             f'  <text x="{cls.MARGIN_X:.0f}" y="52" fill="#34d399" font-size="16" font-weight="bold" '
-            f'letter-spacing="1.6">GRAFO MULTI-VECTOR DE LA INVESTIGACIÓN</text>'
+            f'letter-spacing="{spacing(1.6)}">{cls._esc(strings["title"])}</text>'
         )
         parts.append(
             f'  <text x="{cls.MARGIN_X:.0f}" y="78" fill="#e2e8f0" font-size="12.5">'
-            f'Objetivo: {cls._esc(target)} &nbsp;·&nbsp; {n_cols} vectores &nbsp;·&nbsp; '
-            f'{len(chain.nodes)} entidades &nbsp;·&nbsp; {len(chain.edges)} relaciones</text>'
+            f'{cls._esc(strings["subtitle"].format(target=target, vectors=n_cols, nodes=len(chain.nodes), edges=len(chain.edges)))}</text>'
         )
         parts.append(
             f'  <text x="{width - cls.MARGIN_X:.0f}" y="52" fill="#10b981" font-size="26" '
@@ -328,15 +338,15 @@ class RadialGraphRenderer:
         )
         parts.append(
             f'  <text x="{width - cls.MARGIN_X:.0f}" y="74" fill="#7a9d92" font-size="9.5" '
-            f'text-anchor="end" letter-spacing="1.5">CONFIANZA GLOBAL</text>'
+            f'text-anchor="end" letter-spacing="{spacing(1.5)}">{cls._esc(strings["global_confidence"])}</text>'
         )
         parts.append(
             f'  <line x1="{cls.MARGIN_X:.0f}" y1="96" x2="{width - cls.MARGIN_X:.0f}" y2="96" '
             f'stroke="rgba(52,211,153,0.18)" stroke-width="1"/>'
         )
         parts.append(
-            f'  <text x="{cls.MARGIN_X:.0f}" y="{height - 24:.0f}" fill="#334155" font-size="10">'
-            f'OSINT-D2 · cada banda vertical es un vector de investigación; cada flecha, la acción que lo abrió</text>'
+            f'  <text x="{cls.MARGIN_X:.0f}" y="{height - 24:.0f}" fill="#7a9d92" font-size="10">'
+            f'OSINT-D2 · {cls._esc(strings["footer"])}</text>'
         )
 
         return (
@@ -356,13 +366,14 @@ class RadialGraphRenderer:
         target: str,
         confidence: float | None = None,
         scale: int = 2,
+        language: Language = Language.ENGLISH,
     ) -> str:
         """Rasterizes the graph to PNG (the SVG source stays lossless)."""
         import asyncio
         import concurrent.futures
         from pathlib import Path
 
-        svg = cls.render_svg(chain, target=target, confidence=confidence)
+        svg = cls.render_svg(chain, target=target, confidence=confidence, language=language)
         out = Path(output_path)
         out.parent.mkdir(parents=True, exist_ok=True)
 

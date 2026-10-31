@@ -20,7 +20,9 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
+from adapters.i18n import load_translations
 from core.domain.graph_models import GraphEdge, GraphExportModel, GraphNode
+from core.domain.language import Language
 
 
 @dataclass
@@ -47,23 +49,24 @@ class ChainBuilder:
     """Builds a pivot-chain graph from an agent step trace."""
 
 
-    # Campos de perfil con valor de inteligencia y su etiqueta legible.
+    # Campos de perfil con valor de inteligencia. La etiqueta es un id estable:
+    # el renderer la traduce al idioma de la investigación.
     _PROFILE_FIELDS = (
-        ("name", "Nombre"),
-        ("location", "Ubicación"),
-        ("bio", "Bio"),
-        ("blog", "Web"),
-        ("followers", "Seguidores"),
-        ("following", "Siguiendo"),
-        ("public_repos", "Repos"),
-        ("twitter_username", "Twitter"),
-        ("created_at", "Cuenta creada"),
-        ("karma", "Karma"),
-        ("subscribers", "Suscriptores"),
+        ("name", "name"),
+        ("location", "location"),
+        ("bio", "bio"),
+        ("blog", "website"),
+        ("followers", "followers"),
+        ("following", "following"),
+        ("public_repos", "repos"),
+        ("twitter_username", "twitter"),
+        ("created_at", "account_created"),
+        ("karma", "karma"),
+        ("subscribers", "subscribers"),
     )
 
     @classmethod
-    def _extract_data(cls, tool_result: str | None, tool: str) -> dict[str, str]:
+    def _extract_data(cls, tool_result: str | None, tool: str, strings: dict[str, str]) -> dict[str, str]:
         """Pulls every intelligence-bearing field out of a raw tool result.
 
         Profiles carry far more than a bio: location, follower counts, account
@@ -84,23 +87,23 @@ class ChainBuilder:
         # ── Teléfono: datos de telecom ───────────────────────────────────
         if tool == "scan_phone" or "carrier" in payload:
             for key, label in (
-                ("country", "País"), ("carrier", "Operadora"), ("line_type", "Tipo de línea"),
-                ("timezones", "Zona horaria"), ("whatsapp_active", "WhatsApp"),
+                ("country", "country"), ("carrier", "carrier"), ("line_type", "line_type"),
+                ("timezones", "timezone"), ("whatsapp_active", "whatsapp"),
             ):
                 val = payload.get(key)
                 if val not in (None, "", [], False):
-                    data[label] = "Sí" if val is True else str(val)
+                    data[label] = strings["yes"] if val is True else str(val)
             if payload.get("associated_names"):
-                data["Nombres asociados"] = ", ".join(str(x) for x in payload["associated_names"][:3])
+                data["associated_names"] = ", ".join(str(x) for x in payload["associated_names"][:3])
 
         # ── Email: cuentas descubiertas + brechas ────────────────────────
         if tool == "scan_email" or "total_scanned" in payload:
             confirmed = payload.get("confirmed")
             total = payload.get("total_scanned")
             if total:
-                data["Sitios escaneados"] = str(total)
+                data["sites_scanned"] = str(total)
             if confirmed:
-                data["Perfiles confirmados"] = str(confirmed)
+                data["confirmed_profiles"] = str(confirmed)
 
         # ── Estilometría ─────────────────────────────────────────────────
         # El score se traduce a una etiqueta legible: un numero crudo (0.51) no
@@ -108,45 +111,47 @@ class ChainBuilder:
         # prompt del agente declara para que ambos hablen el mismo idioma.
         if tool == "correlate_stylometry":
             if payload.get("similarity_percentage") is not None:
-                data["Similitud"] = f"{payload['similarity_percentage']}%"
+                data["similarity"] = f"{payload['similarity_percentage']}%"
             score = payload.get("stylometric_score")
             if score is not None:
                 try:
                     value = float(score)
                 except (TypeError, ValueError):
-                    data["Score estilométrico"] = str(score)
+                    data["stylometric_score"] = str(score)
                 else:
                     if value >= 0.70:
-                        label = "mismo autor (muy probable)"
+                        label = strings["style_same"]
                     elif value >= 0.40:
-                        label = "indicio moderado"
+                        label = strings["style_moderate"]
                     else:
-                        label = "sin relación"
-                    data["Score estilométrico"] = f"{value:.2f} — {label}"
+                        label = strings["style_unrelated"]
+                    data["stylometric_score"] = f"{value:.2f} — {label}"
             if payload.get("hamming_distance") is not None:
-                data["Distancia"] = str(payload["hamming_distance"])
+                data["distance"] = str(payload["hamming_distance"])
 
         # ── Comparación de avatares ──────────────────────────────────────
         if tool == "compare_avatars":
             if payload.get("similarity_percentage") is not None:
-                data["Similitud avatar"] = f"{payload['similarity_percentage']}%"
+                data["avatar_similarity"] = f"{payload['similarity_percentage']}%"
             if payload.get("matched") is not None:
-                data["Coinciden"] = "Sí" if payload["matched"] else "No"
+                data["match"] = strings["yes"] if payload["matched"] else strings["no"]
             if payload.get("hamming_distance") is not None:
-                data["Distancia dHash"] = str(payload["hamming_distance"])
+                data["dhash_distance"] = str(payload["hamming_distance"])
 
         # ── Perfiles: el caso más rico ───────────────────────────────────
         profiles = payload.get("profiles") or payload.get("results") or []
         if isinstance(profiles, list) and profiles:
             # Tomar el perfil CONFIRMADO con más campos disponibles
             best: dict[str, Any] = {}
+            best_fields = -1
             for p in profiles:
                 if not isinstance(p, dict) or not p.get("exists"):
                     continue
-                if len([k for k in cls._PROFILE_FIELDS if p.get(k) not in (None, "", [], 0)]) > len(best):
-                    best = p
+                fields = sum(1 for key, _ in cls._PROFILE_FIELDS if p.get(key) not in (None, "", [], 0))
+                if fields > best_fields:
+                    best, best_fields = p, fields
             if best:
-                data["Plataforma"] = str(best.get("network", "?"))
+                data["platform"] = str(best.get("network", "?"))
                 for key, label in cls._PROFILE_FIELDS:
                     val = best.get(key)
                     if val in (None, "", [], 0):
@@ -164,25 +169,25 @@ class ChainBuilder:
                         if isinstance(p, dict) and p.get("exists") and p.get("network") != best.get("network")
                     ][:6]
                     if others:
-                        data["También en"] = ", ".join(others)
+                        data["also_on"] = ", ".join(others)
 
         # ── fetch_url: contenido de la página ────────────────────────────
         if tool == "fetch_url" or "status_code" in payload:
             if payload.get("title"):
-                data["Título"] = str(payload["title"])[:80]
+                data["title"] = str(payload["title"])[:80]
             if payload.get("description"):
-                data["Descripción"] = str(payload["description"])[:110]
+                data["description"] = str(payload["description"])[:110]
             if payload.get("url"):
-                data["URL"] = str(payload["url"])[:70]
+                data["url"] = str(payload["url"])[:70]
             if payload.get("emails"):
-                data["Correos en la página"] = ", ".join(str(x) for x in payload["emails"][:3])
+                data["emails_on_page"] = ", ".join(str(x) for x in payload["emails"][:3])
             if payload.get("phones"):
-                data["Teléfonos en la página"] = ", ".join(str(x) for x in payload["phones"][:3])
+                data["phones_on_page"] = ", ".join(str(x) for x in payload["phones"][:3])
 
         return {k: v for k, v in data.items() if v not in (None, "", "None")}
 
     @staticmethod
-    def _extract_evidence(tool_result: str | None, max_len: int = 160) -> str:
+    def _extract_evidence(tool_result: str | None, strings: dict[str, str], max_len: int = 160) -> str:
         """Pulls a human-readable evidence snippet out of a raw tool result."""
         if not tool_result:
             return ""
@@ -211,7 +216,7 @@ class ChainBuilder:
                 confirmed = [p for p in profiles if isinstance(p, dict) and p.get("exists")]
                 if confirmed:
                     names = ", ".join(str(p.get("network", "?")) for p in confirmed[:5])
-                    return f"{len(confirmed)} perfiles confirmados: {names}"[:max_len]
+                    return strings["n_confirmed"].format(n=len(confirmed), names=names)[:max_len]
             if data.get("error"):
                 return f"error: {data['error']}"[:max_len]
         return text[:max_len]
@@ -222,8 +227,10 @@ class ChainBuilder:
         steps: list[Any],
         target: str,
         person: Any | None = None,
+        language: Language = Language.ENGLISH,
     ) -> GraphExportModel:
         """Converts an agent step trace into a pivot-chain GraphExportModel."""
+        strings: dict[str, str] = load_translations(language.value)["graph"]
         nodes: list[GraphNode] = []
         edges: list[GraphEdge] = []
         seen: set[str] = set()
@@ -251,7 +258,7 @@ class ChainBuilder:
                 return data
             md = getattr(prof, "metadata", None) or {}
             out = dict(data)
-            out.setdefault("Plataforma", str(getattr(prof, "network_name", "?")))
+            out.setdefault("platform", str(getattr(prof, "network_name", "?")))
             for key, label in cls._PROFILE_FIELDS:
                 val = md.get(key)
                 if val in (None, "", [], 0) or label in out:
@@ -264,13 +271,13 @@ class ChainBuilder:
                     out[label] = str(val)[:70]
             # Antigüedad de la cuenta en años
             created = md.get("created_at")
-            if created and "Cuenta creada" not in out:
-                out["Cuenta creada"] = str(created)[:10]
+            if created and "account_created" not in out:
+                out["account_created"] = str(created)[:10]
                 try:
                     from datetime import datetime, timezone
                     dt = datetime.fromisoformat(str(created).replace("Z", "+00:00"))
                     years = (datetime.now(timezone.utc) - dt).days / 365.25
-                    out["Antigüedad"] = f"{years:.1f} años"
+                    out["account_age"] = strings["years"].format(n=f"{years:.1f}")
                 except Exception:
                     pass
             return out
@@ -278,8 +285,8 @@ class ChainBuilder:
         # ── Raíz: el punto de partida de la investigación ─────────────────
         root_id = "seed:target"
         add_node(root_id, f"{target}", "Target",
-                 evidence=f"Objetivo declarado: {target}",
-                 data={"Semilla": target, "Tipo": "Objetivo declarado"})
+                 evidence=strings["declared_target"].format(target=target),
+                 data={"seed": target, "seed_type": strings["declared_target_type"]})
 
         last_id = root_id
         order = 0
@@ -308,8 +315,8 @@ class ChainBuilder:
                 wave_root = last_id
                 wave_parent[step_num] = wave_root
             parent_id = wave_parent.get(step_num, root_id)
-            evidence = cls._extract_evidence(result)
-            step_data = cls._extract_data(result, tool)
+            evidence = cls._extract_evidence(result, strings)
+            step_data = cls._extract_data(result, tool, strings)
 
             # ── scan_username → nodo de handle/pivote ────────────────────
             if tool == "scan_username":
@@ -321,7 +328,7 @@ class ChainBuilder:
                     nid,
                     f"@{username}",
                     "Platform",
-                    evidence=evidence or f"Escaneo de usernames para '{username}'",
+                    evidence=evidence or strings["username_scan"].format(username=username),
                     correlation=None,
                     data=enrich_with_profile(step_data, username),
                 )
@@ -369,7 +376,7 @@ class ChainBuilder:
                     nid,
                     f"{domain}",
                     "Domain",
-                    evidence=evidence or f"Contenido extraído de {url}",
+                    evidence=evidence or strings["content_from"].format(url=url),
                     properties={"url": url},
                     data=step_data,
                 )
@@ -392,9 +399,9 @@ class ChainBuilder:
                             score = float(m.group(1))
                         except Exception:
                             score = None
-                label = "CORRELACIÓN ESTILOMÉTRICA"
+                label = strings["stylometry_title"]
                 if score is not None:
-                    label += f"\n{int(score * 100)}% misma autoría"
+                    label += "\n" + strings["same_author"].format(n=int(score * 100))
                 add_node(
                     nid, label, "Finding",
                     evidence=(evidence or sample[:120]),
@@ -411,7 +418,7 @@ class ChainBuilder:
             # ── compare_avatars → conclusión de identidad visual ─────────
             elif tool == "compare_avatars":
                 nid = f"pivot:avatar:{order}"
-                add_node(nid, "COMPARACIÓN DE AVATARES (dHash)", "Finding",
+                add_node(nid, strings["avatar_title"], "Finding",
                              evidence=evidence, data=step_data)
                 edges.append(GraphEdge(
                     source=parent_id, target=nid, type="PIVOT",
@@ -436,19 +443,19 @@ class ChainBuilder:
                 )
                 edges.append(GraphEdge(
                     source=last_id, target=nid, type="CONCLUSION",
-                    label="conclusión", properties={"full_text": text},
+                    label="conclusion", properties={"full_text": text},
                 ))
 
             if confidence is not None:
                 cid = "conclusion:confidence"
                 add_node(
                     cid,
-                    f"CONFIANZA GLOBAL\n{int(float(confidence) * 100)}%",
+                    f"{strings['global_confidence']}\n{int(float(confidence) * 100)}%",
                     "Identity",
-                    evidence=f"{len(getattr(analysis, 'highlights', []) or [])} conclusiones correlacionadas",
+                    evidence=strings["n_conclusions"].format(n=len(getattr(analysis, "highlights", []) or [])),
                     correlation=float(confidence),
                 )
-                edges.append(GraphEdge(source=last_id, target=cid, type="CONCLUSION", label="cierre"))
+                edges.append(GraphEdge(source=last_id, target=cid, type="CONCLUSION", label="closing"))
 
         metadata = {
             "mode": "pivot_chain",
