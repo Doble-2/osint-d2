@@ -46,6 +46,7 @@
   "form_summary_default": "4 متجهات · وكيل مستقل · تقرير PDF + رسم",
   "console_ready": "جاهز. املأ النموذج وابدأ تحقيقًا.",
   "report_title": "التقرير",
+  "report_empty": "يظهر التقرير هنا عند انتهاء التحقيق.",
   "console_reasoning": "تفكير الوكيل",
   "console_step": "خطوة",
   "js_api_error": "فشل الاتصال بالواجهة",

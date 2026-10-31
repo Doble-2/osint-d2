@@ -46,6 +46,7 @@
   "form_summary_default": "4 vetores · agente autônomo · relatório PDF + grafo",
   "console_ready": "Pronto. Preencha o formulário e inicie uma investigação.",
   "report_title": "Relatório",
+  "report_empty": "O relatório aparece aqui quando a investigação termina.",
   "console_reasoning": "Raciocínio do Agente",
   "console_step": "Passo",
   "js_api_error": "Falha na conexão com API",

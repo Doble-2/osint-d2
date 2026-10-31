@@ -13,8 +13,8 @@ docker compose up -d        # http://localhost:8000
 
 <div class="os-screenshot" markdown>
 
-![Finished investigation showing the graph and the report panel](../assets/dashboard-report.png)
-<div class="os-screenshot__caption">Finished investigation with the report panel open (demo data)</div>
+![Finished investigation showing the report](../assets/dashboard-report.png)
+<div class="os-screenshot__caption">Finished investigation with the report open (demo data)</div>
 
 </div>
 
@@ -28,7 +28,7 @@ docker compose up -d        # http://localhost:8000
 4. Open **Options** to change the mode, AI provider, report language, step limit, or breach check.
 5. Click **Start Investigation**, or press ++enter++ in any field.
 
-The top bar shows the status and a progress bar. The **Console** tab shows the current step, such as `Step 2 / 6`. **Cancel** stops the run immediately.
+The top bar shows the status. Above the results, a bar shows the subject, the current step (such as `Step 2 / 6`), and the progress. The **Console** tab opens while the agent works, and **Cancel** stops the run immediately. When the run finishes, the **Report** tab opens, or the **Graph** tab if there is no report.
 
 You can reload the page or change the language at any time: the form stays filled in, and a run in progress reconnects. The status **Completed with errors** means a tool failed or a file could not be created, so check the console.
 
@@ -78,7 +78,7 @@ The console logs each step as it happens, along with warnings and errors.
 
 ### Report
 
-The report panel opens automatically when the agent finishes. Close it with **×** or ++esc++, and reopen it with **Report** in the top bar.
+The **Report** tab shows the main findings and the full analysis. It opens automatically when the agent finishes.
 
 The confidence score is colored by level, but it's the model's own estimate, not a measured probability. Check the evidence before relying on a finding.
 
@@ -89,7 +89,7 @@ The confidence score is colored by level, but it's the model's own estimate, not
 | **PDF** | Dossier with the graph page |
 | **Canvas** | Graph for [Obsidian Canvas](https://obsidian.md/canvas) |
 
-A button appears only once its file exists. Copies, plus the HTML, SVG, and PNG versions, are saved to `reports/`.
+The buttons are above the results, next to the subject's name. A button appears only once its file exists. Copies, plus the HTML, SVG, and PNG versions, are saved to `reports/`.
 
 ---
 

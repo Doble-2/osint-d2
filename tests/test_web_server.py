@@ -2,6 +2,7 @@ import json
 import re
 from unittest.mock import AsyncMock, patch
 
+import pytest
 from fastapi.testclient import TestClient
 from adapters.i18n import TEMPLATES_DIR
 from adapters.web_server import active_sessions, app
@@ -84,6 +85,21 @@ def test_dashboard_english_has_no_hardcoded_spanish():
     html = client.get("/?lang=en").text
     for text in ("Motor de búsqueda", "NODOS", "CONEXIONES", "CONFIANZA", "Sin pasos", "HALLAZGO", "seguidores"):
         assert text not in html
+
+
+def test_report_is_a_tab_with_an_empty_state():
+    html = client.get("/?lang=es").text
+    assert 'id="tab-report"' in html and 'aria-controls="report-panel"' in html
+    assert "report-drawer" not in html
+    assert "El informe aparece aquí" in html
+
+
+def test_vendored_fonts_cover_basic_latin():
+    # A wrong subset fails silently: the browser just falls back to a system font.
+    fonts = pytest.importorskip("fontTools.ttLib")
+    for name in ("inter-latin", "jetbrains-mono-latin"):
+        cmap = fonts.TTFont(I18N_DIR.parent / "vendor" / "fonts" / f"{name}.woff2").getBestCmap()
+        assert all(ord(c) in cmap for c in "azAZ09[]"), name
 
 
 def test_dashboard_arabic_is_rtl():

@@ -46,6 +46,7 @@
   "form_summary_default": "4 vectors · autonomous agent · PDF report + graph",
   "console_ready": "Ready. Fill in the form and start an investigation.",
   "report_title": "Report",
+  "report_empty": "The report appears here when the investigation finishes.",
   "console_reasoning": "Agent Reasoning",
   "console_step": "Step",
   "js_api_error": "API connection failed",

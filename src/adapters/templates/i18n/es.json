@@ -46,6 +46,7 @@
   "form_summary_default": "4 vectores · agente autónomo · reporte PDF + grafo",
   "console_ready": "Listo. Completa el formulario e inicia una investigación.",
   "report_title": "Informe",
+  "report_empty": "El informe aparece aquí cuando termina la investigación.",
   "console_reasoning": "Razonamiento del Agente",
   "console_step": "Paso",
   "js_api_error": "Falló conexión con API",

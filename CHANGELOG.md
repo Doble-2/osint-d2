@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Dashboard: the report is now a tab that opens when a run finishes, instead of a panel covering the graph
+- Dashboard: a bar above the results shows the subject, the current step, and the cancel and download buttons
+- Dashboard: simpler form, and the view no longer jumps between tabs while results arrive
+- Documentation site: new theme and home page, with a working light mode
+
+### Fixed
+- Dashboard: the bundled JetBrains Mono font had almost no ASCII characters, so most text fell back to a system font
+- Dashboard: the empty state did not come back after an expired run
+
 ### Security
 - Selecting another provider no longer sends the configured API key to it
 - SSRF guard now validates every redirect hop, covers `compare_avatars`, and blocks IPv4-embedded IPv6, multicast and reserved ranges
