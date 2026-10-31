@@ -5,7 +5,7 @@
 #   docker run -p 127.0.0.1:8000:8000 --env-file .env ghcr.io/doble-2/osint-d2
 
 # ── Build stage: Poetry stays here, out of the final image ──
-FROM python:3.12-slim AS builder
+FROM python:3.15-slim AS builder
 
 RUN pip install --no-cache-dir poetry poetry-plugin-export
 
@@ -20,7 +20,7 @@ RUN python -m venv /opt/venv \
     && /opt/venv/bin/pip install --no-cache-dir --no-deps .
 
 # ── Runtime stage ──
-FROM python:3.12-slim AS runtime
+FROM python:3.15-slim AS runtime
 
 # Libraries WeasyPrint loads at runtime. Playwright's own are installed below.
 RUN apt-get update && apt-get install -y --no-install-recommends \
