@@ -26,7 +26,7 @@ The project is a local, single-user tool, so these are deliberate decisions. Rev
 
 | Risk | Why it is accepted | What remains exposed |
 |------|-------------------|----------------------|
-| The dashboard has no login | It binds to `127.0.0.1` by default | Other local users and processes can reach it. Binding it to another interface exposes it to that network |
+| The dashboard has no login | It binds to `127.0.0.1` by default | Other local users and processes can reach it, and can replace the saved AI key. Binding it to another interface exposes it to that network |
 | DNS rebinding can bypass the SSRF check | Each request is checked, and fixing this needs a custom transport | A hostile page could make the agent reach a service on the operator's local network and read its response |
 | There is no record of who investigated whom | A local tool has a single operator, and a log would be one more file of personal data | The operator must keep any record their legal basis requires |
 | Prompt injection is reduced, not eliminated | No current technique removes it | A hostile page can still distort the report, so its findings need human review |

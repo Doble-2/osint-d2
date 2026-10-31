@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/dashboard-report.png" alt="OSINT-D2 dashboard showing a finished investigation with demo data" width="800" />
+  <img src="https://raw.githubusercontent.com/Doble-2/osint-d2/main/docs/assets/dashboard-report.png" alt="OSINT-D2 dashboard showing a finished investigation with demo data" width="800" />
 </p>
 
 <h1 align="center">OSINT-D2</h1>
@@ -13,7 +13,7 @@
   <a href="https://github.com/Doble-2/osint-d2/releases"><img src="https://img.shields.io/github/v/release/Doble-2/osint-d2" alt="Latest release" /></a>
   <a href="https://osint-d2.angelcalderon.dev"><img src="https://img.shields.io/badge/Docs-osint--d2.angelcalderon.dev-2dd4bf?logo=readthedocs&logoColor=white" alt="Docs" /></a>
   <img src="https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white" alt="Python 3.11+" />
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-success" alt="MIT license" /></a>
+  <a href="https://github.com/Doble-2/osint-d2/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-success" alt="MIT license" /></a>
 </p>
 
 > [!IMPORTANT]
@@ -43,23 +43,32 @@ Target: johndoe
 ```
 
 <p align="center">
-  <img src="docs/assets/dashboard-timeline.png" alt="Timeline listing each tool call the agent made, with demo data" width="700" />
+  <img src="https://raw.githubusercontent.com/Doble-2/osint-d2/main/docs/assets/dashboard-timeline.png" alt="Timeline listing each tool call the agent made, with demo data" width="700" />
 </p>
 
 ## Quick start
 
 Direct scans need no API key. Agent runs and AI analysis need one, unless you use Ollama.
 
+### pipx
+
+Requires Python 3.11+ and [pipx](https://pipx.pypa.io/).
+
+```bash
+pipx install git+https://github.com/Doble-2/osint-d2.git
+osint-d2 scan johndoe
+```
+
+That's enough for scans. Run `osint-d2 doctor run` to see which optional parts are missing, and `osint-d2 serve` to open the dashboard, which offers to install what it needs.
+
 ### Docker
 
 ```bash
-git clone https://github.com/Doble-2/osint-d2.git && cd osint-d2
-cp .env.example .env     # Add your AI key
-mkdir -p reports         # Keeps reports writable by the container
-docker compose up -d
+curl -fsSLO https://raw.githubusercontent.com/Doble-2/osint-d2/main/scripts/install-docker.sh
+sh install-docker.sh
 ```
 
-Open <http://localhost:8000>. To use the CLI, prefix commands with `docker compose exec osint-d2`:
+This creates an `osint-d2` folder with the Compose file, a `.env` for your AI key, and a `reports` folder. Open <http://localhost:8000>. To use the CLI, prefix commands with `docker compose exec osint-d2`:
 
 ```bash
 docker compose exec osint-d2 osint-d2 scan johndoe
@@ -67,7 +76,7 @@ docker compose exec osint-d2 osint-d2 scan johndoe
 
 ### Poetry
 
-Requires Python 3.11+, [Poetry](https://python-poetry.org/), and the [Pango libraries](https://osint-d2.angelcalderon.dev/getting-started/installation/#system-dependencies) for PDFs.
+For development. Requires Python 3.11+ and [Poetry](https://python-poetry.org/). The [Pango libraries](https://osint-d2.angelcalderon.dev/getting-started/installation/#system-dependencies) are optional, for CLI PDFs.
 
 ```bash
 git clone https://github.com/Doble-2/osint-d2.git && cd osint-d2
@@ -80,7 +89,7 @@ poetry run osint-d2 serve
 
 ### Prebuilt binaries
 
-Download them from [Releases](https://github.com/Doble-2/osint-d2/releases). The [installation guide](https://osint-d2.angelcalderon.dev/getting-started/installation/) lists what they need on your system.
+Download them from [Releases](https://github.com/Doble-2/osint-d2/releases). They aren't signed, so your system may warn you. The [installation guide](https://osint-d2.angelcalderon.dev/getting-started/installation/#standalone-binaries) explains that, and what PDFs need.
 
 > [!WARNING]
 > OSINT-D2 is a local tool: for ethical and legal reasons, the project doesn't operate a hosted version. The dashboard has no authentication by design and listens on localhost. Don't expose it to other people or to the internet.

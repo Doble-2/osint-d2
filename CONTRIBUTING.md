@@ -11,18 +11,18 @@ cd osint-d2
 
 # Install with Poetry (recommended)
 poetry install
-playwright install chromium
+poetry run osint-d2 doctor install-browser
 
 # Or with pip
 python3 -m venv .venv && source .venv/bin/activate
-pip install -e ".[tls]"
+pip install -e .
 pip install pytest pytest-asyncio ruff
 
 # Run the test suite
 poetry run pytest tests/ -v
 
 # Run the linter
-poetry run ruff check src/ tests/ --select=E,F,W --ignore=E501,E402
+poetry run ruff check .
 ```
 
 ## Docker Development
@@ -89,3 +89,15 @@ Open an issue using the [Bug Report template](https://github.com/Doble-2/osint-d
 - Expected vs actual behavior
 - Python version and OS
 - Installation method (Docker / Poetry / pip)
+
+## Publishing to PyPI
+
+`.github/workflows/publish-pypi.yml` publishes every `vX.Y.Z` tag, using trusted publishing, so no password is stored. It stops if the tag doesn't match the version in `pyproject.toml`.
+
+One-time setup:
+
+1. Create an account on [PyPI](https://pypi.org/account/register/).
+2. In [your publishing settings](https://pypi.org/manage/account/publishing/), add a pending publisher: project `osint-d2`, owner `Doble-2`, repository `osint-d2`, workflow `publish-pypi.yml`, environment `pypi`.
+3. In the GitHub repository, go to **Settings > Environments** and create an environment named `pypi`. Add yourself as a required reviewer, because a published version can't be replaced.
+
+After the first release, replace the `pipx install git+...` commands in the docs with `pipx install osint-d2`.

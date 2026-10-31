@@ -2,22 +2,31 @@
 
 ## Requirements
 
-- **Python 3.11+** (tested on 3.11 through 3.14)
-- **Poetry** for dependency management
-- **Playwright Chromium** — required for dashboard PDFs and graph images (`playwright install chromium`)
-- **Pango** — required for CLI PDFs (see [system dependencies](#system-dependencies))
+- **Python 3.11+** (tested on 3.11 through 3.14), unless you use Docker or a binary
+
+These are optional. Scans work without them:
+
+- **Chromium** — for dashboard PDFs and graph images. Install it with `osint-d2 doctor install-browser`, or accept the offer when you run `osint-d2 serve`
+- **Pango** — for CLI PDFs (see [system dependencies](#system-dependencies)). Without it, `--export-pdf` creates an HTML file
 
 ---
 
 ## Install
 
-=== "Poetry (recommended)"
+=== "pipx (recommended)"
+
+    ```bash
+    pipx install git+https://github.com/Doble-2/osint-d2.git
+    osint-d2 scan johndoe
+    ```
+
+=== "Poetry (development)"
 
     ```bash
     git clone https://github.com/Doble-2/osint-d2.git
     cd osint-d2
     poetry install
-    poetry run playwright install chromium
+    poetry run osint-d2 doctor install-browser
     ```
 
 === "pip"
@@ -32,11 +41,8 @@
 === "Docker"
 
     ```bash
-    git clone https://github.com/Doble-2/osint-d2.git
-    cd osint-d2
-    cp .env.example .env
-    mkdir -p reports   # Otherwise Docker creates it as root, and reports fail to save
-    docker compose up -d
+    curl -fsSLO https://raw.githubusercontent.com/Doble-2/osint-d2/main/scripts/install-docker.sh
+    sh install-docker.sh
     ```
 
     !!! success "Batteries included"
@@ -69,6 +75,19 @@
 
     !!! warning "Native dependencies"
         The standalone binary bundles Python code but **not** native system libraries. CLI PDFs require Pango on the host, and dashboard PDFs and graph images require Chromium.
+
+---
+
+## Standalone Binaries
+
+The binaries bundle the Python code, but not Chromium or Pango. Scans work right away.
+
+They aren't signed, so your system may warn you. Only continue if you downloaded the file from the project's [Releases](https://github.com/Doble-2/osint-d2/releases):
+
+- **macOS:** after extracting, run `xattr -dr com.apple.quarantine osint-d2`
+- **Windows:** in the SmartScreen window, choose **More info**, then **Run anyway**
+
+To avoid these warnings, install with pipx or Docker.
 
 ---
 
@@ -167,7 +186,7 @@ This checks:
 - Have I Been Pwned key
 - Proxy configuration (ScrapingAnt mode, key, country)
 
-It lists how to fix each problem, and exits with code 1 if a check fails.
+It lists how to fix each problem. Missing Chromium or Pango is only a note, because they're optional. It exits with code 1 only if the connection fails.
 
 ---
 

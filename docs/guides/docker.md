@@ -3,12 +3,11 @@
 ## Quick Start
 
 ```bash
-git clone https://github.com/Doble-2/osint-d2.git
-cd osint-d2
-cp .env.example .env          # Add your AI key
-mkdir -p reports              # Otherwise Docker creates it as root, and reports fail to save
-docker compose up -d
+curl -fsSLO https://raw.githubusercontent.com/Doble-2/osint-d2/main/scripts/install-docker.sh
+sh install-docker.sh
 ```
+
+This creates an `osint-d2` folder with the Compose file, a `.env` for your AI key, and a `reports` folder.
 
 Open **http://localhost:8000** to access the web dashboard.
 

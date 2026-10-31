@@ -256,6 +256,7 @@ osint-d2 doctor <subcommand>
 |------------|-------------|
 | `run` | Run diagnostics and show how to fix problems. Exits with `1` if a check fails |
 | `setup-ai` | Interactive AI setup (stores config in user `.env`) |
+| `install-browser` | Download Chromium, for dashboard PDFs and graph images |
 
 ### Examples
 

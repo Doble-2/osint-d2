@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- WeasyPrint's missing-library message no longer corrupts JSON output on stdout
 - A hostile page can no longer freeze the server through the email search, or fill memory with a huge response
 - A scan no longer fails at the end when it discovers many identifiers
 - Phone lookups now use the configured proxy
@@ -18,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Saving settings no longer erases a user `.env` it cannot read
 
 ### Added
+- `osint-d2 doctor install-browser`, and `serve` offers to install Chromium
+- The dashboard can save the AI key
+- `scripts/install-docker.sh` installs with Docker without cloning the repository
+- A workflow to publish to PyPI, and install tests on Linux, macOS, and Windows in CI
 - `osint-d2 purge`, and automatic deletion with `OSINT_D2_REPORT_RETENTION_DAYS`
 - Threat model, acceptable use policy, data flows, and an impact assessment template (drafts pending legal review)
 - CodeQL and gitleaks in CI
@@ -30,6 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Unused modules `report_theme` and `activity_timeline`
 
 ### Changed
+- `doctor run` treats Chromium and Pango as optional, and no longer fails without them
+- Blank values in a `.env` file no longer hide settings from another file
 - **Personality, ideology, and attack-surface sections are now off by default.** Enable them with `--sensitive-inferences`, the dashboard option, or `OSINT_D2_SENSITIVE_INFERENCES=true`
 - Scans follow at most 25 discovered usernames and 25 discovered emails, and websites are no longer scanned as usernames
 - Dashboard: the report is now a tab that opens when a run finishes, instead of a panel covering the graph
@@ -38,6 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Documentation site: new theme and home page, with a working light mode
 
 ### Fixed
+- WeasyPrint's missing-library message no longer corrupts JSON output on stdout
 - Dashboard: the bundled JetBrains Mono font had almost no ASCII characters, so most text fell back to a system font
 - Dashboard: the empty state did not come back after an expired run
 
@@ -81,6 +89,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Documentation: Security & Responsible Use guide
 
 ### Fixed
+- WeasyPrint's missing-library message no longer corrupts JSON output on stdout
 - CLI no longer prints API keys in tracebacks, emits JSON twice, or ignores commas in `--emails`
 - `pip install` no longer pulls a Click version that breaks `--help`
 - Live graph counter, hidden graph clipping, and dates shown as phone numbers in the dashboard
