@@ -152,7 +152,7 @@ OSINT_D2_AI_API_KEY=sk-...        # Not needed for Ollama
 
 ## 6D Cognitive Profile
 
-When the agent finishes, it generates a structured analysis across 6 dimensions:
+When the agent finishes, it generates a structured analysis. **OCEAN Psychology**, **Ideology & Values**, and **OpSec / Attack Surface** are off by default. Enable them with `--sensitive-inferences`, the dashboard's **Sensitive inferences** option, or `OSINT_D2_SENSITIVE_INFERENCES=true`.
 
 | Dimension | What the agent analyzes |
 |-----------|------------------------|

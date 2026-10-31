@@ -41,6 +41,7 @@ osint-d2 scan <target> [OPTIONS]
 
 | Flag | Default | Description |
 |------|---------|-------------|
+| `--sensitive-inferences` | off | Add personality, ideology, and attack-surface sections to the AI report |
 | `--deep-analyze` / `--no-deep-analyze` | `--no-deep-analyze` | Send the evidence to the AI provider for analysis |
 | `--language`, `-l` | `en` | Output language |
 | `--export-pdf` / `--no-export-pdf` | `--no-export-pdf` | Export PDF dossier |
@@ -76,6 +77,7 @@ osint-d2 scan-email <email> [OPTIONS]
 
 | Flag | Default | Description |
 |------|---------|-------------|
+| `--sensitive-inferences` | off | Add personality, ideology, and attack-surface sections to the AI report |
 | `--deep-analyze` / `--no-deep-analyze` | `--no-deep-analyze` | Send the evidence to the AI provider for analysis |
 | `--scan-localpart` / `--no-scan-localpart` | `--no-scan-localpart` | Also try the local part (before `@`) as a username |
 | `--language`, `-l` | `en` | Output language |
@@ -106,6 +108,7 @@ osint-d2 hunt [OPTIONS]
 
 | Flag | Short | Default | Description |
 |------|-------|---------|-------------|
+| `--sensitive-inferences` | | off | Add personality, ideology, and attack-surface sections to the AI report |
 | `--usernames` | `-u` | — | Target usernames (comma-separated or repeated) |
 | `--emails` | `-e` | — | Target emails (comma-separated or repeated) |
 | `--sherlock` / `--no-sherlock` | | `--no-sherlock` | Enable the Sherlock manifest (about 470 sites) |
@@ -153,6 +156,7 @@ osint-d2 agent <objective> [OPTIONS]
 
 | Flag | Default | Description |
 |------|---------|-------------|
+| `--sensitive-inferences` | off | Add personality, ideology, and attack-surface sections to the AI report |
 | `--ai-provider` | — | AI provider preset (see [global options](#global-options)) |
 | `--max-steps` | `10` | Maximum reasoning steps before the agent concludes (1–50) |
 | `--breach-check` / `--no-breach-check` | `--no-breach-check` | Allow the agent to query the official HaveIBeenPwned API. Requires `OSINT_D2_HIBP_API_KEY` |
@@ -195,6 +199,7 @@ osint-d2 analyze <input_path> [OPTIONS]
 
 | Flag | Default | Description |
 |------|---------|-------------|
+| `--sensitive-inferences` | off | Add personality, ideology, and attack-surface sections to the AI report |
 | `--ai-provider` | — | AI provider preset |
 | `--language`, `-l` | `en` | Output language |
 | `--format` | `table` | Terminal output format: `table` or `json` |
@@ -278,7 +283,6 @@ osint-d2 serve [OPTIONS]
 |------|-------|---------|-------------|
 | `--host` | `-h` | `127.0.0.1` | Host interface to bind to |
 | `--port` | `-p` | `8000` | Port number |
-| `--reload` | | — | Enable auto-reload for development |
 
 ### Examples
 
@@ -292,6 +296,29 @@ osint-d2 serve --host 0.0.0.0 --port 9000
 
 !!! warning
     The dashboard has no authentication. See [Security & Responsible Use](security.md) before binding to other interfaces.
+
+---
+
+## `purge`
+
+Delete saved reports by target, by age, or both.
+
+```
+osint-d2 purge [OPTIONS]
+```
+
+### Options
+
+| Flag | Short | Default | Description |
+|------|-------|---------|-------------|
+| `--target` | `-t` | — | Exact target of the investigation |
+| `--older-than` | | — | Only reports older than this many days |
+| `--dry-run` | | off | List the files without deleting them |
+| `--yes` | `-y` | off | Delete without asking for confirmation |
+
+At least one of `--target` and `--older-than` is required. Only files with report extensions in `reports/` are deleted.
+
+To delete old reports automatically, set `OSINT_D2_REPORT_RETENTION_DAYS`. The check runs when the dashboard starts and whenever reports are exported.
 
 ---
 

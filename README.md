@@ -143,9 +143,9 @@ Optional services:
 | `scan_phone` | Carrier, country, line type, and WhatsApp status |
 | `search_vector_memory` | BM25 keyword search across collected evidence |
 | `correlate_stylometry` | Compare writing style with character n-grams |
-| `generate_report` | Finish with a report covering six areas |
+| `generate_report` | Finish with the report |
 
-The report covers identity, geo-temporal signals, personality (OCEAN), technical profile, ideology and values, and attack surface. The personality and ideology sections are speculative inferences, and the confidence score is the model's own estimate. Verify them before relying on them.
+The report covers identity, geo-temporal signals, and technical profile. Personality (OCEAN), ideology, and attack-surface sections are off by default; enable them with `--sensitive-inferences`. They are speculative inferences, and the confidence score is the model's own estimate, so verify them before relying on them.
 
 ## Documentation
 

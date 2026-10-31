@@ -22,7 +22,7 @@ ssh -L 8000:127.0.0.1:8000 user@server
 
 ## Protecting results
 
-- `reports/` is not cleaned automatically. It holds personal data, so restrict access and delete what you no longer need.
+- `reports/` holds personal data, so restrict access to it. Set `OSINT_D2_REPORT_RETENTION_DAYS` to delete old reports automatically, or use `osint-d2 purge`. Without a retention period, reports stay until you delete them.
 - Unless you use Ollama, scan results are sent to your AI provider. Check that provider's data policy. CLI scans send nothing to an AI provider unless you pass `--ai` or `--deep-analyze`.
 - Breach checks send the full email address to Have I Been Pwned.
 - The dashboard keeps the form in the browser tab until you close it. Close the tab on shared machines.
@@ -34,7 +34,7 @@ Profiles and web pages are written by third parties, and may try to manipulate t
 
 | Risk | Protection |
 |------|------------|
-| Text that gives the LLM instructions | The system prompt marks tool results as untrusted data. This reduces the risk but cannot eliminate it, so review the findings |
+| Text that gives the LLM instructions | Tool results are wrapped as untrusted data and limited in size. This reduces the risk but cannot eliminate it, so review the findings |
 | Requests to internal services (SSRF) | Agent URLs are checked at every redirect, and private, reserved, and metadata addresses are blocked |
 | HTML or scripts in a dossier | Report Markdown escapes raw HTML and removes unsafe links |
 | PDF rendering | Image requests cannot reach internal addresses or follow redirects, and only the dossier itself can be read from disk. The dashboard renders without JavaScript |
@@ -43,7 +43,6 @@ Profiles and web pages are written by third parties, and may try to manipulate t
 ### Known limits
 
 - **DNS rebinding:** a hostname that changes its answer between the check and the request can bypass the SSRF check.
-- **Response size:** agent downloads have no size limit, although only the first 2 million characters of a page are parsed.
 - **External requests in PDFs:** rendering a dossier fetches its fonts from Google Fonts and the avatars of the profiles found, which reveals your IP address to those servers.
 
 ## Responsible use
@@ -53,8 +52,10 @@ Use OSINT-D2 only where you have a lawful basis and, where required, authorizati
 Before running or sharing an investigation, keep in mind:
 
 - **Privacy law may apply even to public data.** Under the EU's GDPR, for example, collecting and profiling personal data needs a legal basis.
-- **Political views and personality are sensitive inferences.** Some of the agent's analysis touches categories that receive extra protection. Get legal advice before using these results in decisions about someone.
+- **Political views and personality are sensitive inferences.** They touch categories that can receive extra protection, so personality, ideology, and attack-surface sections are off by default. Get legal advice before enabling them or using them in decisions about someone.
 - **Results can be wrong.** Namesakes and model errors are common, and the personality and ideology sections are speculative. Do not treat them as fact without corroboration.
 - **Do not use it to harass, stalk, or expose anyone.**
+
+See also the [threat model](../threat-model.md), [acceptable use policy](../legal/acceptable-use.md), [data flows](../legal/data-flows.md), and [impact assessment template](../legal/dpia-template.md).
 
 To report a vulnerability, see the [security policy](https://github.com/Doble-2/osint-d2/blob/main/SECURITY.md).

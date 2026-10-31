@@ -7,7 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- A hostile page can no longer freeze the server through the email search, or fill memory with a huge response
+- A scan no longer fails at the end when it discovers many identifiers
+- Phone lookups now use the configured proxy
+- The project `.env` now takes priority over the user-wide one
+- The rate limiter no longer stops every domain while one of them waits
+- A failed file export no longer hides a finished report in the dashboard
+- A report forced by the step limit now counts as partial
+- Saving settings no longer erases a user `.env` it cannot read
+
+### Added
+- `osint-d2 purge`, and automatic deletion with `OSINT_D2_REPORT_RETENTION_DAYS`
+- Threat model, acceptable use policy, data flows, and an impact assessment template (drafts pending legal review)
+- CodeQL and gitleaks in CI
+
+### Security
+- Tool results reach the agent wrapped as untrusted data and limited in size, and the profiler's prompt treats evidence as untrusted
+
+### Removed
+- `serve --reload`, which always exited with an error
+- Unused modules `report_theme` and `activity_timeline`
+
 ### Changed
+- **Personality, ideology, and attack-surface sections are now off by default.** Enable them with `--sensitive-inferences`, the dashboard option, or `OSINT_D2_SENSITIVE_INFERENCES=true`
+- Scans follow at most 25 discovered usernames and 25 discovered emails, and websites are no longer scanned as usernames
 - Dashboard: the report is now a tab that opens when a run finishes, instead of a panel covering the graph
 - Dashboard: a bar above the results shows the subject, the current step, and the cancel and download buttons
 - Dashboard: simpler form, and the view no longer jumps between tabs while results arrive

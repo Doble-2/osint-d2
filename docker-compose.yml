@@ -1,5 +1,5 @@
 # OSINT-D2 — Docker Compose
-# Quick start: cp .env.example .env && docker compose up -d
+# Quick start: cp .env.example .env && mkdir -p reports && docker compose up -d
 # Dashboard: http://localhost:8000
 
 services:
