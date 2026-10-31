@@ -1,0 +1,484 @@
+/* OSINT-D2 documentation theme.
+   Sits on top of Material for MkDocs: colors come from the tokens below, and
+   each component is only restyled where the default doesn't fit. Teal is kept
+   for links and actions, so it always means "you can click this". */
+
+/* ── Tokens ─────────────────────────────────────────────────────────── */
+
+:root {
+  --os-radius: 8px;
+}
+
+[data-md-color-scheme="slate"] {
+  --os-bg: #0c0f12;
+  --os-surface: #151a21;
+  --os-border: rgba(255, 255, 255, 0.1);
+  --os-text: #e8ecf0;
+  --os-text-dim: #a3adba;
+  --os-accent: #2dd4bf;
+  --os-accent-hover: #5eead4;
+  --os-on-accent: #04201c;
+
+  --md-hue: 215;
+  --md-default-bg-color: var(--os-bg);
+  --md-default-fg-color: var(--os-text);
+  --md-default-fg-color--light: var(--os-text-dim);
+  --md-code-bg-color: #12171d;
+  --md-footer-bg-color: #080b0e;
+  --md-footer-bg-color--dark: #050709;
+}
+
+[data-md-color-scheme="default"] {
+  --os-bg: #ffffff;
+  --os-surface: #f5f7f8;
+  --os-border: rgba(15, 23, 42, 0.13);
+  --os-text: #1c2530;
+  --os-text-dim: #55616f;
+  --os-accent: #0f766e;
+  --os-accent-hover: #115e59;
+  --os-on-accent: #ffffff;
+
+  --md-default-fg-color: var(--os-text);
+  --md-default-fg-color--light: var(--os-text-dim);
+  --md-code-bg-color: #f5f7f8;
+  --md-footer-bg-color: #1c2530;
+  --md-footer-bg-color--dark: #151b24;
+}
+
+[data-md-color-scheme] {
+  --md-primary-fg-color: var(--os-bg);
+  --md-primary-fg-color--light: var(--os-surface);
+  --md-primary-fg-color--dark: var(--os-bg);
+  --md-primary-bg-color: var(--os-text);
+  --md-primary-bg-color--light: var(--os-text-dim);
+  --md-accent-fg-color: var(--os-accent);
+  --md-accent-fg-color--transparent: color-mix(in srgb, var(--os-accent) 10%, transparent);
+  --md-accent-bg-color: var(--os-on-accent);
+  --md-accent-bg-color--light: var(--os-on-accent);
+  --md-typeset-a-color: var(--os-accent);
+}
+
+/* ── Typography ─────────────────────────────────────────────────────── */
+
+.md-typeset {
+  font-size: 0.82rem;
+  line-height: 1.7;
+}
+
+.md-typeset h1 {
+  color: var(--os-text);
+  font-size: 1.9rem;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.2;
+}
+
+.md-typeset h2 {
+  color: var(--os-text);
+  font-size: 1.3rem;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  margin-top: 2.2em;
+}
+
+.md-typeset h3 {
+  color: var(--os-text);
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.md-typeset h4 {
+  color: var(--os-text);
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+/* Links in running text stay recognizable without relying on color alone. */
+.md-typeset :is(p, li, td) a:not(.md-button, .headerlink) {
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
+  text-underline-offset: 0.18em;
+}
+
+.md-typeset a:hover {
+  color: var(--os-accent-hover);
+}
+
+.md-typeset :is(p, li, td) a:not(.md-button, .headerlink):hover {
+  text-decoration-color: currentColor;
+}
+
+.md-typeset :not(pre) > code {
+  border: 1px solid var(--os-border);
+  border-radius: 4px;
+  color: var(--os-text);
+}
+
+.md-typeset :is(p, li, td) a > code {
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--os-accent);
+  outline-offset: 2px;
+}
+
+/* ── Header and tabs ────────────────────────────────────────────────── */
+
+.md-header,
+.md-tabs {
+  background: var(--os-bg);
+  color: var(--os-text);
+}
+
+.md-header {
+  border-bottom: 1px solid var(--os-border);
+  box-shadow: none;
+}
+
+.md-header--shadow {
+  box-shadow: none;
+}
+
+.md-header:has(+ .md-container .md-tabs),
+.md-header:has(.md-tabs) {
+  border-bottom: 0;
+}
+
+.md-tabs {
+  border-bottom: 1px solid var(--os-border);
+}
+
+/* No official logo yet, so the site name stands alone. */
+.md-header__button.md-logo,
+.md-nav__title .md-logo {
+  display: none;
+}
+
+.md-tabs__link {
+  color: var(--os-text-dim);
+  font-size: 0.72rem;
+  opacity: 1;
+}
+
+.md-tabs__link:hover,
+.md-tabs__item--active .md-tabs__link {
+  color: var(--os-accent);
+}
+
+/* ── Sidebar navigation ─────────────────────────────────────────────── */
+
+.md-nav {
+  font-size: 0.72rem;
+}
+
+.md-nav__title,
+.md-nav__item--section > .md-nav__link {
+  background: none;
+  box-shadow: none;
+  color: var(--os-text);
+  font-weight: 600;
+}
+
+.md-sidebar--secondary .md-nav__title {
+  background: var(--os-bg);
+}
+
+.md-nav__link--active,
+.md-nav__item .md-nav__link--active {
+  color: var(--os-accent);
+  font-weight: 600;
+}
+
+/* Keep the title bar of the mobile drawer readable in both themes. */
+@media (max-width: 76.1875em) {
+  .md-nav--primary .md-nav__title[for="__drawer"] {
+    background: var(--os-surface);
+    color: var(--os-text);
+  }
+
+  .md-nav--primary .md-nav__source {
+    background: var(--os-surface);
+    color: var(--os-text);
+  }
+}
+
+/* The home page drops the sidebar on desktop. It stays in the page for the
+   mobile drawer: see docs/overrides/main.html. */
+@media (min-width: 76.25em) {
+  .md-sidebar--home {
+    display: none;
+  }
+}
+
+/* ── Search ─────────────────────────────────────────────────────────── */
+
+@media (min-width: 60em) {
+  .md-search__input {
+    background: var(--os-surface);
+    border: 1px solid var(--os-border);
+    border-radius: 6px;
+    color: var(--os-text);
+  }
+
+  .md-search__input:hover {
+    background: var(--os-surface);
+  }
+
+  .md-search__input::placeholder,
+  .md-search__input + .md-search__icon {
+    color: var(--os-text-dim);
+  }
+
+  [data-md-toggle="search"]:checked ~ .md-header .md-search__input {
+    background: var(--os-surface);
+    border-radius: 6px 6px 0 0;
+    color: var(--os-text);
+  }
+
+  [data-md-toggle="search"]:checked ~ .md-header .md-search__input::placeholder,
+  [data-md-toggle="search"]:checked ~ .md-header .md-search__input + .md-search__icon {
+    color: var(--os-text-dim);
+  }
+}
+
+/* ── Content components ─────────────────────────────────────────────── */
+
+.md-typeset :is(.admonition, details) {
+  border-radius: var(--os-radius);
+  box-shadow: none;
+  font-size: 0.78rem;
+}
+
+.md-typeset pre > code {
+  border: 1px solid var(--os-border);
+  border-radius: var(--os-radius);
+}
+
+.md-typeset table:not([class]) {
+  border: 1px solid var(--os-border);
+  border-radius: var(--os-radius);
+  font-size: 0.75rem;
+}
+
+.md-typeset table:not([class]) th {
+  background: var(--os-surface);
+  color: var(--os-text);
+  font-weight: 600;
+}
+
+.md-typeset table:not([class]) :is(th, td) {
+  border-color: var(--os-border);
+}
+
+.md-typeset .md-button {
+  border: 1px solid var(--os-border);
+  border-radius: 6px;
+  color: var(--os-text);
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.55em 1.2em;
+}
+
+.md-typeset .md-button:hover {
+  background: var(--os-surface);
+  border-color: var(--os-accent);
+  color: var(--os-text);
+}
+
+.md-typeset .md-button--primary {
+  background: var(--os-accent);
+  border-color: var(--os-accent);
+  color: var(--os-on-accent);
+}
+
+.md-typeset .md-button--primary:hover {
+  background: var(--os-accent-hover);
+  border-color: var(--os-accent-hover);
+  color: var(--os-on-accent);
+}
+
+.os-screenshot {
+  border: 1px solid var(--os-border);
+  border-radius: var(--os-radius);
+  margin: 1.5em 0;
+  overflow: hidden;
+}
+
+.os-screenshot p {
+  margin: 0;
+}
+
+.os-screenshot img {
+  display: block;
+  height: auto;
+  margin: 0 auto;
+  max-width: 100%;
+}
+
+.os-screenshot__caption {
+  background: var(--os-surface);
+  border-top: 1px solid var(--os-border);
+  color: var(--os-text-dim);
+  font-size: 0.7rem;
+  line-height: 1.5;
+  padding: 0.6em 1em;
+}
+
+/* ── Home page ──────────────────────────────────────────────────────── */
+
+.os-hero {
+  align-items: center;
+  display: grid;
+  gap: 2.5rem;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  padding: 1.5rem 0 2rem;
+}
+
+.md-typeset .os-hero h1 {
+  font-size: 2.8rem;
+  margin: 0 0 0.35em;
+}
+
+.os-hero .headerlink,
+.os-feature .headerlink {
+  display: none;
+}
+
+.md-typeset .os-hero__subtitle {
+  color: var(--os-text-dim);
+  font-size: 0.95rem;
+  line-height: 1.6;
+  margin: 0 0 1.4em;
+}
+
+.md-typeset .os-hero__subtitle strong {
+  color: var(--os-text);
+  font-weight: 600;
+}
+
+.md-typeset .os-hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin: 0;
+}
+
+.os-hero__actions p {
+  display: contents;
+}
+
+.md-typeset .os-hero__actions .md-button {
+  margin: 0;
+}
+
+.os-hero__start-label {
+  color: var(--os-text-dim);
+  font-size: 0.72rem;
+  font-weight: 600;
+  margin-bottom: 0.4rem;
+}
+
+.md-typeset .os-hero__start pre {
+  margin: 0;
+}
+
+.os-stats {
+  border-block: 1px solid var(--os-border);
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(4, 1fr);
+  margin-bottom: 1.5rem;
+  padding: 1rem 0;
+}
+
+.os-stat__value {
+  color: var(--os-text);
+  display: block;
+  font-size: 1.3rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.os-stat__label {
+  color: var(--os-text-dim);
+  display: block;
+  font-size: 0.7rem;
+}
+
+.os-features {
+  display: grid;
+  gap: 0.8rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 1.2rem 0 0;
+}
+
+.os-feature {
+  border: 1px solid var(--os-border);
+  border-radius: var(--os-radius);
+  display: flex;
+  flex-direction: column;
+  padding: 1rem 1.1rem;
+}
+
+.md-typeset .os-feature p {
+  font-size: 0.75rem;
+  line-height: 1.6;
+  margin: 0 0 0.7em;
+}
+
+.md-typeset .os-feature p:last-child {
+  margin: auto 0 0;
+}
+
+.md-typeset .os-feature h3 {
+  font-size: 0.85rem;
+  margin: 0 0 0.4em;
+}
+
+.md-typeset .os-feature__icon {
+  color: var(--os-text-dim);
+  font-size: 1.05rem;
+}
+
+.os-gallery {
+  display: grid;
+  gap: 0.8rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.os-gallery .os-screenshot {
+  margin: 0;
+}
+
+/* ── Small screens ──────────────────────────────────────────────────── */
+
+@media (max-width: 60em) {
+  .os-hero {
+    gap: 1.5rem;
+    grid-template-columns: minmax(0, 1fr);
+    padding-top: 0.5rem;
+  }
+
+  .os-features {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 40em) {
+  .md-typeset .os-hero h1 {
+    font-size: 2.2rem;
+  }
+
+  .os-stats,
+  .os-features,
+  .os-gallery {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .os-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
