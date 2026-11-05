@@ -96,14 +96,13 @@ def _compact_text_samples(value: object, *, max_items: int, max_chars_each: int)
     return out or None
 
 
-def _summary_has_six_sections(*, summary: str, language: Language, last_section: int = 6) -> bool:
+def _summary_has_sections(*, summary: str, expected_sections: tuple[int, ...]) -> bool:
+    """Require every expected numbered heading, regardless of the report language."""
     text = (summary or "").strip()
     if not text:
         return False
 
-    # Exigimos al menos el primer y el último encabezado para evitar falsos positivos.
-    # El patrón es idéntico para todos los idiomas.
-    return bool(re.search(r"(?m)^##\s*1\.", text)) and bool(re.search(rf"(?m)^##\s*{last_section}\.", text))
+    return all(re.search(rf"(?m)^##[ \t]*{section}\.", text) for section in expected_sections)
 
 
 def _scoped_prompt(prompt: str, language: Language, settings: AppSettings) -> str:
@@ -866,6 +865,8 @@ async def _analyze_person(
         {"role": "user", "content": json.dumps(user_payload, ensure_ascii=False)},
     ]
 
+    expected_sections = (1, 2, 3, 4, 5, 6) if settings.sensitive_inferences else (1, 2, 4)
+    section_headings = ", ".join(f"'## {section}.'" for section in expected_sections)
     last_error: Exception | None = None
     fallback_model: str | None = None
     base_url_l = (settings.ai_base_url or "").lower()
@@ -888,8 +889,8 @@ async def _analyze_person(
             data: Any = json.loads(json_text)
             parsed = _AIReportPayload.model_validate(data)
 
-            missing_sections = not _summary_has_six_sections(
-                summary=parsed.summary, language=language, last_section=6 if settings.sensitive_inferences else 4,
+            missing_sections = not _summary_has_sections(
+                summary=parsed.summary, expected_sections=expected_sections,
             )
             if _looks_like_template_response(parsed=parsed) or missing_sections:
                 last_error = ValueError("ai_returned_template")
@@ -900,37 +901,37 @@ async def _analyze_person(
                     if missing_sections:
                         fix = (
                             "No seguiste el formato requerido. "
-                            "Reescribe SOLO el JSON válido: 'summary' debe ser Markdown e incluir las 6 secciones con encabezados '## 1.' hasta '## 6.' "
+                            f"Reescribe SOLO el JSON válido: 'summary' debe ser Markdown e incluir solo las secciones con encabezados {section_headings} "
                             "y 'highlights' debe ser una lista real basada en la evidencia recibida."
                         )
                     else:
                         fix = (
                             "Tu JSON es un template (valores de ejemplo). "
-                            "Reescribe SOLO el JSON con contenido real: 'summary' debe incluir las 6 secciones completas y "
+                            f"Reescribe SOLO el JSON con contenido real: 'summary' debe incluir solo las secciones completas con encabezados {section_headings} y "
                             "'highlights' debe ser una lista real basada en la evidencia recibida."
                         )
                 elif language == Language.PORTUGUESE:
                     if missing_sections:
                         fix = (
-                            "Você não seguiu o formato requerido. Reescreva APENAS o JSON válido: 'summary' deve ser Markdown e incluir as 6 seções com títulos '## 1.' a '## 6.' "
+                            f"Você não seguiu o formato requerido. Reescreva APENAS o JSON válido: 'summary' deve ser Markdown e incluir apenas as seções com títulos {section_headings} "
                             "e 'highlights' deve ser uma lista real baseada nas evidências fornecidas."
                         )
                     else:
                         fix = (
-                            "Seu JSON é um template (valores de exemplo). Reescreva APENAS o JSON com conteúdo real: 'summary' deve incluir as 6 seções completas e "
+                            f"Seu JSON é um template (valores de exemplo). Reescreva APENAS o JSON com conteúdo real: 'summary' deve incluir apenas as seções completas com títulos {section_headings} e "
                             "'highlights' deve ser uma lista real baseada nas evidências fornecidas."
                         )
                 else:
                     if missing_sections:
                         fix = (
                             "You did not follow the required format. "
-                            "Rewrite ONLY valid JSON: 'summary' must be Markdown and include all six sections with headings '## 1.' through '## 6.' "
+                            f"Rewrite ONLY valid JSON: 'summary' must be Markdown and include only the sections with headings {section_headings} "
                             "and 'highlights' must be a real list grounded in the provided evidence."
                         )
                     else:
                         fix = (
                             "Your JSON is a template (example values). "
-                            "Rewrite ONLY the JSON with real content: 'summary' must include all 6 sections and "
+                            f"Rewrite ONLY the JSON with real content: 'summary' must include only the complete sections with headings {section_headings} and "
                             "'highlights' must be a real list grounded in the provided evidence."
                         )
                 if not settings.sensitive_inferences:
