@@ -2,36 +2,110 @@
 
 from __future__ import annotations
 
+import json
+import re
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
+
 import pytest
 
-from adapters.ai_analyst import _heuristic_analysis, _summary_has_six_sections
+from adapters import ai_analyst
+from adapters.ai_analyst import _heuristic_analysis, _summary_has_sections
+from core.config import AppSettings
 from core.domain.language import Language
 from core.domain.models import PersonEntity, SocialProfile
 
 
 # ---------------------------------------------------------------------------
-# _summary_has_six_sections
+# _summary_has_sections
 # ---------------------------------------------------------------------------
 
-class TestSummaryHasSixSections:
-    def test_valid_summary(self):
-        text = "## 1. Identity\nblah\n## 2. Geo\n## 3. Psych\n## 4. Tech\n## 5. Values\n## 6. OpSec"
-        assert _summary_has_six_sections(summary=text, language=Language.ENGLISH) is True
+class TestSummaryHasSections:
+    @pytest.mark.parametrize("sections", [(1, 2, 4), (1, 2, 3, 4, 5, 6)])
+    def test_valid_summary(self, sections):
+        assert _summary_has_sections(summary=_summary(sections), expected_sections=sections) is True
 
-    def test_missing_section_6(self):
-        text = "## 1. Identity\nOnly one section"
-        assert _summary_has_six_sections(summary=text, language=Language.ENGLISH) is False
+    @pytest.mark.parametrize("summary", ["", "   ", "## 1. Identity\n## 6. OpSec"])
+    def test_incomplete_summary(self, summary):
+        assert _summary_has_sections(summary=summary, expected_sections=(1, 2, 3, 4, 5, 6)) is False
 
-    def test_empty_string(self):
-        assert _summary_has_six_sections(summary="", language=Language.ENGLISH) is False
+    @pytest.mark.parametrize("sections", [(1, 2, 4), (1, 2, 3, 4, 5, 6)])
+    def test_rejects_each_missing_section(self, sections):
+        for missing in sections:
+            text = "\n".join(f"## {section}. Test" for section in sections if section != missing)
+            assert _summary_has_sections(
+                summary=text, expected_sections=sections,
+            ) is False, f"Missing section {missing} was accepted"
 
-    def test_none_like(self):
-        assert _summary_has_six_sections(summary="   ", language=Language.SPANISH) is False
+
+def _summary(sections):
+    return "\n".join(f"## {section}. Section\nObserved evidence." for section in sections)
+
+
+def _reply(summary, *, highlights=None):
+    content = json.dumps({
+        "summary": summary,
+        "highlights": ["An observed public profile."] if highlights is None else highlights,
+        "confidence": 0.5,
+    })
+    return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=content))])
+
+
+async def _analyze_replies(monkeypatch, *, replies, language, sensitive_inferences):
+    snapshots = []
+
+    async def create(**kwargs):
+        snapshots.append([dict(message) for message in kwargs["messages"]])
+        return replies[len(snapshots) - 1]
+
+    client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+    monkeypatch.setattr(ai_analyst, "AsyncOpenAI", lambda **kwargs: client)
+    monkeypatch.setattr(ai_analyst.asyncio, "sleep", AsyncMock())
+    settings = AppSettings(
+        _env_file=None, ai_api_key="test-key", ai_model="test-model", ai_max_retries=1,
+        sensitive_inferences=sensitive_inferences,
+    )
+    report = await ai_analyst.analyze_person(
+        person=PersonEntity(target="testuser"), language=language, settings=settings,
+    )
+    return report, snapshots
+
+
+class TestReportSectionRetries:
+    @pytest.mark.parametrize("language", list(Language))
+    @pytest.mark.parametrize("sensitive_inferences, sections", [
+        (False, (1, 2, 4)), (True, (1, 2, 3, 4, 5, 6)),
+    ])
+    async def test_complete_report_needs_no_retry(self, monkeypatch, language, sensitive_inferences, sections):
+        summary = _summary(sections)
+        report, snapshots = await _analyze_replies(
+            monkeypatch, replies=[_reply(summary)], language=language, sensitive_inferences=sensitive_inferences,
+        )
+        assert len(snapshots) == 1
+        assert report.model == "test-model"
+        assert report.summary == summary
 
     @pytest.mark.parametrize("language", list(Language))
-    def test_all_languages_use_same_logic(self, language: Language):
-        good = "## 1. Test\n## 6. End"
-        assert _summary_has_six_sections(summary=good, language=language) is True
+    @pytest.mark.parametrize("sensitive_inferences, sections", [
+        (False, (1, 2, 4)), (True, (1, 2, 3, 4, 5, 6)),
+    ])
+    @pytest.mark.parametrize("problem", ["missing_sections", "template"])
+    async def test_retry_uses_expected_sections(self, monkeypatch, language, sensitive_inferences, sections, problem):
+        summary = _summary(sections)
+        bad_reply = (
+            _reply(_summary((sections[0], sections[-1])))
+            if problem == "missing_sections" else _reply(summary, highlights=[])
+        )
+        report, snapshots = await _analyze_replies(
+            monkeypatch, replies=[bad_reply, _reply(summary)], language=language,
+            sensitive_inferences=sensitive_inferences,
+        )
+        assert len(snapshots) == 2
+        correction = snapshots[1][-1]["content"]
+        assert ", ".join(f"'## {section}.'" for section in sections) in correction
+        assert {int(section) for section in re.findall(r"##\s*(\d+)\.", correction)} == set(sections)
+        assert report.model == "test-model"
+        assert report.summary == summary
 
 
 # ---------------------------------------------------------------------------
